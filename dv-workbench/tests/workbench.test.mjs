@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {extractCandidates,csv} from '../lib/workbench.ts';
+const input='[Page 12]\nThe interface shall retain queued requests.\nThis is introductory text.\n[Page 13]\nReset shall block acceptance.\nThe register should clear after recovery.';
+const found=extractCandidates(input);
+assert.equal(found.length,3);assert.equal(found[0].page,'12');assert.equal(found[1].page,'13');
+assert.equal(extractCandidates(input,true).length,3);
+assert.deepEqual(extractCandidates('Welcome to the document.'),[]);
+assert.equal(extractCandidates(Array(150).fill('The block must retain all requests.').join('\n')).length,100);
+assert.equal(csv([{id:'1',value:'=SUM(A1:A4)'},{id:'2',value:'a,"b"'}]),'"id","value"\r\n"1","\'=SUM(A1:A4)"\r\n"2","a,""b"""');
+assert.equal(csv([]),'');
+console.log('6 extraction and export checks passed');
