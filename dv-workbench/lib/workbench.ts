@@ -41,3 +41,15 @@ export function extractCandidates(text:string,onlyReset=false){
  return result.slice(0,100);
 }
 export function csv(rows:Row[]){if(!rows.length)return '';const keys=Object.keys(rows[0]);const cell=(s:string)=>'"'+String(/^[=+@-]/.test(s)?"'"+s:s).replaceAll('"','""')+'"';return [keys,...rows.map(r=>keys.map(k=>r[k]??''))].map(r=>r.map(cell).join(',')).join('\r\n');}
+
+// Keep the inputs as strings while editing; only parse when extraction is requested.
+export function parsePageRange(startText:string,endText:string){
+ const parse=(text:string,label:string)=>{
+  if(!/^[0-9]+$/.test(text)||!Number.isSafeInteger(Number(text))||Number(text)<1)
+   throw new Error(`${label} must be a whole page number of 1 or greater.`);
+  return Number(text);
+ };
+ const start=parse(startText,'From page'),end=parse(endText,'To page');
+ if(end<start)throw new Error('To page must be greater than or equal to From page.');
+ return {start,end};
+}

@@ -59,3 +59,49 @@ Export backups regularly. Import replaces the current workspace after confirmati
 You can add most project content directly in the UI. Starter-code changes do not overwrite existing browser data. No Sites project IDs, hosting credentials or platform helper scripts are included.
 
 The parent repository's LICENSE applies to this project's original source. Third-party dependencies retain their own licenses.
+
+## First-time setup without SSH
+
+You need Git, Node.js 24 (including npm), and an internet connection for the initial dependency download. Check `git --version`, `node --version`, and `npm --version` in a new terminal after installing them. A GitHub account or SSH key is not required to read this public repository: use HTTPS instead of the SSH clone command above if you have not configured SSH:
+
+```powershell
+git clone https://github.com/MAHANTHADEEKSHA-SB/self_practice_f.git
+cd self_practice_f\dv-workbench
+npm ci
+npm run dev
+```
+
+Alternatively, download **Code → Download ZIP** on GitHub, extract it, and open a terminal in the extracted `dv-workbench` directory before running the npm commands. Run every npm command from this directory, where `package.json` is located. Normal local use does not require a ChatGPT login or an API key; the hosted private Sites app has separate access controls.
+
+If PowerShell blocks `npm.ps1`, use `npm.cmd ci` and `npm.cmd run dev` (or run the commands in Command Prompt). You do not need to change the system execution policy. If a port is already occupied, open the exact alternative URL Vite prints. Keep the same local hostname and port when you want to reuse the same saved browser workspace.
+
+## First workflow: from PDF to a reviewable requirement
+
+1. Select **Start a workflow → Bring your source**, or **Explore an example** to try the built-in bridge-reset excerpt without a PDF.
+2. Set **From page** and **To page**, then select **Choose PDF**. Both fields can be cleared and retyped, including multi-digit numbers such as `12` and `25`. Empty, non-integer, zero/negative or reversed ranges show an error when you choose a PDF.
+3. Page numbers refer to the PDF's physical pages, starting at 1, not the printed page labels inside a specification. The end is capped at the PDF length and at 50 pages per extraction; a start beyond the document is rejected. Split larger ranges into batches.
+4. Fill in the source revision and section/table after uploading. Inspect the extracted text against the PDF, particularly tables and footnotes.
+5. Select **Find requirement candidates**. Review/edit the candidates and add selected items to the requirements table. The original matched statement is retained as evidence.
+6. Open **Requirements → Edit** to set the verification method, review status and acceptance-test ID. Starter rows are review prompts; extracted candidates are unreviewed until you check them.
+7. Use **Reset maps** to record trigger, in-flight behavior, recovery and checker obligations. Use **Acceptance tests** for Given/When/Then definitions and manual result recording.
+8. Open **AI companion** to build and copy a grounded review prompt into your chosen assistant. Nothing is sent to a model automatically.
+9. Select **Export workspace** before changing machines, browsers or ports, and periodically as a backup.
+
+Only the latest extracted source text is retained in the source editor. Requirements already added to the table remain saved. The app does not retain PDF bytes, perform OCR, run EDA tools, or automatically treat extracted text as verified protocol behavior.
+
+## Get fixes and contribute
+
+If you cloned with Git, export a workspace backup, stop the dev server, and run these commands from `dv-workbench`:
+
+```powershell
+git pull --ff-only
+npm ci
+npm test
+npm run dev
+```
+
+If Git reports local modifications or a merge conflict, preserve your edits before resolving it; do not discard them merely to update. ZIP users should download/extract the updated archive and import their workspace backup. Browser storage may be cleared by private browsing or browser cleanup, so keep exported JSON files outside the browser.
+
+For bug reports, include the view/button, steps to reproduce, expected versus actual behavior, browser, Node version, and any visible error. Use a small non-confidential fixture rather than uploading a proprietary specification.
+
+See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for architecture, current status, limitations, and the recent fix history. Before submitting code changes, run `npm test` and `npm run build`, then exercise the affected UI path.
