@@ -1,0 +1,102 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 2 · Protocol Layer</div>
+    <h1>UCIe Protocol Mappings Field Guide</h1>
+    <p class="lede">UCIe carries PCIe, CXL, Streaming (any vendor protocol) and Management Transport. Each protocol has a few allowed flit formats, and each mapping removes the parts of the native protocol that UCIe already handles (CRC, retry, link training, PM DLLPs). This guide shows which formats each protocol uses, what the Protocol Layer must change, and why.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>Protocol Layer</span><span><i class="sw" style="background:var(--pl)"></i>D2D Adapter</span><span><i class="sw" style="background:var(--sb)"></i>link / remote die</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). PCIe and CXL protocol details are in their own specifications; this page covers only what UCIe says about carrying them. Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#matrix">2 · Format matrix</a><a href="#pcie">3 · PCIe</a><a href="#cxl256">4 · CXL 256B</a><a href="#cxl68">5 · CXL 68B</a><a href="#stream">6 · Streaming, MTP, Raw</a><a href="#rationale">7 · Why each rule</a><a href="#live">8 · Live scenarios</a><a href="#verify">9 · Verification</a><a href="#quiz">10 · Test yourself</a><a href="#refs">11 · Spec index</a>
+</div></nav>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why protocol mappings exist</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Reuse</div><h3>Keep the PCIe/CXL transaction layers</h3><p>Existing PCIe and CXL controllers, software and compliance carry over. UCIe only changes the layers below the transaction layer: framing, reliability and link management.</p><p class="src"><span class="sl">Spec</span>§2.0, p.51 · §11.1, p.580</p></div>
+    <div class="card"><div class="tagline">Remove duplicates</div><h3>Don't do reliability twice</h3><p>The Adapter already does CRC and retry, and the PHY trains the link and manages power. So the native protocol's LCRC, Ack/Nak, PM and link-management DLLPs, and 8b/10b or 128b/130b encoding are not used.</p><p class="src"><span class="sl">Spec</span>§2.1.2–2.1.3, p.53 · §2.3.2, p.55 · §10.3.1, p.561</p></div>
+    <div class="card"><div class="tagline">Interop vs latency</div><h3>Standard formats and faster ones</h3><p>Standard 256B flits match the PCIe/CXL formats exactly, so any vendor interoperates. Latency-Optimized flits let the receiver use each 128B half early, for lower latency between parts that support them.</p><p class="src"><span class="sl">Spec</span>§2.1.2, p.53 · §2.2.2, p.54</p></div>
+    <div class="card"><div class="tagline">Openness</div><h3>Streaming for anything else</h3><p>Any protocol can ride UCIe as "Streaming", in Raw Format or (optionally) in the Adapter's flit formats with CRC and retry. Management Transport uses the same paths for management packets.</p><p class="src"><span class="sl">Spec</span>§2.4, p.56 · §2.5, p.57</p></div>
+  </div>
+</div></section>
+
+<section id="matrix"><div class="wrap">
+  <h2>2 · Which formats each protocol may use</h2>
+  <p class="sub">Pick a protocol and the negotiated maximum data rate. The table combines Table 2-1 (protocol modes per native spec) and Table 3-7 (format requirements).</p>
+  <div class="twocol">
+    <div class="card">
+      <div class="chips" role="group" id="pmproto"></div>
+      <div class="chips" role="group" id="pmrate"></div>
+      <div id="pmout"></div>
+      <p class="src" id="pmsrc"></p>
+    </div>
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table 2-1, p.53. "for CXL.io" = required for the CXL.io part of a CXL device.</caption>
+      <thead><tr><th>Native spec</th><th>Max rate</th><th>PCIe Non-Flit</th><th>CXL 68B</th><th>CXL 256B</th><th>PCIe Flit</th></tr></thead>
+      <tbody style="font-size:13px">
+        <tr><td>PCIe</td><td>≤ 32 GT/s</td><td>Mandatory</td><td>N/A</td><td>N/A</td><td>Optional</td></tr>
+        <tr><td>PCIe</td><td>&gt; 32 GT/s</td><td>Not supported</td><td>N/A</td><td>N/A</td><td>Mandatory</td></tr>
+        <tr><td>CXL 2.0</td><td>≤ 32 GT/s</td><td>Mandatory (CXL.io)</td><td>Mandatory</td><td>N/A</td><td>N/A</td></tr>
+        <tr><td>CXL 2.0</td><td>&gt; 32 GT/s</td><td colspan="4">Not supported</td></tr>
+        <tr><td>CXL 3.0</td><td>≤ 32 GT/s</td><td>Mandatory (CXL.io)</td><td>Mandatory</td><td>Mandatory</td><td>Mandatory (CXL.io)</td></tr>
+        <tr><td>CXL 3.0</td><td>&gt; 32 GT/s</td><td colspan="2">Not supported</td><td>Mandatory</td><td>Mandatory (CXL.io)</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div></section>
+
+<section id="pcie"><div class="wrap">
+  <h2>3 · PCIe over UCIe</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Format</th><th>Status</th><th>What the Protocol Layer does</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>Raw (1)</td><td>Optional</td><td>Fills every byte; keeps its own CRC, retry and FEC. For Retimers carrying PCIe off-package; Retimers should count errors with the FEC parity or 8B CRC.</td><td class="ref">§2.1.1, p.53</td></tr>
+      <tr><td>Std 256B End Header (3)</td><td>Mandatory for PCIe Flit Mode</td><td>Standard PCIe flit; zeros in Adapter fields; drives Flit_Marker bits in DLP. No PM or Link Management DLLPs; other DLLPs and Flit Status as in PCIe.</td><td class="ref">§2.1.2, p.53</td></tr>
+      <tr><td>68B (2)</td><td>Mandatory if max rate ≤ 32 GT/s</td><td>PCIe Non-Flit Mode carried as CXL.io 68B flits. LCRC driven as 0 and ignored; no Ack/Nak DLLPs; STP sequence number and CRCs recommended 0, ignored.</td><td class="ref">§2.1.3, p.53 · §2.3.2, p.55</td></tr>
+      <tr><td>Std 256B Start Header (4)</td><td>Optional (capability)</td><td>As Format 3 but header first.</td><td class="ref">§2.1.4, p.53</td></tr>
+      <tr><td>Latency-Optimized with optional bytes (6)</td><td>Optional (capability), strongly recommended</td><td>Two 128B halves with their own CRC.</td><td class="ref">§2.1.5, p.54 · Table 3-7</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note-s" style="margin-top:8px">The spec strongly recommends removing 8b/10b, 128b/130b and non-Flit CRC/retry/framing logic from UCIe Protocol Layers for area and power. Framing errors seen by the Protocol Layer are likely internal errors (the Adapter already guaranteed delivery) and may be treated as such.<span class="ref" style="display:block">Spec: §2.1.2–2.1.3, p.53</span></p>
+</div></section>
+
+<section id="cxl256"><div class="wrap">
+  <h2>4 · CXL 256B Flit Mode</h2>
+  <div class="twocol">
+    <div class="card"><ul class="tight" style="font-size:15px">
+      <li><strong>Raw</strong> (optional): Retimer use; the Protocol Layer does CRC, retry, FEC and viral/poison containment.</li>
+      <li><strong>Latency-Optimized</strong> (strongly recommended): Format 5 or 6. The Protocol Layer can consume the flit at each 128B boundary. Format 6 gives CXL.io 4 more TLP bytes, and CXL.cachemem an extra 14-byte H-slot ordered between slots 7 and 8.</li>
+      <li><strong>Standard 256B Start Header</strong> (Format 4): mandatory, for interop with vendors that only support baseline CXL formats.</li>
+      <li>For CXL.io in any 256B mode, Ack, Nak, PM and Link Management DLLPs are not used; Flit_Marker rules as in CXL.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§2.2–2.2.3, p.54–55</p></div>
+    <div class="card"><div class="tagline">Viral containment at low latency</div><h3><code>lp_corrupt_crc</code></h3><p style="font-size:15px">For CXL.cachemem with Adapter retry, the Protocol Layer can ask the Adapter to corrupt the CRC of an outgoing flit (recommended: XOR with syndrome 138Eh, chosen so no 1- or 2-bit error aliases to it). The receiver sees a CRC error and Naks; the Adapter has already overwritten that flit in its retry buffer with the next flit, which carries the viral information. So bad data is never accepted, and the replay delivers the viral notification.</p><p class="src"><span class="sl">Spec</span>Table 10-3 (lp_corrupt_crc), p.540 · §2.2.2, p.54</p></div>
+  </div>
+</div></section>
+
+<section id="cxl68"><div class="wrap">
+  <h2>5 · CXL 68B Flit Mode</h2>
+  <div class="twocol">
+    <div class="card"><ul class="tight" style="font-size:15px">
+      <li>Not supported when the negotiated maximum rate is above 32 GT/s.</li>
+      <li><strong>Raw</strong> (optional, Retimers): Protocol Layer does CRC and retry.</li>
+      <li><strong>68B Flit Format</strong> (mandatory at ≤ 32 GT/s): the Protocol Layer presents 64B (no Protocol ID, no CRC) on FDI; the Adapter adds the 2B header and 2B CRC and shifts.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§2.3–2.3.2, p.55</p></div>
+    <div class="card"><h3>What changes inside the flit</h3><ul class="tight" style="font-size:15px">
+      <li>CXL.io: no Ack, Nak or PM DLLPs; no Protocol Layer retry; LCRC driven 0 and ignored; STP sequence number and CRCs recommended 0.</li>
+      <li>CXL.cachemem: the "Ak" field is reserved and Retry flits are not used. Link initialization begins by sending INIT.Param without waiting.</li>
+      <li>Viral containment must be handled inside the Protocol Layer. Because Retry flits (which carry viral in CXL 68B) are unused, the spec recommends relying on CXL error isolation at the Root Port for fatal errors.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§2.3.2, p.55–56</p></div>
+  </div>
+</div></section>
+
+<section id="stream"><div class="wrap">
+  <h2>6 · Streaming, Management Transport and Raw</h2>
+  <div class="grid g3">
+    <div class="card"><h3>Streaming</h3><p style="font-size:15px">The default protocol if neither PCIe nor CXL is advertised. Raw Format is mandatory in the Adapter; Protocol Layer interop is vendor-defined. With the Streaming Flit Format capability, the 68B (≤ 32 GT/s), Standard 256B and Latency-Optimized formats may be used, giving CRC and retry. The Protocol Layer fills only Protocol ID bits [7:6] and must never use 00b (that marks Adapter NOPs).</p><p class="src"><span class="sl">Spec</span>§2.4–2.4.4, p.56–57 · §3.3.3, p.76</p></div>
+    <div class="card"><h3>Management Transport</h3><p style="font-size:15px">Carries management network packets (MTPs) over the mainband. Raw or any 256B format; 68B is not allowed. The Management Port Gateway ignores Adapter bytes on receive. Can be multiplexed on the same stack as CXL.io, PCIe or Streaming.</p><p class="src"><span class="sl">Spec</span>§2.5, p.57 · §3.3.3–3.3.4 Management Flit notes</p></div>
+    <div class="card"><h3>Raw Format for Retimers</h3><p style="font-size:15px">For every protocol, Raw Format exists mainly for UCIe Retimers bridging to an off-package interconnect. The protocol's own CRC, retry and FEC protect the end-to-end path, and Retimers are encouraged to count errors to characterize the off-package link, which dominates the error rate.</p><p class="src"><span class="sl">Spec</span>§2.1.1, p.53 · §2.2.1, p.54 · §2.3.1, p.55</p></div>
+  </div>
+</div></section>

@@ -1,0 +1,153 @@
+
+<section id="rationale"><div class="wrap">
+  <h2>7 · Why each rule exists, with real-time examples</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="pcie">
+      <div class="meta"><span>PCIe</span><span>§2.1.2–2.1.3 p.53</span></div>
+      <h3>No Ack/Nak, PM or Link Management DLLPs</h3>
+      <p class="rule">Over UCIe, PCIe does not use Ack/Nak DLLPs (Non-Flit), nor PM and Link Management DLLPs (any mode). Other DLLPs, such as flow-control updates, are still used.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Reliability is the Adapter's CRC and retry; power states are the FDI/RDI handshakes plus sideband messages; link state is the LTSM. Native DLLPs for those would duplicate mechanisms and could disagree with them.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A PCIe controller's L1 entry is driven by its idle timer and an FDI L1 request; no PM_Enter_L1 DLLP is sent. Credits still flow as UpdateFC DLLPs, which the Adapter packs into DLP bytes.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A controller that waits for a PM_Request_Ack DLLP before entering L1 never gets one.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>DLLP rules <span class="ref">§2.1.2, p.53 · §3.6, p.91</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="pcie">
+      <div class="meta"><span>PCIe</span><span>§2.1.3 p.53 · §2.3.2 p.55</span></div>
+      <h3>Keep the 68B framing, zero the reliability fields</h3>
+      <p class="rule">In 68B mode the Protocol Layer still produces CXL.io-style framing tokens and LCRC fields, but drives LCRC as 0 (receiver ignores it) and is recommended to drive STP sequence number, DLLP CRC, frame CRC and parity to 0.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Keeping the framing format lets existing parsers work unchanged, so the controller design stays close to a standard CXL.io one. Zeroing the protection fields avoids computing work that the Adapter's CRC already covers.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A TLP in a 68B flit still starts with an STP token, but its sequence number field is 0 and its LCRC is four zero bytes.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that checks LCRC flags every TLP as corrupted.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>LCRC and STP rules <span class="ref">§2.1.3, p.53 · §2.3.2, p.55</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="pcie">
+      <div class="meta"><span>PCIe</span><span>§2.1.2 p.53 · §2.1.3 p.53</span></div>
+      <h3>Framing errors are internal errors</h3>
+      <p class="rule">If the Protocol Layer detects a framing error, it is permitted to treat it as an uncorrectable internal error.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Flits reaching the Protocol Layer were already CRC-checked and, with retry, replayed if bad. A framing error therefore almost certainly comes from a logic or buffer fault inside the chip, not from the wire.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An SRAM soft error in a receive buffer corrupts an STP token. The Protocol Layer reports an uncorrectable internal error instead of triggering native PCIe recovery.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Triggering PCIe-style link recovery cannot help: the link itself is fine.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Permission to treat as UIE <span class="ref">§2.1.3, p.53</span></li><li><span class="kind illus">Illustrative</span>The SRAM example</li></ul></div>
+    </article>
+    <article class="wcard" data-g="cxl">
+      <div class="meta"><span>CXL</span><span>§2.2.2 p.54</span></div>
+      <h3>Format 6 adds payload, not just latency</h3>
+      <p class="rule">Format 6 gives CXL.io 4 more bytes of TLP per flit, and CXL.cachemem a 14-byte H-slot between slots 7 and 8.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Splitting the flit into CRC-protected halves costs some bytes. Format 6 hands unused Adapter bytes back to the protocol, recovering packing efficiency so the latency gain does not cost bandwidth.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Every Format 6 cachemem flit carries one more 14-byte H-slot than a Format 5 flit, at the same link rate and the same latency.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that packs Format 6 rules while Format 5 was negotiated writes into bytes the Adapter treats as reserved; the remote Protocol Layer ignores them and loses the slot.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Extra bytes and slot position <span class="ref">§2.2.2, p.54</span></li><li><span class="kind illus">Illustrative</span>Slot count and percentage</li></ul></div>
+    </article>
+    <article class="wcard" data-g="cxl">
+      <div class="meta"><span>CXL</span><span>Table 10-3 p.540</span></div>
+      <h3>Corrupt the CRC to contain viral</h3>
+      <p class="rule">With Adapter retry, the CXL.cachemem Protocol Layer asserts <code>lp_corrupt_crc</code> with the last chunk of a flit (or 128B half) that must not be consumed. The Adapter corrupts its CRC and overwrites it in the retry buffer with the next flit, which carries viral.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The Protocol Layer may discover a problem after it has already started sending a flit. Corrupting the CRC guarantees the receiver discards it, and the replay naturally delivers the viral flit in its place, with no extra latency on the normal path.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>See the "Viral with lp_corrupt_crc" scenario below.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Not overwriting the retry-buffer entry: the replay resends the poisoned flit with a good CRC, and the receiver accepts it.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Rules for Standard and Latency-Optimized flits; 138Eh <span class="ref">Table 10-3, p.540</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cxl">
+      <div class="meta"><span>CXL</span><span>§2.3.2 p.55–56</span></div>
+      <h3>68B CXL: viral stays in the Protocol Layer</h3>
+      <p class="rule">In 68B mode, CXL Retry flits are not used, so viral containment must be handled within the Protocol Layer; the spec recommends CXL error isolation at the Root Port for fatal errors.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Native CXL 68B carries viral in Retry flits, which UCIe removes. Error isolation resets only the virtual hierarchy below a Root Port instead of the whole host, so it is a better fit than viral when the usual viral transport is missing.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Type 3 memory device on a 16 GT/s UCIe link has an uncorrectable error; the host Root Port isolates it and software resets that hierarchy while the rest of the host runs.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Expecting a Retry flit to deliver viral in 68B mode: none arrives.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Viral and error isolation text <span class="ref">§2.3.2, p.55–56</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="str">
+      <div class="meta"><span>Streaming</span><span>§2.4 p.56 · §3.3.3 p.76</span></div>
+      <h3>Streaming never uses Protocol ID 00b</h3>
+      <p class="rule">In Streaming flit formats the Protocol Layer fills only Protocol ID bits [7:6] of the flit header and must never set 00b.</p>
+      <div class="part"><span class="l l-why">Why</span><p>00b marks an Adapter NOP flit, which the receiving Adapter drops. The other three values are free for vendor use, for example to tag message classes.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A vendor uses 01b for data and 10b for control messages of its accelerator protocol.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Flits sent with 00b vanish at the receiver: silent data loss.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Protocol ID rule <span class="ref">§3.3.3, p.76 · §3.3.4, p.80 · Table 3-5</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="str">
+      <div class="meta"><span>Streaming</span><span>§2.5 p.57</span></div>
+      <h3>Management Transport: no 68B</h3>
+      <p class="rule">Management Transport over mainband may use Raw or any 256B format, never 68B.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Management flits carry fields (for example the credit return DWORD) at fixed byte positions defined only for the 256B layouts. The 68B format has no room for them.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Format 3 Management flits put the credit-return DWORD in bytes 238–241.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Negotiating Management Transport with 68B is an illegal combination; either side may take the link to LinkError.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Format restriction <span class="ref">§2.5, p.57</span></li><li><span class="kind spec">Spec</span>CRD byte positions <span class="ref">§3.3.3, p.76–77</span></li><li><span class="kind spec">Spec</span>Illegal combo → LinkError <span class="ref">§3.4, p.87</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="str">
+      <div class="meta"><span>Streaming</span><span>§2.1.1 p.53 · §2.2.1 p.54</span></div>
+      <h3>Raw is for Retimers, and they should count errors</h3>
+      <p class="rule">In Raw Format the Protocol Layer keeps its own CRC, retry and FEC. Retimers are strongly recommended to check and count errors using the protocol's FEC parity or CRC.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Across a Retimer, the off-package link dominates errors. End-to-end protocol protection covers both links, and error counts at the Retimer show which link is misbehaving.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A rack-scale CXL link through two Retimers shows replays; the Retimers' counters show all errors on the cable, none on either UCIe link.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Retimers that do not count errors leave debug blind to which segment is bad.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Raw format intent and recommendation <span class="ref">§2.1.1, p.53 · §2.2.1, p.54</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>8 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>9 · Verification</h2>
+  <div class="twocol">
+    <div class="card"><h3>Checkers</h3><ul class="tight">
+      <li>Negotiated protocol/format legal per Tables 2-1, 3-7 and the max data rate. <span class="ref">p.53, p.85</span></li>
+      <li>No Ack/Nak/PM/Link Management DLLPs on FDI. <span class="ref">§2.1.2 · §2.2.2</span></li>
+      <li>68B: LCRC = 0, Ak reserved, no Retry flits. <span class="ref">§2.3.2</span></li>
+      <li>Adapter-reserved bytes driven 0 by the Protocol Layer. <span class="ref">§3.3.3</span></li>
+      <li>Streaming Protocol ID ≠ 00b. <span class="ref">§3.3.3</span></li>
+      <li><code>lp_corrupt_crc</code> only for CXL.cachemem with Adapter retry; second half also marked if first is. <span class="ref">Table 10-3</span></li>
+    </ul></div>
+    <div class="card"><h3>Scenarios</h3><ul class="tight">
+      <li>Each protocol × rate × format from the matrix, including "not supported" combinations. <span class="ref">Table 2-1</span></li>
+      <li>CXL 3.0 device negotiating with a CXL 2.0-only partner at 32 GT/s (68B) and at 64 GT/s (fail). <span class="ref">Table 2-1</span></li>
+      <li>Viral on the first half, the second half, and both halves of a Latency-Optimized flit. <span class="ref">Table 10-3</span></li>
+      <li>Format 6 with cachemem H-slot packing; Format 5 fallback. <span class="ref">§2.2.2</span></li>
+      <li>Management Transport multiplexed with CXL.io on one stack. <span class="ref">§2.5 · §3.3.3</span></li>
+    </ul></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>10 · Test yourself</h2>
+  <p class="sub"><button class="btn" id="qa-toggle" type="button" aria-pressed="false">Show all answers</button></p>
+  <details><summary>How is PCIe Non-Flit Mode carried over UCIe? <span class="lvl">Basic</span></summary><div><p>Using the CXL.io 68B flit formats (Format 2), only when the negotiated maximum data rate is ≤ 32 GT/s.</p><p class="src"><span class="sl">Spec</span>§2.1.3, p.53</p></div></details>
+  <details><summary>Which format is mandatory for CXL 256B Flit Mode? <span class="lvl">Basic</span></summary><div><p>Standard 256B Start Header (Format 4). Latency-Optimized formats are strongly recommended in addition.</p><p class="src"><span class="sl">Spec</span>§2.2.3, p.55 · Table 3-7</p></div></details>
+  <details><summary>Which DLLPs are dropped for PCIe and CXL.io over UCIe? <span class="lvl">Intermediate</span></summary><div><p>PM and Link Management DLLPs in all modes; Ack/Nak as well (Non-Flit and CXL.io). Other DLLPs such as flow-control updates remain.</p><p class="src"><span class="sl">Spec</span>§2.1.2–2.1.3, p.53 · §2.2.2, p.54 · §2.3.2, p.55</p></div></details>
+  <details><summary>What extra space does Format 6 give CXL? <span class="lvl">Intermediate</span></summary><div><p>4 more TLP bytes for CXL.io; a 14-byte H-slot between slots 7 and 8 for CXL.cachemem.</p><p class="src"><span class="sl">Spec</span>§2.2.2, p.54</p></div></details>
+  <details><summary>How does lp_corrupt_crc contain viral without delaying normal flits? <span class="lvl">Advanced</span></summary><div><p>The Adapter corrupts the CRC of the marked flit (XOR 138Eh recommended) so the receiver rejects it, and overwrites that flit in the retry buffer with the next flit, which carries viral. The receiver's Nak causes a replay that delivers the viral flit instead.</p><p class="src"><span class="sl">Spec</span>Table 10-3, p.540</p></div></details>
+  <details><summary>A CXL 3.0 device and a CXL 2.0-only device at a 64 GT/s maximum rate: what happens? <span class="lvl">Advanced</span></summary><div><p>CXL 2.0 above 32 GT/s is not supported, so there is no common CXL mode at that rate. The link must train with a maximum rate ≤ 32 GT/s, where CXL 68B is mandatory for both.</p><p class="src"><span class="sl">Spec</span>Table 2-1, p.53</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>11 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>§2.0, Table 2-1</td><td>Protocol Layer; Specification to Protocol Mode Requirements</td><td class="num">51–53</td></tr>
+      <tr><td>§2.1–2.1.5</td><td>PCIe formats</td><td class="num">53–54</td></tr>
+      <tr><td>§2.2–2.2.3</td><td>CXL 256B Flit Mode formats</td><td class="num">54–55</td></tr>
+      <tr><td>§2.3–2.3.2</td><td>CXL 68B Flit Mode formats</td><td class="num">55–56</td></tr>
+      <tr><td>§2.4–2.4.4</td><td>Streaming Protocol formats</td><td class="num">56–57</td></tr>
+      <tr><td>§2.5</td><td>Management Transport Protocol</td><td class="num">57</td></tr>
+      <tr><td>§3.3, Tables 3-6, 3-7</td><td>Operation formats; requirements</td><td class="num">71–85</td></tr>
+      <tr><td>§3.4</td><td>Decision Table for Flit Format and Protocol</td><td class="num">85–88</td></tr>
+      <tr><td>§3.6</td><td>Power Management Link States</td><td class="num">90–91</td></tr>
+      <tr><td>Table 10-3</td><td>FDI signal list (lp_corrupt_crc, lp_dllp)</td><td class="num">540–541</td></tr>
+      <tr><td>§11.1</td><td>Protocol Layer Compliance</td><td class="num">580</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 2 Protocol Layer, with Chapters 3, 10 and 11 for context.</div></footer>

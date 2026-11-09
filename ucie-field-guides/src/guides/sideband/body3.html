@@ -1,0 +1,115 @@
+
+<section id="live"><div class="wrap">
+  <h2>8 · Live scenarios</h2>
+  <p class="sub">Step-level and cycle-level views. The column unit is shown in each scenario.</p>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps">
+      <div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+      <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <h2>9 · Real silicon: what the theory turns into</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Quantity</th><th class="num">Value</th><th>Basis</th></tr></thead>
+      <tbody>
+        <tr><td>Header-only packet on the wire</td><td class="num">64 UI = 80 ns</td><td class="ref">§4.1.5 · §5.13</td></tr>
+        <tr><td>Packet with 64b data, no PMO</td><td class="num">192 UI = 240 ns</td><td class="ref">derived</td></tr>
+        <tr><td>Same with PMO</td><td class="num">128 UI = 160 ns</td><td class="ref">derived</td></tr>
+        <tr><td>Remote read, wire time only (req + cpl with data)</td><td class="num">≈ 360 ns</td><td class="ref">derived</td></tr>
+        <tr><td>Max FDI/RDI sideband credits per direction</td><td class="num">32 (512 B of buffer)</td><td class="ref">§7.1.3.1 · derived</td></tr>
+        <tr><td>Remote register request credits</td><td class="num">≥ 4</td><td class="ref">§7.1.3.3</td></tr>
+        <tr><td>Request timeout / Retimer Stall</td><td class="num">8 ms / every 4 ms</td><td class="ref">§7.0</td></tr>
+        <tr><td>Config bus width NC</td><td class="num">8, 16 or 32 bits</td><td class="ref">Table 10-1</td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid" style="gap:12px">
+      <div class="callout"><p><strong>Mailbox throughput is low by design.</strong> One outstanding mailbox access plus software polling means remote register access runs at microseconds per register. That is fine for configuration and debug; bulk management traffic should use Management Transport instead.</p><p class="src"><span class="sl">Spec</span>§7.1.3.3, p.299 · <span class="kind bg">Background</span>polling cost</p></div>
+      <div class="callout" style="border-left-color:var(--lp)"><p><strong>The sideband is shared.</strong> Training, link management, register access, error messages and MPMs all queue on the same wire. §4.8 bounds an MPM with data to 512/768 UI so link management never waits long enough to time out.</p><p class="src"><span class="sl">Spec</span>§4.8, p.182</p></div>
+    </div>
+  </div>
+  <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td>Link drops to LinkError on first register access</td><td>CP computed over DP too, or odd parity.</td><td class="ref">Table 7-5, p.272</td></tr>
+      <tr><td>Sideband hangs under heavy register traffic</td><td>Completions placed in a credited queue behind requests.</td><td class="ref">§7.1.3.1, p.298</td></tr>
+      <tr><td>Remote register access stops working after a link-down</td><td>E2E credit counter not re-initialized to 4 on RDI Reset → Active.</td><td class="ref">§7.1.3.3, p.299</td></tr>
+      <tr><td>Completions routed to the wrong stack</td><td>Adapter matched on srcid/dstid instead of tracking Tag per stack.</td><td class="ref">§7.0, p.268 · Table 7-2</td></tr>
+      <tr><td>Retimer link: Adapter LSM requests time out</td><td>Retimer stall interval ≥ 8 ms.</td><td class="ref">§7.0, p.268</td></tr>
+      <tr><td>Stale bits in fragmented registers</td><td>Layer returned non-zero for bits it does not own.</td><td class="ref">§7.0, p.268</td></tr>
+      <tr><td>Lost credit returns in PM</td><td>Credit pulse sent while the receiver was clock-gated.</td><td class="ref">Table 10-1, p.526</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>10 · Verification</h2>
+  <div class="twocol">
+    <div class="card"><h3>Checkers</h3><ul class="tight">
+      <li>Opcode legal for the hop (FDI: register access only). <span class="ref">§7.0 · Table 7-1</span></li>
+      <li>srcid/dstid legal per Tables 7-2 to 7-4; reserved on completions. <span class="ref">p.270–271</span></li>
+      <li>CP/DP even parity; parity error → UIE + RDI LinkError. <span class="ref">§7.1.3</span></li>
+      <li>Credit counters never negative; completions sent without credit check and always sunk. <span class="ref">§7.1.3.1</span></li>
+      <li>Tag unique among outstanding requests; completion returns Tag and BE. <span class="ref">Tables 7-5, 7-7</span></li>
+      <li>One outstanding LM request per MsgCode; every LM request gets a response. <span class="ref">§7.1.3.3</span></li>
+      <li>E2E credits init 4, saturating; CR bit and Nop.Crd handled. <span class="ref">§7.1.3.3</span></li>
+      <li>8 ms timeout reset by Stall; Stall interval ≤ 4 ms from Retimers. <span class="ref">§7.0</span></li>
+    </ul></div>
+    <div class="card"><h3>Scenarios</h3><ul class="tight">
+      <li>Every opcode at NC = 8, 16, 32 with BE patterns (non-contiguous). <span class="ref">Table 7-5</span></li>
+      <li>Remote read/write through the mailbox; completion with UR (reserved RL, EP set, timeout). <span class="ref">Table 7-7</span></li>
+      <li>Fragmented register read across PL, Adapter and PHY. <span class="ref">§7.0</span></li>
+      <li>Two stacks issuing register accesses concurrently. <span class="ref">§7.0</span></li>
+      <li>Injected CP and DP errors on each hop. <span class="ref">§7.1.3</span></li>
+      <li>Credit starvation: receiver holds credits; messages still progress. <span class="ref">§7.1.3.1</span></li>
+      <li>Priority packet chains interrupting long MPMs (PSPT). <span class="ref">§4.1.5.2</span></li>
+    </ul></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>11 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>What are the five sideband packet categories? <span class="lvl">Basic</span></summary><div><p>Register accesses, messages without data, messages with data, Management Transport messages (MPMs), and Priority Sideband Traffic Packets.</p><p class="src"><span class="sl">Spec</span>§7.1.1, p.269</p></div></details>
+  <details><summary>How does the Protocol Layer read a register on the far die? <span class="lvl">Basic</span></summary><div><p>Through the Adapter's sideband mailbox registers: it programs index and control, the Adapter issues the remote request over RDI and the sideband, and puts the completion data and status into the mailbox.</p><p class="src"><span class="sl">Spec</span>§7.0, p.268 · §9.5.1.11–9.5.1.16</p></div></details>
+  <details><summary>How big is one sideband credit on FDI/RDI? <span class="lvl">Basic</span></summary><div><p>64 bits of header plus 64 bits of data, regardless of what the packet actually carries. Up to 32 credits per direction.</p><p class="src"><span class="sl">Spec</span>§7.1.3.1, p.298</p></div></details>
+  <details><summary>Why is there no retry on the sideband? <span class="lvl">Intermediate</span></summary><div><p>Its BER is 1e-27 or better. Parity detects the extremely rare error, and it is escalated as a fatal Uncorrectable Internal Error.</p><p class="src"><span class="sl">Spec</span>§7.1.3.2, p.298</p></div></details>
+  <details><summary>Why don't completions need credits? <span class="lvl">Intermediate</span></summary><div><p>Deadlock avoidance: requests waiting for credits must never block the completions that would free them. Receivers must always sink completions.</p><p class="src"><span class="sl">Spec</span>§7.1.3.1, p.298 · §7.1.3.3, p.299</p></div></details>
+  <details><summary>What does a UR completion carry? <span class="lvl">Advanced</span></summary><div><p>For an aborted request, 64 bits of data holding the original request header, so the requester can log it. For a timed-out request, no data.</p><p class="src"><span class="sl">Spec</span>Table 7-7, p.274–275</p></div></details>
+  <details><summary>Four E2E credits but only one mailbox: why? <span class="lvl">Advanced</span></summary><div><p>The mailbox allows one outstanding access; the extra credits let software issue debug register accesses after a timeout without waiting for the lost credit to come back.</p><p class="src"><span class="sl">Spec</span>§7.1.3.3, p.299</p></div></details>
+  <details><summary>How does a Retimer avoid timing out a requester while it waits on its far link? <span class="lvl">Advanced</span></summary><div><p>It sends the response with the Stall encoding (MsgInfo FFFFh) every 4 ms; each Stall resets the requester's 8 ms timer. It must not stall indefinitely.</p><p class="src"><span class="sl">Spec</span>§7.0, p.268 · Table 7-8, p.276</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>12 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>§4.1.5–4.1.5.2</td><td>Sideband transmission; PMO; PSPT</td><td class="num">102–104</td></tr>
+      <tr><td>§4.7.1.1</td><td>Sideband Assignment for Multi-module</td><td class="num">178</td></tr>
+      <tr><td>§4.8</td><td>Sideband PHY Arbitration between MPMs and Link Management</td><td class="num">182</td></tr>
+      <tr><td>§5.13</td><td>Sideband signaling (800 MT/s SDR)</td><td class="num">254</td></tr>
+      <tr><td>§7.0</td><td>Sideband (mailbox, timeouts, fragmented registers)</td><td class="num">268</td></tr>
+      <tr><td>§7.1.1, Table 7-1</td><td>Sideband Packet Types; opcode encodings</td><td class="num">269</td></tr>
+      <tr><td>Tables 7-2 to 7-4</td><td>srcid and dstid encodings on FDI, RDI and the Link</td><td class="num">270–271</td></tr>
+      <tr><td>§7.1.2.1, Tables 7-5 to 7-7</td><td>Register Access Packets</td><td class="num">272–275</td></tr>
+      <tr><td>§7.1.2.2, Tables 7-8 and 7-9</td><td>Messages without Data</td><td class="num">275–282</td></tr>
+      <tr><td>§7.1.2.3, Tables 7-10 and 7-11</td><td>Messages with data payloads</td><td class="num">282–291</td></tr>
+      <tr><td>§7.1.2.4–7.1.2.5</td><td>Management Port Messages with and without Data</td><td class="num">291–296</td></tr>
+      <tr><td>§7.1.2.6</td><td>Priority Sideband Traffic Packets</td><td class="num">297</td></tr>
+      <tr><td>§7.1.3–7.1.3.3, Figure 7-15</td><td>Flow Control and Data Integrity; E2E flow control</td><td class="num">297–300</td></tr>
+      <tr><td>§7.1.4</td><td>Operation on RDI and FDI</td><td class="num">302</td></tr>
+      <tr><td>§9.5.1.11–9.5.1.16</td><td>UCIe Link DVSEC Sideband Mailbox registers</td><td class="num">477–479</td></tr>
+      <tr><td>Table 10-1</td><td>RDI lp_cfg/pl_cfg and credit signals</td><td class="num">526</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 7 Sideband, with Chapters 4.1.5, 4.7, 4.8, 5.13, 9.5.1 and 10 for context.</div></footer>
