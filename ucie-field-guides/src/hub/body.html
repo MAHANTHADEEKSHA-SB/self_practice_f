@@ -1,0 +1,108 @@
+<header class="top">
+  <div class="wrap hero">
+    <div class="eyebrow">UCIe Specification Revision 3.0, Version 1.0 · August 5, 2025</div>
+    <h1>UCIe 3.0 Field Guides</h1>
+    <p class="lede">Eleven plain-English guides that walk the UCIe 3.0 spec layer by layer. Each one explains why a rule exists, ties every fact to a section and page, and lets you step through waveforms of the flows that matter. Start with the layer map, or jump to a topic below.</p>
+    <p class="src" style="max-width:76ch"><span class="sl">How to read them</span>Every card cites § (section) and p. (page). Tags: <span class="kind spec">Spec</span> stated in the spec, <span class="kind derived">Derived</span> worked out from spec values, <span class="kind illus">Illustrative</span> example values, <span class="kind bg">Background</span> from outside UCIe.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#map">Layer map</a><a href="#guides">All guides</a><a href="#paths">Reading paths</a><a href="#topics">Topic finder</a><a href="#notes">Spec notes</a>
+</div></nav>
+<style>
+  .lmap a { cursor: pointer; }
+  .lmap a:hover rect, .lmap a:focus rect { stroke-width: 2.6; }
+  .lmap a:focus { outline: none; }
+  .gcard h3 a { color: inherit; text-decoration: none; }
+  .gcard h3 a:hover { text-decoration: underline; }
+  .gcard .ch { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .gcard .tools { font-size: 13.5px; color: var(--muted); margin: 8px 0 0; }
+  .gcard .go { display: inline-block; margin-top: 10px; font-weight: 500; color: var(--pl); text-decoration: none; }
+  .gcard .go:hover { text-decoration: underline; }
+  .path ol { margin: 6px 0 0; padding-left: 20px; }
+  .path li { margin: 4px 0; font-size: 15px; }
+  .path a, #topics td a { color: var(--pl); text-decoration: none; }
+  .path a:hover, #topics td a:hover { text-decoration: underline; }
+</style>
+<main>
+
+<section id="map"><div class="wrap">
+  <h2>Layer map: click a layer to open its guide</h2>
+  <figure>
+    <svg class="lmap" viewBox="0 0 860 470" role="img" aria-label="UCIe layer map. Protocol Layer at the top links to Protocol Mappings; FDI links to the FDI guide; the D2D Adapter links to its guide; RDI links to its guide; the Physical Layer contains the Logical PHY, Link Training (LTSM) and the Electrical layer, each linking to a guide; the Sideband runs alongside. On the right, Manageability, Registers, and Retimers and Compliance cut across layers.">
+      <g font-family="var(--font-body)" style="color:var(--ink)">
+        <a href="guides/protocol-mappings.html"><rect x="20" y="16" width="520" height="56" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="40" y="41" font-size="16" font-weight="600" fill="currentColor">Protocol Layer</text><text x="40" y="61" font-size="12" fill="var(--muted)">PCIe · CXL · Streaming · Management → Protocol Mappings (Ch 2)</text></a>
+        <a href="guides/fdi.html"><rect x="20" y="80" width="520" height="38" rx="7" fill="var(--hl)" stroke="var(--lp)" stroke-width="1.6"/><text x="40" y="104" font-size="14" font-weight="600" fill="var(--lp)">FDI</text><text x="80" y="104" font-size="12" fill="var(--muted)">Flit-aware D2D Interface (Ch 10.2)</text></a>
+        <a href="guides/d2d-adapter.html"><rect x="20" y="126" width="520" height="56" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="40" y="151" font-size="16" font-weight="600" fill="currentColor">Die-to-Die Adapter</text><text x="40" y="171" font-size="12" fill="var(--muted)">flit formats · CRC · retry · parameter exchange · stack mux (Ch 3)</text></a>
+        <a href="guides/rdi.html"><rect x="20" y="190" width="520" height="38" rx="7" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.6"/><text x="40" y="214" font-size="14" font-weight="600" fill="var(--pl)">RDI</text><text x="80" y="214" font-size="12" fill="var(--muted)">Raw D2D Interface (Ch 10.1)</text></a>
+        <rect x="20" y="236" width="520" height="168" rx="9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="40" y="258" font-size="16" font-weight="600" fill="currentColor">Physical Layer</text>
+        <a href="guides/logical-phy.html"><rect x="36" y="268" width="236" height="56" rx="7" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="52" y="292" font-size="14" font-weight="600" fill="currentColor">Logical PHY</text><text x="52" y="312" font-size="11.5" fill="var(--muted)">lanes · Valid · repair · degrade (4.1–4.4)</text></a>
+        <a href="guides/link-training.html"><rect x="288" y="268" width="236" height="56" rx="7" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="304" y="292" font-size="14" font-weight="600" fill="currentColor">Link Training (LTSM)</text><text x="304" y="312" font-size="11.5" fill="var(--muted)">RESET → ACTIVE, retrain, PM (4.5–4.7)</text></a>
+        <a href="guides/electrical-ucie-3d.html"><rect x="36" y="334" width="488" height="56" rx="7" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="52" y="358" font-size="14" font-weight="600" fill="currentColor">Electrical (AFE) and UCIe-3D</text><text x="52" y="378" font-size="11.5" fill="var(--muted)">rates · clocking · Tx/Rx · channel · BER · 3D stacking (Ch 5, 6)</text></a>
+        <a href="guides/sideband.html"><rect x="20" y="414" width="520" height="40" rx="7" fill="var(--surface)" stroke="var(--sb)" stroke-width="1.6" stroke-dasharray="5 3"/><text x="40" y="439" font-size="14" font-weight="600" fill="var(--sb)">Sideband</text><text x="118" y="439" font-size="12" fill="var(--muted)">packets · opcodes · credits · mailbox transport (Ch 7)</text></a>
+        <a href="guides/manageability-uda.html"><rect x="580" y="16" width="260" height="120" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="600" y="44" font-size="15" font-weight="600" fill="currentColor">Manageability &amp; UDA</text><text x="600" y="66" font-size="12" fill="var(--muted)">management network, MTP,</text><text x="600" y="84" font-size="12" fill="var(--muted)">path setup, heartbeat,</text><text x="600" y="102" font-size="12" fill="var(--muted)">test/debug hub and spokes</text><text x="600" y="122" font-size="11.5" fill="var(--muted)">(Ch 8)</text></a>
+        <a href="guides/registers-discovery.html"><rect x="580" y="150" width="260" height="120" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="600" y="178" font-size="15" font-weight="600" fill="currentColor">Registers &amp; Discovery</text><text x="600" y="200" font-size="12" fill="var(--muted)">UEDT, UiRB, Link DVSEC,</text><text x="600" y="218" font-size="12" fill="var(--muted)">mailbox, error registers,</text><text x="600" y="236" font-size="12" fill="var(--muted)">eye margins (UHM)</text><text x="600" y="256" font-size="11.5" fill="var(--muted)">(Ch 9)</text></a>
+        <a href="guides/retimers-compliance.html"><rect x="580" y="284" width="260" height="120" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="600" y="312" font-size="15" font-weight="600" fill="currentColor">Retimers &amp; Compliance</text><text x="600" y="334" font-size="12" fill="var(--muted)">off-package links, credits,</text><text x="600" y="352" font-size="12" fill="var(--muted)">Stall; Golden Die, injection,</text><text x="600" y="370" font-size="12" fill="var(--muted)">PHY margining</text><text x="600" y="390" font-size="11.5" fill="var(--muted)">(§1.3, Ch 11, §9.5.4)</text></a>
+        <text x="710" y="436" text-anchor="middle" font-size="11.5" fill="var(--muted)">these cut across all layers</text>
+      </g>
+    </svg>
+    <p class="src"><span class="kind illus">Illustrative</span> map in the spirit of Figure 1-8, p.42 (UCIe layers and functionalities). Each box opens its guide.</p>
+  </figure>
+</div></section>
+
+<section id="guides"><div class="wrap">
+  <h2>All guides</h2>
+  <div class="grid g2" id="glist"></div>
+</div></section>
+
+<section id="paths"><div class="wrap">
+  <h2>Reading paths</h2>
+  <div class="grid g2">
+    <div class="card path"><div class="tagline">New to UCIe</div><h3>Top to bottom</h3><ol>
+      <li><a href="guides/protocol-mappings.html">Protocol Mappings</a>: what rides on UCIe</li>
+      <li><a href="guides/fdi.html">FDI</a>: how a protocol hands over flits</li>
+      <li><a href="guides/d2d-adapter.html">D2D Adapter</a>: formats, CRC, retry</li>
+      <li><a href="guides/rdi.html">RDI</a>: the Adapter–PHY boundary</li>
+      <li><a href="guides/logical-phy.html">Logical PHY</a> and <a href="guides/link-training.html">Link Training</a></li>
+      <li><a href="guides/sideband.html">Sideband</a>: the side channel everything uses</li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Verification engineer</div><h3>Bring-up and debug first</h3><ol>
+      <li><a href="guides/link-training.html">Link Training</a>: where links get stuck</li>
+      <li><a href="guides/sideband.html">Sideband</a>: messages, timeouts, credits</li>
+      <li><a href="guides/rdi.html">RDI</a> and <a href="guides/fdi.html">FDI</a>: interface checkers and assertions</li>
+      <li><a href="guides/d2d-adapter.html">D2D Adapter</a>: retry and parameter exchange</li>
+      <li><a href="guides/registers-discovery.html">Registers</a>: error logs and the mailbox</li>
+      <li><a href="guides/retimers-compliance.html">Retimers &amp; Compliance</a>: injection hooks</li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Platform and system</div><h3>Software, management, physical</h3><ol>
+      <li><a href="guides/registers-discovery.html">Registers &amp; Discovery</a></li>
+      <li><a href="guides/manageability-uda.html">Manageability &amp; UDA</a></li>
+      <li><a href="guides/retimers-compliance.html">Retimers &amp; Compliance</a></li>
+      <li><a href="guides/electrical-ucie-3d.html">Electrical &amp; UCIe-3D</a></li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Interview prep</div><h3>The quizzes</h3><p style="font-size:15px">Each guide after FDI ends with interview-style questions (Basic, Intermediate, Advanced) with answers and page references; FDI has a verification section instead. A quick round: the quiz sections of D2D Adapter, Link Training, Sideband and Registers.</p></div>
+  </div>
+</div></section>
+
+<section id="topics"><div class="wrap">
+  <h2>Topic finder</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>If you are looking for…</th><th>Guide</th><th>Spec</th></tr></thead>
+    <tbody id="tbody-topics"></tbody>
+  </table></div>
+</div></section>
+
+<section id="notes"><div class="wrap">
+  <h2>Spec notes found while building the guides</h2>
+  <p class="sub">Places where the spec is easy to misread or appears inconsistent. Each is explained in the linked guide.</p>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Gotcha</div><h3>Three encodings for link width</h3><p>Code 2h means x64 in Link Capability, but x16 in Link Control and Link Status. Each register has its own table.</p><p class="src"><span class="sl">Spec</span>Tables 9-8, 9-9, 9-10, p.466–470 · <a href="guides/registers-discovery.html">Registers guide</a></p></div>
+    <div class="card"><div class="tagline">Gotcha</div><h3>PCIe Link Status shows a fixed 8 GT/s x16</h3><p>On UCIe ports the PCIe capability reports fixed speed and width; the real values are in the UCIe Link DVSEC.</p><p class="src"><span class="sl">Spec</span>Appendix A.2, Table A-2, p.583 · <a href="guides/registers-discovery.html">Registers guide</a></p></div>
+    <div class="card"><div class="tagline">Inconsistency</div><h3>Valid error correction at exactly 48 GT/s</h3><p>§4.1.2.1 lets retimer-link receivers at ≤ 48 GT/s retrain on any Valid error; §5.11 requires single-error correction at 48 GT/s. Correcting at 48 GT/s satisfies both.</p><p class="src"><span class="kind derived">Derived</span> §4.1.2.1, p.101 vs §5.11, p.253 · <a href="guides/electrical-ucie-3d.html">Electrical guide</a></p></div>
+    <div class="card"><div class="tagline">Stale reference</div><h3>§11.3 points to the wrong UHM section</h3><p>It says the UHM DVSEC is in §9.5.3.36; in Revision 3.0 that is Runtime Link Test Control, and UHM is §9.5.3.40.</p><p class="src"><span class="kind derived">Derived</span> §11.3, p.581 · <a href="guides/retimers-compliance.html">Compliance guide</a></p></div>
+  </div>
+  <p class="src" style="margin-top:12px">Not covered in depth: individual bump-map figures, every register bit outside the main ones, and Appendix B (AIB interoperability).</p>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). The guides explain and index the spec; for sign-off, check the spec itself at the cited page.</div></footer>
