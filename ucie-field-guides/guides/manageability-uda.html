@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe Manageability, MTP and UDA Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the UCIe field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="fdi.html">FDI</a><a href="rdi.html">RDI</a><a href="d2d-adapter.html">D2D Adapter</a><a href="link-training.html">Link Training</a><a href="logical-phy.html">Logical PHY</a><a href="sideband.html">Sideband</a><a href="protocol-mappings.html">Protocol Mappings</a><span class="here">Manageability &amp; UDA</span><a href="registers-discovery.html">Registers &amp; Discovery</a><a href="retimers-compliance.html">Retimers &amp; Compliance</a><a href="electrical-ucie-3d.html">Electrical &amp; UCIe-3D</a></div>
+    <div class="eyebrow">UCIe 3.0 · Chapter 8 · System Architecture</div>
+    <h1>UCIe Manageability, MTP and UDA Field Guide</h1>
+    <p class="lede">Chapter 8 defines an optional management network that runs across the chiplets of a package, independent of the mainband protocol: discovery, configuration, firmware download, telemetry, power control, and a standard test and debug architecture (UDA). It is 150 pages in the spec; this guide gives the architecture, the packet, how it rides on sideband and mainband, how a path comes up, and how UDA uses it.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>chiplet A / requester</span><span><i class="sw" style="background:var(--pl)"></i>chiplet B / responder</span><span><i class="sw" style="background:var(--sb)"></i>sideband management traffic</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#arch">2 · Architecture</a><a href="#mtp">3 · The MTP packet</a><a href="#encap">4 · Encapsulation</a><a href="#setup">5 · Path setup</a><a href="#uda">6 · UDA</a><a href="#caps">7 · Capabilities</a><a href="#rationale">8 · Why each rule</a><a href="#live">9 · Live scenario</a><a href="#quiz">10 · Test yourself</a><a href="#refs">11 · Spec index</a>
+</div></nav>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why UCIe defines manageability</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Open ecosystem</div><h3>One way to manage chiplets from any vendor</h3><p>A package built from several vendors' chiplets needs common discovery, configuration and debug. Manageability standardizes generally useful features and lets the rest be vendor-defined.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303</p></div>
+    <div class="card"><div class="tagline">Protocol-agnostic</div><h3>Works whatever the mainband carries</h3><p>Management runs over sideband or mainband regardless of whether the mainband is PCIe, CXL, Streaming or a future protocol, so the same firmware base can manage any chiplet.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303</p></div>
+    <div class="card"><div class="tagline">Simple stays simple</div><h3>Core in hardware, extras optional</h3><p>Required core capabilities can be implemented in hardware, so simple chiplets need no firmware. Advanced capabilities and security features are a menu, chosen per market.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303</p></div>
+    <div class="card"><div class="tagline">Examples</div><h3>What it is used for</h3><p>Discovering the chiplets in a package, initializing structures and parameters (replacing serial EEPROMs), firmware download, telemetry, power and thermal control, test and debug.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303 · §8.3–8.4</p></div>
+  </div>
+</div></section>
+
+<section id="arch"><div class="wrap">
+  <h2>2 · Architecture: entities, network, directors</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Management Domain</td><td>All chiplets in the package that support UCIe manageability.</td></tr>
+        <tr><td>Management Network</td><td>Those chiplets connected through Management Ports by chiplet-to-chiplet management links; fully connected (a path exists between any two).</td></tr>
+        <tr><td>Management Fabric</td><td>On-die interconnect between a chiplet's Management Entities (implementation-specific).</td></tr>
+        <tr><td>Management Element</td><td>Entity that implements a management service; supports Management Transport and one or more Management Protocols.</td></tr>
+        <tr><td>Management Port</td><td>Interface between the fabric and a point-to-point management link (UCIe sideband or mainband).</td></tr>
+        <tr><td>Management Bridge</td><td>Connects the Management Network to another interconnect, inside or outside the package.</td></tr>
+        <tr><td>Management Director</td><td>One active per SiP: configures the network and acts as manageability Root of Trust.</td></tr>
+        <tr><td>Security Director</td><td>Configures security parameters (for example security clearance groups).</td></tr>
+        <tr><td>DFx Management Hub (DMH)</td><td>Management Element that implements test and debug protocols (UDA).</td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Layering</h3><div class="flow">
+        <div><span class="n">4</span><p>Management Protocols: UCIe Memory Access Protocol, test/debug protocols, vendor protocols.</p></div>
+        <div><span class="n">3</span><p>UCIe Management Transport: end-to-end packets between entities, unmodified in flight.</p></div>
+        <div><span class="n">2</span><p>Link encapsulation: one mechanism for sideband, one for mainband.</p></div>
+        <div><span class="n">1</span><p>UCIe link: sideband wires or mainband flits.</p></div>
+      </div><p class="src"><span class="sl">Spec</span>§8.1.2, p.304–306 · Figure 8-3</p></div>
+      <div class="card"><h3>Port recommendations</h3><p style="font-size:15px">A manageable chiplet should have at least one sideband Management Port, and enough of them that a whole package can form one management domain over sideband alone. Chiplets that need high-bandwidth management (test, debug, telemetry) are strongly recommended to also support mainband Management Ports.</p><p class="src"><span class="sl">Spec</span>§8.1.2, p.305</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="mtp"><div class="wrap">
+  <h2>3 · The Management Transport Packet (MTP)</h2>
+  <div class="twocol">
+    <div class="card"><ul class="tight" style="font-size:15px">
+      <li><strong>Header</strong>: first two DWORDs. Destination and Source Management Network IDs, Management Protocol ID, Traffic Class, Packet Integrity Protection Present (PIPP), Security Clearance Group, Length.</li>
+      <li><strong>Length</strong> is the whole packet in DWORDs minus one (000h = 1 DWORD).</li>
+      <li><strong>Protocol-specific field</strong>: defined by the Management Protocol; whole DWORDs.</li>
+      <li><strong>Packet Integrity</strong> (optional, if PIPP ≠ 0): currently CRC only.</li>
+      <li>Fields are little-endian bit order; reserved fields are sent as 0, forwarded unmodified, ignored by receivers.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§8.1.3.1 and Table 8-1, p.307–308</p></div>
+    <div class="card"><h3>Traffic classes and access control</h3><ul class="tight" style="font-size:15px">
+      <li>Eight traffic classes. Each is its own ordering domain: no ordering between classes, nor between requests and responses.</li>
+      <li>The Management Director may route classes differently (for example TC0 over sideband, TC2 over mainband).</li>
+      <li>Forward progress is required on every class; QoS between classes is implementation-specific.</li>
+      <li>Requests carry a Security Clearance Group used by access control; responses carry 00h and are handled at the request's group.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§8.1.3.1.1, p.308–309 · Table 8-1</p></div>
+  </div>
+</div></section>
+
+<section id="encap"><div class="wrap">
+  <h2>4 · Getting MTPs across a UCIe link</h2>
+  <div class="twocol">
+    <div class="card"><h3>Management Port Gateways</h3><p style="font-size:15px">At each end of a UCIe link a Management Port Gateway (MPG) bridges the on-die fabric to the link. On sideband, MTPs travel as Management Port Messages (MPMs, opcodes 10111b and 11000b) in per-RxQ credited buffers; the PHY has extra RDI signals for this (Table 10-2). On mainband, MTPs ride in Management Flits, as their own protocol or multiplexed with CXL.io, PCIe or Streaming on the same stack.</p><p class="src"><span class="sl">Spec</span>§8.2.1, p.361–365 · §7.1.2.4–7.1.2.5 · §2.5, p.57</p></div>
+    <div class="card"><h3>Sideband vs mainband</h3><div class="tbl-wrap" style="border:0"><table><thead><tr><th></th><th>Sideband</th><th>Mainband</th></tr></thead><tbody>
+      <tr><td>Availability</td><td>Early, even with mainband down; may run on an aux Mgmt_clk</td><td>Only with the mainband up</td></tr>
+      <tr><td>Bandwidth</td><td>800 MT/s serial, shared</td><td>Full link rate</td></tr>
+      <tr><td>Negotiated in</td><td>MBINIT.PARAM (SBFE)</td><td>Adapter parameter exchange</td></tr>
+      <tr><td>Good for</td><td>Discovery, config, low-rate control</td><td>Test, debug, telemetry, firmware</td></tr>
+    </tbody></table></div><p class="src"><span class="sl">Spec</span>§8.1.2, p.305 · §8.2.3, p.371 · §10.1.2, p.529</p></div>
+  </div>
+</div></section>
+
+<section id="setup"><div class="wrap">
+  <h2>5 · Bringing up a sideband management path</h2>
+  <div class="twocol">
+    <div class="flow">
+      <div><span class="n">1</span><p><strong>Negotiation</strong> (in MBINIT.PARAM): does the partner support management transport, and how many RxQs does it have?</p></div>
+      <div><span class="n">2</span><p><strong>Capabilities</strong>: each MPG sends a Management Port Gateway Capabilities message once, with its Port ID and NumVC. Both enable MIN(NumVC sent, NumVC received) + 1 VCs.</p></div>
+      <div><span class="n">3</span><p><strong>Credits</strong>: Credit Return messages for each enabled VC, for requests and responses, on each enabled RxQ-ID (0 to MIN(RxQ local, RxQ remote) − 1).</p></div>
+      <div><span class="n">4</span><p><strong>Init Done</strong> per RxQ-ID after its last credit return. When sent and received on all RxQ-IDs, the MPG asserts <code>mp_mgmt_up</code> and <code>mp_mgmt_init_done</code>; the PHY sets SB_MGMT_UP.</p></div>
+      <div><span class="n">5</span><p><strong>Running</strong>: MTPs flow, independent of mainband state.</p></div>
+    </div>
+    <div class="grid" style="gap:12px">
+      <div class="card" style="border-left:4px solid var(--bad)"><h3>Heartbeat</h3><p style="font-size:15px">After init, each receiver runs an 8 ms Heartbeat timer, restarted by any MPM. Each MPG must send some MPM at least every 4 ms per RxQ-ID path (a credit return if it has nothing else). On timeout, the MPG drops <code>mp_mgmt_up</code> after 16 ms, the PHY clears SB_MGMT_UP, and the path must be set up again. The timer pauses across sideband L1/L2.</p><p class="src"><span class="sl">Spec</span>§8.2.5.1.3, p.384 · §8.2.3.1, p.372–373</p></div>
+      <div class="card"><h3>When it is redone</h3><p style="font-size:15px">After a Management Reset, after software writes Retrain Link in the Sideband Management Port Structure, or after a Heartbeat timeout. Once up, it stays up across mainband retrains.</p><p class="src"><span class="sl">Spec</span>§8.2.3.1, p.371</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="uda"><div class="wrap">
+  <h2>6 · UDA: the UCIe Debug and Test Architecture</h2>
+  <div class="twocol">
+    <div class="card"><ul class="tight" style="font-size:15px">
+      <li>Built on the manageability infrastructure; needs working UCIe links and a management network.</li>
+      <li><strong>Hub-and-spoke</strong> per chiplet: one DFx Management Hub (DMH) implements the test/debug protocols, discovery and global security control; DFx Management Spokes (DMS) implement the functions: scan controller, memory BIST, fabric debug, core debug, trace.</li>
+      <li>The DMH has a Management Network ID; each spoke has a Spoke-ID under it.</li>
+      <li>UCIe itself has DMS spokes: Spoke Type 0 registers in the Adapter, Type 1 in the PHY, Type 2 split. They are reached over the FDI config bus with the DMS Register Read/Write opcodes.</li>
+      <li>Bring-up of the links and UDA elements themselves can use any other interface (JTAG, GPIO, sideband-only UCIe).</li>
+    </ul><p class="src"><span class="sl">Spec</span>§8.3.1, p.391–395 · §8.3.5 · Table 7-1, p.269</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Three use cases</h3><ul class="tight" style="font-size:15px"><li><strong>Sort / pre-bond</strong>: test a bare chiplet before packaging.</li><li><strong>SiP-level</strong>: test chiplets after assembly through the package's management network.</li><li><strong>System debug</strong>: in-field debug access via the same structures.</li></ul><p class="src"><span class="sl">Spec</span>§8.3.2–8.3.4, p.395–397</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="caps"><div class="wrap">
+  <h2>7 · Management capabilities</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Early Firmware Download</h3><p style="font-size:15px">Lets one Management Element (initiator) load firmware into another (target), for any hardware block in the target chiplet that needs firmware. A capability structure can download several distinct firmware images; a vendor-defined PROCESSING state can verify the payload (for example integrity checks) and report failure.</p><p class="src"><span class="sl">Spec</span>§8.4.1, p.412–418</p></div>
+    <div class="card"><h3>Power Management: Fast Throttle</h3><p style="font-size:15px">An optional, package-wide fast signal for "throttle now": when any trigger-enabled Power Management Element sees a threshold (for example temperature) crossed, all enabled responders throttle immediately, before limits are reached. The threshold sits just inside the operating range.</p><p class="src"><span class="sl">Spec</span>§8.4.2, p.418–419 · §5.14 Open Drain</p></div>
+  </div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>8 · Why each rule exists</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="arch">
+      <div class="meta"><span>Architecture</span><span>§8.1.2 p.305</span></div>
+      <h3>Sideband management first, mainband optional</h3>
+      <p class="rule">Every manageable chiplet should have at least one sideband Management Port, enough to build a single management domain over sideband alone. Mainband ports are recommended only for high-bandwidth uses.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The sideband is up before the mainband trains, and can run on an auxiliary clock, so management can discover and configure chiplets whose mainband is still down (or broken). Requiring only sideband keeps the barrier for simple chiplets low.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A package controller discovers four chiplets over sideband, sets their link parameters, then software starts mainband training. Later, a trace dump uses the mainband port for bandwidth.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A chiplet manageable only over mainband is invisible whenever its mainband fails to train, exactly when you most need to debug it.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Port recommendations <span class="ref">§8.1.2, p.305</span></li><li><span class="kind spec">Spec</span>Mgmt_clk for sideband <span class="ref">§10.1.2, p.529</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="arch">
+      <div class="meta"><span>Architecture</span><span>§8.1.2 p.306</span></div>
+      <h3>One active Management Director</h3>
+      <p class="rule">Several elements may be capable of being Management Director, but only one is active at a time. It configures the network and is the manageability Root of Trust.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Routes, IDs and security settings need a single authority, or two directors could configure conflicting routes. Being the root of trust, it is also the anchor for security decisions.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An I/O chiplet with a microcontroller is the director; a compute chiplet that could also act as director stays passive.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Two active directors programming routes for the same traffic class produce loops or black holes.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Director role <span class="ref">§8.1.2, p.306</span></li><li><span class="kind spec">Spec</span>Selection out of scope <span class="ref">§8.1.2</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="mtp">
+      <div class="meta"><span>Transport</span><span>§8.1.3.1 p.307–309</span></div>
+      <h3>Packets cross the network unmodified</h3>
+      <p class="rule">MTPs are produced and consumed by Management Entities and flow unmodified through the network; reserved fields are forwarded as-is and ignored by receivers.</p>
+      <div class="part"><span class="l l-why">Why</span><p>End-to-end integrity (the optional packet CRC) and future extensions both depend on intermediate hops not touching the packet. It also keeps bridges and ports simple.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A packet from chiplet A to chiplet C passes through B's fabric and two UCIe links; its CRC is checked only at C.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A port that clears "reserved" bits in transit breaks the packet CRC and silently drops future-version fields.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Unmodified flow; reserved field rules <span class="ref">§8.1.3.1, p.307</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="mtp">
+      <div class="meta"><span>Transport</span><span>§8.1.3.1.1 p.308</span></div>
+      <h3>Traffic classes are separate ordering domains</h3>
+      <p class="rule">Eight traffic classes; no ordering between classes, nor between requests and responses. Every class must make forward progress.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Independence prevents a slow class (for example a long firmware download) from blocking an urgent one (for example a power control message), and lets the director route classes over different links.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A bulk debug dump on TC2 goes over the mainband port; a thermal query on TC0 goes over sideband and returns first.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Software that assumes a TC0 response arrives after an earlier TC2 write may read stale data.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>TC rules and routing example <span class="ref">§8.1.3.1.1, p.308–309</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="link">
+      <div class="meta"><span>Link</span><span>§8.2.3.1 p.372–374</span></div>
+      <h3>Credits per VC, per RxQ, before any traffic</h3>
+      <p class="rule">After capabilities, each MPG returns credits for every enabled VC (requests and responses) on every enabled RxQ-ID, then sends Init Done for that RxQ-ID. Only after Init Done is sent and received on all RxQ-IDs may MTPs flow.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Receive buffers must be known before sending, or packets would overflow. Separate request and response credits avoid request/response deadlock; per-VC credits keep one VC from starving another.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Two RxQs, one VC: four credit-return messages (VC0 request and response on RxQ0 and RxQ1), then Init Done on each RxQ.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Credit returns for an RxQ-ID that was not negotiated are a fatal error: <code>mp_mgmt_up</code> stays low with <code>mp_mgmt_init_done</code> high, and the path does not come up.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Initialization phase steps <span class="ref">§8.2.3.1, p.372–374</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="link">
+      <div class="meta"><span>Link</span><span>§8.2.5.1.3 p.384</span></div>
+      <h3>Heartbeat: something every 4 ms, timeout at 8 ms</h3>
+      <p class="rule">Each MPG sends an MPM at least every 4 ms per RxQ-ID path (a credit return if nothing else). The receiver's 8 ms Heartbeat timer restarts on any MPM; on timeout the path is torn down.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The management path is long-lived and independent of mainband state, so it needs its own liveness check. Sending at half the timeout guarantees a live partner is never declared dead.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A partner chiplet's management domain is reset; its MPMs stop. Within 8 ms the local receiver times out, drops <code>mp_mgmt_up</code> 16 ms later, and SB_MGMT_UP clears so the path can be renegotiated.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>An idle MPG that sends nothing for 10 ms is declared dead by its partner even though it is fine.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Heartbeat timer, 4 ms rule, teardown <span class="ref">§8.2.5.1.3, p.384 · §8.2.3.1</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="uda">
+      <div class="meta"><span>UDA</span><span>§8.3.1 p.391–392</span></div>
+      <h3>One hub, many spokes</h3>
+      <p class="rule">A chiplet's test/debug features (spokes) sit behind a DFx Management Hub that handles discovery, routing to spokes and global security control. A chiplet may have more than one hub.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Software finds a group of debug features through one Management Network ID and one security gate, instead of each vendor's scan, BIST and trace blocks having their own access method.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DMH at Management Network ID 1040h has four spokes with DMS-IDs 1–4 (for example a scan controller and a memory BIST). A test program enumerates them through the hub's registers using UMAP.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Spokes reachable without the hub bypass its security control.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Hub-spoke model, Figure 8-58 example <span class="ref">§8.3.1, p.391–392</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="uda">
+      <div class="meta"><span>UDA</span><span>§8.3.5 · Table 7-1 p.269</span></div>
+      <h3>UCIe's own debug registers are DMS spokes</h3>
+      <p class="rule">The Adapter (Spoke Type 0), PHY (Type 1) or both (Type 2) expose DMS registers, accessed over the FDI config bus with the DMS Register Read/Write opcodes, which always target local registers.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Link debug data (training logs, eye margins, error counters) then appears to UDA software like any other spoke. Restricting DMS opcodes to local registers keeps remote access going through the management network and its security.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A SiP-level test reads PHY lane margins from chiplet B's Type 1 spoke via chiplet B's DMH, over the sideband management path.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A DMS Read issued toward the remote die is not allowed; remote spokes are reached through their own DMH.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Spoke types and access <span class="ref">§8.3.5</span></li><li><span class="kind spec">Spec</span>DMS opcodes local only <span class="ref">Table 7-6, p.273</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>9 · Live scenario</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>10 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" style="margin-left:8px" type="button" aria-pressed="false">Show all answers</button></p>
+  <details><summary>Name the three kinds of Management Entity. <span class="lvl">Basic</span></summary><div><p>Management Element (implements a service), Management Port (connects to a point-to-point management link), Management Bridge (connects to another interconnect).</p><p class="src"><span class="sl">Spec</span>§8.1.2, p.305</p></div></details>
+  <details><summary>How are MTPs carried on the sideband? <span class="lvl">Basic</span></summary><div><p>Encapsulated in Management Port Messages (opcodes 10111b without data, 11000b with data) between Management Port Gateways, using per-RxQ credited buffers.</p><p class="src"><span class="sl">Spec</span>§8.2.1 · Table 7-1, p.269</p></div></details>
+  <details><summary>What are the two phases of sideband management path setup? <span class="lvl">Intermediate</span></summary><div><p>Negotiation (in MBINIT.PARAM: support and number of RxQs) and Initialization (capabilities with NumVC and Port ID, credit returns per VC per RxQ, Init Done).</p><p class="src"><span class="sl">Spec</span>§8.2.3, p.371</p></div></details>
+  <details><summary>Why does an idle MPG still send credit returns? <span class="lvl">Intermediate</span></summary><div><p>To keep the partner's 8 ms Heartbeat timer alive: an MPM must be sent at least every 4 ms per RxQ-ID path.</p><p class="src"><span class="sl">Spec</span>§8.2.5.1.3, p.384</p></div></details>
+  <details><summary>Where do a UCIe Adapter's DMS registers live, and how are they accessed? <span class="lvl">Advanced</span></summary><div><p>Spoke Type 0 in the Adapter, Type 1 in the PHY, Type 2 split. Accessed over the FDI config bus using the DMS Register Read/Write sideband opcodes, which only target local registers.</p><p class="src"><span class="sl">Spec</span>§8.3.5 · Table 7-1, p.269</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>11 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>§8.1.1–8.1.2</td><td>UCIe Manageability overview; Theory of Operation</td><td class="num">303–307</td></tr>
+      <tr><td>§8.1.3, Table 8-1</td><td>UCIe Management Transport; packet fields</td><td class="num">307–309</td></tr>
+      <tr><td>§8.1.4</td><td>UCIe Memory Access Protocol</td><td class="num">341</td></tr>
+      <tr><td>§8.2.1–8.2.2</td><td>MTP Encapsulation; Management Port Messages</td><td class="num">361–371</td></tr>
+      <tr><td>§8.2.3</td><td>Management Transport Path Setup</td><td class="num">371–378</td></tr>
+      <tr><td>§8.2.4.4</td><td>‘Init Done’ Timeout Flow</td><td class="num">383</td></tr>
+      <tr><td>§8.2.5.1.3</td><td>Heartbeat Mechanism</td><td class="num">384</td></tr>
+      <tr><td>§8.3.1–8.3.5</td><td>UDA overview, use cases, DMH/DMS registers</td><td class="num">391–412</td></tr>
+      <tr><td>§8.4.1</td><td>Early Firmware Download</td><td class="num">412–418</td></tr>
+      <tr><td>§8.4.2</td><td>Power Management (Fast Throttle)</td><td class="num">418</td></tr>
+      <tr><td>§2.5</td><td>Management Transport Protocol on mainband</td><td class="num">57</td></tr>
+      <tr><td>§7.1.2.4–7.1.2.5</td><td>MPMs with and without data</td><td class="num">291–296</td></tr>
+      <tr><td>Table 10-2</td><td>RDI extensions for Management Transport</td><td class="num">527–529</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 8 System Architecture, with Chapters 2.5, 4.5.3.3.1, 7.1.2 and 10.1 for context. Chapter 8 is long; this guide covers its architecture and main mechanisms, not every register.</div></footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  window.PAGE = {
+    CW: 104,
+    wgroups: [["all", "All"], ["arch", "Architecture"], ["mtp", "Transport"], ["link", "Link setup"], ["uda", "UDA"]],
+    scenarios: [
+      {
+        id: "sbsetup", tab: "Sideband path setup", unit: "steps", title: "Management path setup over sideband: 1 RxQ, 1 VC",
+        desc: "Chiplet A and chiplet B both support Management Transport over sideband. Each column is one step, not a fixed time.",
+        ref: "§8.2.3.1, p.371–375 · §8.2.5.1.3, p.384 · Table 10-2, p.527",
+        n: 10, gaps: [],
+        sig: [
+          { name: "LTSM", d: "note", t: "note", v: ["MBINIT.PARAM", "MBINIT.PARAM", "", "", "", "", "", "", "", ""] },
+          { name: "A → B (sideband)", d: "sb", t: "note", v: ["SBFE (RxQs)", "", "Caps NumVC=0", "Cred VC0 req", "Cred VC0 rsp", "Init Done Q0", "", "MTP", "", "cred return"] },
+          { name: "B → A (sideband)", d: "sb", t: "note", v: ["", "SBFE resp", "Caps NumVC=0", "Cred VC0 req", "Cred VC0 rsp", "Init Done Q0", "", "", "MTP", ""] },
+          { name: "pm_param_done (pulse)", d: "pl", t: "bit", v: bits(10, [[1, 1]]) },
+          { name: "mp_mgmt_up / init_done", d: "lp", t: "bit", v: bits(10, [[6, 9]]) },
+          { name: "SB_MGMT_UP (PHY)", d: "pl", t: "bit", v: bits(10, [[6, 9]]) },
+          { name: "heartbeat", d: "note", t: "note", v: seq([["", 6], ["8 ms timer · MPM ≤ 4 ms apart", 4]]) }
+        ],
+        steps: [
+          { r: [0, 1], t: "Negotiation in MBINIT.PARAM", x: "The PHYs exchange Sideband Feature Extension information: management transport support and the number of RxQs. The PHY tells the gateway with pm_param_done and the module counts.", s: "§8.2.3, p.371 · §4.5.3.3.1.1 · Table 10-2, p.527" },
+          { r: [2, 2], t: "Capabilities", x: "Each gateway sends one Management Port Gateway Capabilities message with its Port ID and NumVC (0 = one VC). Both enable MIN(sent, received) + 1 VCs: here VC0 only.", s: "§8.2.3.1 step 1, p.372" },
+          { r: [3, 4], t: "Credits for VC0, requests and responses", x: "Each side returns credits for VC0 request and response buffers on RxQ-ID 0.", w: "Separate request and response credits stop requests from filling the buffers that their own responses need.", s: "§8.2.3.1 step 2, p.372" },
+          { r: [5, 6], t: "Init Done, path up", x: "After its last credit return on RxQ0, each side sends Init Done. Having sent and received Init Done on every RxQ-ID, the gateway asserts mp_mgmt_up and mp_mgmt_init_done; the PHY sets SB_MGMT_UP.", s: "§8.2.3.1 step 3, p.374" },
+          { r: [7, 9], t: "MTPs flow; heartbeat keeps it alive", x: "Encapsulated MTPs now travel as MPMs, regardless of the mainband's state. If a side has nothing to send for 4 ms it sends a credit return so the partner's 8 ms Heartbeat timer never expires.", s: "§8.2.5.1.3, p.384" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      waveEl.innerHTML = renderWave(s, st.r, false);
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+</script>
+</body>
+</html>

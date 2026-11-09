@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe Retimers and Compliance Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the UCIe field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="fdi.html">FDI</a><a href="rdi.html">RDI</a><a href="d2d-adapter.html">D2D Adapter</a><a href="link-training.html">Link Training</a><a href="logical-phy.html">Logical PHY</a><a href="sideband.html">Sideband</a><a href="protocol-mappings.html">Protocol Mappings</a><a href="manageability-uda.html">Manageability &amp; UDA</a><a href="registers-discovery.html">Registers &amp; Discovery</a><span class="here">Retimers &amp; Compliance</span><a href="electrical-ucie-3d.html">Electrical &amp; UCIe-3D</a></div>
+    <div class="eyebrow">UCIe 3.0 · §1.3, Chapter 3, §4.1.2.1, §4.5.2 · §9.5.4, Chapter 11</div>
+    <h1>UCIe Retimers and Compliance Field Guide</h1>
+    <p class="lede">Two topics the spec scatters across six chapters. <strong>Retimers</strong> carry a UCIe link off the package and must keep two dies, two UCIe links and one external link in step. <strong>Compliance</strong> is how a die is tested against a known-good Golden Die, using injection and margining registers. Retimer rules are collected here from §1.3, Chapter 3, Chapter 4 and Chapter 9; compliance from Chapter 11 and §9.5.4.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>UCIe die / software</span><span><i class="sw" style="background:var(--pl)"></i>retimer / hardware status</span><span><i class="sw" style="background:var(--sb)"></i>sideband traffic</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#topo">2 · Retimer topology</a><a href="#rel">3 · Reliability options</a><a href="#cred">4 · Credits</a><a href="#sync">5 · Staying in sync</a><a href="#swr">6 · Retimers in software</a><a href="#setup">7 · Compliance setup</a><a href="#adc">8 · Adapter compliance</a><a href="#phc">9 · PHY compliance</a><a href="#rationale">10 · Why each rule</a><a href="#live">11 · Live scenarios</a><a href="#quiz">12 · Test yourself</a><a href="#refs">13 · Spec index</a>
+</div></nav>
+<style>
+  .tool { display: grid; gap: 10px; }
+  .tool label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+  .tool input, .tool select { font-family: var(--font-mono); font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
+  .tool .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .out { font-family: var(--font-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+  .out .big { font-size: 18px; font-weight: 600; color: var(--ink); }
+  .out .warn { color: var(--bad); }
+</style>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why these exist</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Retimers</div><h3>UCIe stops at the package edge</h3><p>UCIe links are short, on-package channels. A UCIe Retimer sits on the package next to a die and drives an Off Package Interconnect (for example an electrical or optical cable) to a second retimer on another package, so two dies on different packages can talk.</p><p class="src"><span class="sl">Spec</span>§1.3, p.47 · §1.0, p.39</p></div>
+    <div class="card"><div class="tagline">Retimers</div><h3>Three links pretending to be one</h3><p>Die 0 ↔ Retimer 0 is one UCIe link, Retimer 1 ↔ Die 1 another, plus the external link. Each die must see what looks like one consistent link, so retimers resolve parameters, link states and flow control between the ends.</p><p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p></div>
+    <div class="card"><div class="tagline">Compliance</div><h3>Test against a known-good die</h3><p>A DUT is packaged with a <strong>Golden Die</strong> (a known-good UCIe implementation of every layer) on a known-good bridge, interposer or package. Each layer is checked on its own. Support is optional, but without it a device may not join the compliance program.</p><p class="src"><span class="sl">Spec</span>§11.0, p.579</p></div>
+    <div class="card"><div class="tagline">Compliance</div><h3>The spec defines hooks, not tests</h3><p>Chapter 11 defines the hardware the DUT must have (injection, compliance modes, margining). The test setup, channel model, test details and Golden Die details are left to a separate document.</p><p class="src"><span class="sl">Spec</span>§11.0, p.579</p></div>
+  </div>
+</div></section>
+
+<section id="topo"><div class="wrap">
+  <h2>2 · Retimer topology</h2>
+  <figure>
+    <svg viewBox="0 0 860 220" role="img" aria-label="Package 0 holds UCIe Die 0 and UCIe Retimer 0 joined by UCIe Link 0 (mainband and sideband). Retimer 0 connects over the Off Package Interconnect to Retimer 1 in Package 1, which connects to UCIe Die 1 over UCIe Link 1. Each retimer has a receiver buffer for flits from its local die.">
+      <defs>
+        <marker id="c-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      </defs>
+      <g font-family="var(--font-body)" style="color:var(--ink)">
+        <rect x="10" y="20" width="370" height="170" rx="12" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="24" y="42" font-size="12" fill="var(--muted)">Package 0</text>
+        <rect x="480" y="20" width="370" height="170" rx="12" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="836" y="42" font-size="12" fill="var(--muted)" text-anchor="end">Package 1</text>
+        <rect x="30" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.6"/>
+        <text x="90" y="110" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">UCIe Die 0</text>
+        <text x="90" y="128" text-anchor="middle" font-size="11" fill="var(--muted)">e.g. Root Port (DP)</text>
+        <rect x="240" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.6"/>
+        <text x="300" y="86" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Retimer 0</text>
+        <rect x="252" y="100" width="96" height="30" rx="4" fill="var(--hl)" stroke="var(--pl)"/>
+        <text x="300" y="119" text-anchor="middle" font-size="10.5" fill="currentColor">Rx buffer (credits)</text>
+        <text x="300" y="156" text-anchor="middle" font-size="10.5" fill="var(--muted)">FEC/CRC/Retry (opt.)</text>
+        <rect x="500" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.6"/>
+        <text x="560" y="86" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Retimer 1</text>
+        <rect x="512" y="100" width="96" height="30" rx="4" fill="var(--hl)" stroke="var(--pl)"/>
+        <text x="560" y="119" text-anchor="middle" font-size="10.5" fill="currentColor">Rx buffer (credits)</text>
+        <text x="560" y="156" text-anchor="middle" font-size="10.5" fill="var(--muted)">FEC/CRC/Retry (opt.)</text>
+        <rect x="710" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.6"/>
+        <text x="770" y="110" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">UCIe Die 1</text>
+        <text x="770" y="128" text-anchor="middle" font-size="11" fill="var(--muted)">e.g. Endpoint (UP)</text>
+        <line x1="152" y1="95" x2="238" y2="95" stroke="var(--ink)" stroke-width="2" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="195" y="86" text-anchor="middle" font-size="11" fill="currentColor">UCIe Link 0</text>
+        <line x1="152" y1="140" x2="238" y2="140" stroke="var(--sb)" stroke-width="1.6" stroke-dasharray="4 3" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="195" y="158" text-anchor="middle" font-size="10.5" fill="var(--sb)">sideband</text>
+        <line x1="362" y1="115" x2="498" y2="115" stroke="var(--muted)" stroke-width="3" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="430" y="104" text-anchor="middle" font-size="11.5" fill="currentColor">Off Package</text>
+        <text x="430" y="135" text-anchor="middle" font-size="11.5" fill="currentColor">Interconnect</text>
+        <line x1="622" y1="95" x2="708" y2="95" stroke="var(--ink)" stroke-width="2" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="665" y="86" text-anchor="middle" font-size="11" fill="currentColor">UCIe Link 1</text>
+        <line x1="622" y1="140" x2="708" y2="140" stroke="var(--sb)" stroke-width="1.6" stroke-dasharray="4 3" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="665" y="158" text-anchor="middle" font-size="10.5" fill="var(--sb)">sideband</text>
+        <text x="430" y="210" text-anchor="middle" font-size="11" fill="var(--muted)">Retimer 1 is Retimer 0's "remote Retimer partner"</text>
+      </g>
+    </svg>
+    <p class="src"><span class="sl">Spec</span>Figure 1-18, p.47 · §1.3, p.47 (DP/UP labels are illustrative)</p>
+  </figure>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>What a retimer is responsible for</h3><ul class="tight" style="font-size:15px"><li>Reliable flit transfer across the external link (one of three options, below).</li><li>Resolving link and protocol parameters with the remote retimer, so both dies end up with the same width, speed, protocol and flit format.</li><li>Resolving Adapter LSM and RDI states with the remote retimer.</li><li>Flow control from die to retimer using credits.</li></ul><p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p></div>
+    <div class="card"><h3>What is left to the implementation</h3><p style="font-size:15px">How retimers talk to each other over the external link (message transfer, parameter resolution, retimer-to-retimer flow control) is implementation-specific. UCIe only defines what each die sees on its own UCIe link.</p><p class="src"><span class="sl">Spec</span>§1.3, p.48</p></div>
+  </div>
+</div></section>
+
+<section id="rel"><div class="wrap">
+  <h2>3 · Three ways to make the external link reliable</h2>
+  <div class="tbl-wrap diff"><table>
+    <thead><tr><th></th><th>A · Tunnel the protocol's own FEC/CRC</th><th>B · Retimer does FEC, CRC and Retry</th><th>C · Retimer FEC, protocol CRC and Replay</th></tr></thead>
+    <tbody>
+      <tr><td>Who corrects errors</td><td>The protocol's native FEC and CRC (e.g. PCIe/CXL flits)</td><td>The retimer, with its own FEC, CRC and Retry</td><td>Retimer FEC (replacing or adding to native FEC); protocol CRC and Replay</td></tr>
+      <tr><td>Condition</td><td>External link meets the protocol's error model (BER, error correlation)</td><td>None stated beyond handling the external BER</td><td>None stated</td></tr>
+      <tr><td>UCIe flit format</td><td>Raw Format, tunnelling native bits</td><td>Any applicable flit format</td><td>Not restricted in §1.3</td></tr>
+      <tr><td>Ack/Nak</td><td>End to end by the protocol</td><td>Three independent links: each retimer acks/naks with its local die, and separately with the remote retimer</td><td>End to end by the protocol</td></tr>
+      <tr><td>Buffer sizing on the dies</td><td>Protocol Layer buffers sized for the full round trip</td><td>Not called out</td><td>Protocol Layer and Retry buffers sized for the full round trip</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p>
+</div></section>
+
+<section id="cred"><div class="wrap">
+  <h2>4 · Credits: the one flow-control rule a die must follow</h2>
+  <div class="twocol">
+    <div class="card"><h3>Die → retimer is credited, retimer → die is not</h3><ul class="tight" style="font-size:15px">
+      <li>Every retimer has a <strong>Receiver Buffer</strong> for flits from its local die.</li>
+      <li>It advertises the buffer size in parameter exchange: <strong>"Retimer" = 1</strong> and <strong>Retimer_Credits</strong>, a 9-bit count.</li>
+      <li><strong>1 credit = 256 B</strong> of data, including any FEC and CRC.</li>
+      <li>The die must not send without a credit. These credits sit on top of protocol credits (for example PCIe PH/PD).</li>
+      <li>Data sent to the retimer must be consumable by the remote die with no other dependency.</li>
+      <li>Retimer → die traffic has no UCIe credit flow control.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§1.3, p.48 · §3.2.1.2, p.63–64</p></div>
+    <div class="card"><h3>Credit returns ride on the Valid wire</h3><div class="tbl-wrap"><table>
+      <thead><tr><th>8-UI Valid</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>00000000b</code></td><td>No flit data, no credit</td></tr>
+        <tr><td><code>00001111b</code></td><td>Flit data, no credit (the normal Valid frame)</td></tr>
+        <tr><td><code>11110000b</code></td><td>No flit data + 1 credit release</td></tr>
+        <tr><td><code>11111111b</code></td><td>Flit data + 1 credit release</td></tr>
+      </tbody>
+    </table></div><p style="font-size:14px;margin:8px 0 0">Bit 0 is sent first. The encodings detect up to three bit flips. At ≤ 48 GT/s a receiver may retrain on any error or correct single-bit errors; above 48 GT/s it must correct single-bit errors.</p><p class="src"><span class="sl">Spec</span>§4.1.2.1, Table 4-1, p.101</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Reset on leaving Active</h3><p>The die resets its credit counter to the advertised value whenever RDI leaves Active. The retimer drains or dumps its buffer before re-entering Active. Because credits are re-advertised, the first transfer after Active entry cannot be a credit-only frame.</p><p class="src"><span class="sl">Spec</span>§1.3, p.48 · §4.1.2, p.100</p></div>
+    <div class="card"><h3>Parity bytes are invisible to the retimer</h3><p>Runtime-link-testing parity bytes do not consume retimer credits, are not written into the buffer and are not forwarded: the feature characterizes only the local UCIe link.</p><p class="src"><span class="sl">Spec</span>§3.9, p.96</p></div>
+  </div>
+</div></section>
+
+<section id="sync"><div class="wrap">
+  <h2>5 · Keeping both dies in step</h2>
+  <div class="twocol">
+    <div class="card"><h3>Link training with a retimer</h3><div class="flow">
+      <div><span class="n">1</span><p>External link and each UCIe link may come up independently.</p></div>
+      <div><span class="n">2</span><p>Each UCIe link trains SBINIT → MBINIT (local parameters) → MBTRAIN at its local data rate.</p></div>
+      <div><span class="n">3</span><p>The retimer asks for the remote side's rate and width over the external link.</p></div>
+      <div><span class="n">4</span><p>If they differ and the retimer needs a match, it retrains from LINKSPEED. This may repeat.</p></div>
+      <div><span class="n">5</span><p>When the configuration suits both ends, the link goes through LINKINIT to ACTIVE.</p></div>
+    </div><p class="src"><span class="sl">Spec</span>§4.5.2, Figure 4-32, p.130</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Parameter exchange: Stall, don't time out</h3><p style="font-size:15px">The Adapter's parameter exchange timeout is 8 ms (−0% / +50%), counted only while RDI is Active, and reset by any Stall message. A retimer resolves capabilities with its remote partner and merges its own before answering its die, sending the Stall message once every 4 ms meanwhile.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.70</p></div>
+      <div class="card"><h3>Link states: answer only when the far die has</h3><p style="font-size:15px">If Die 0 sends Active Request, Retimer 0 must confirm through Retimer 1 that Die 1 received it and replied Active Status, then reply to Die 0. Stall every 4 ms meanwhile. The external link enters low power only when both dies have.</p><p class="src"><span class="sl">Spec</span>§3.5, p.90</p></div>
+      <div class="card"><h3>Retimer and DP/UP bits</h3><p style="font-size:15px">A retimer's Adapter sets "Retimer" and clears "DP" and "UP". The dies set DP or UP so the retimer knows whether it faces a downstream or upstream port.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.64</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="swr"><div class="wrap">
+  <h2>6 · Retimers as software sees them</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Registers</div><h3>Reached only through the mailbox</h3><p>Retimer registers live in sideband config and sideband MMIO space, not visible to host software directly. The RP/DSP mailbox reaches the retimer nearest the host; the EP/USP mailbox reaches the far retimer. An EP/USP sets "Sideband mailbox Registers Present" only when paired with a retimer.</p><p class="src"><span class="sl">Spec</span>§9.3, p.457–458 · Table 9-7, p.465</p></div>
+    <div class="card"><div class="tagline">Identity</div><h3>Link Capability bit 8</h3><p>A retimer sets the "Retimer" bit in its UCIe Link Capability register so software can tell it apart. Its Link DVSEC Next Capability is 0h and Register Locator offsets are reserved.</p><p class="src"><span class="sl">Spec</span>Table 9-8, p.466 · Table 9-5, p.464 · Table 9-13, p.476</p></div>
+    <div class="card"><div class="tagline">Errors</div><h3>Forwarding across the external link is vendor-specific</h3><p>A retimer next to an RP/DSP reports errors to it with sideband error messages. A retimer next to an EP/USP reports to its partner retimer by a vendor-specific mechanism.</p><p class="src"><span class="sl">Spec</span>Table 9-12, p.473–475</p></div>
+    <div class="card"><div class="tagline">Management</div><h3>Optional management transport</h3><p>Retimers may join the UCIe management network. If they do, they follow all the generic chiplet rules and can forward management packets between their UCIe side and the retimed side.</p><p class="src"><span class="sl">Spec</span>§8.2.6, p.391</p></div>
+  </div>
+</div></section>
+
+<section id="setup"><div class="wrap">
+  <h2>7 · Compliance setup</h2>
+  <div class="twocol">
+    <div class="card"><h3>The test package</h3><ul class="tight" style="font-size:15px">
+      <li><strong>Golden Die</strong>: known-good UCIe across all layers. Its Adapter supports every flit format and can inject consistent and inconsistent sideband messages; it can force timeouts on sideband messages and state residency timers.</li>
+      <li><strong>DUT</strong>: one or more dies that have already passed sort/pre-bond testing.</li>
+      <li><strong>Channel</strong>: known-good bridge or interposer (Advanced Package) or package (Standard Package).</li>
+      <li><strong>Compliance software</strong>: runs on the Golden Die or on an external controller attached via a test/JTAG port.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§11.0, p.579 · §11.2, p.580 · §11.3, p.581</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Layers tested separately</h3><p style="font-size:15px"><strong>Protocol</strong>: PCIe/CXL use their own compliance; Streaming is out of scope. <strong>Adapter</strong>: injection hooks, required in any Adapter that supports a flit format, retimers included. <strong>PHY</strong>: margining, BER, lane skew, Tx EQ.</p><p class="src"><span class="sl">Spec</span>§11.1–11.3, p.580–581</p></div>
+      <div class="card"><h3>Two preconditions</h3><p style="font-size:15px">The sideband must come up without firmware, because it carries all compliance register accesses. Software reads the capability registers before testing any optional feature.</p><p class="src"><span class="sl">Spec</span>§11.0, p.579</p></div>
+      <div class="card"><h3>Test/Compliance register block</h3><p style="font-size:15px">Register Locator block ID 1h. 8 KB: Adapter registers at D2DOFF (offset 10h, normally 0), PHY registers at PHYOFF (offset 14h, normally 4 KB). Software must read both offsets rather than assume them.</p><p class="src"><span class="sl">Spec</span>§9.5.4–9.5.4.3, p.507–508</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="adc"><div class="wrap">
+  <h2>8 · Adapter compliance: injection hooks</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Register (from D2DOFF)</th><th>What it does</th><th>Key fields</th></tr></thead>
+    <tbody>
+      <tr><td>20h Adapter Compliance Control</td><td>Puts the Adapter in a compliance mode; takes effect at the next RDI entry to Retrain</td><td>Mode 00b normal · 01b PHY-only training (RDI to Active, no parameter exchange, FDI held in Reset) · 10b Adapter Compliance (acts only on the injection registers). Bit 2 Force Link Reset → RDI LinkError</td></tr>
+      <tr><td>28h Flit Tx Injection Control</td><td>Injects NOP or Test flits at the transmitter</td><td>Type: NOP (bypass retry buffer) / Test / alternate. Mode: continuous / N contiguous / N interleaved with protocol flits. Payload: fixed or LFSR 4B patterns, whole payload or at an offset</td></tr>
+      <tr><td>30h Adapter Test Status</td><td>Reports what happened</td><td>Compliance status, injection status, Rx test-flit status, link-state injection status, retry injection status, retries over threshold</td></tr>
+      <tr><td>34h / 38h Link State Injection Stack 0 / 1</td><td>Injects a link state request, or a chosen response when a matching request arrives</td><td>Encodings follow FDI state request/response. Only in Adapter Compliance mode; unexpected responses are discarded</td></tr>
+      <tr><td>40h Retry Injection Control</td><td>Injects 1-, 2- or 3-bit errors to force Retry</td><td>Byte offset, flits between errors (0 = random 1–31), number of errors, which flit types, Tx Retry Error Threshold</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>§9.5.4.4, Tables 9-72 to 9-77, p.509–513 · §11.2, p.580–581</p>
+  <div class="twocol" style="margin-top:14px">
+    <div class="grid" style="gap:12px">
+    <div class="card"><h3>Test flits vs NOP flits</h3><p>Test flits carry <code>01b</code> in Byte 1 bits [7:6] of the flit header, go through the Tx retry buffer if Retry is enabled, and are CRC-checked at the receiver like any flit, then cancelled (for example with <code>pl_flit_cancel</code>) so the Protocol Layer never sees them. NOP flits bypass the retry buffer.</p><p class="src"><span class="sl">Spec</span>§11.2, p.581 · Table 9-73, p.509</p></div>
+    <div class="card"><h3>Reading the results (Adapter Test Status, 30h)</h3><ul class="tight" style="font-size:15px">
+      <li><strong>[2:1] Flit Tx Injection</strong>: 00b none, 01b in progress (stays here in continuous mode), 10b finished, 11b stopped early.</li>
+      <li><strong>[4:3] Flit Rx Status</strong> (RW1C): 01b at least one Test flit received without CRC error.</li>
+      <li><strong>[10:9] Retry Injection</strong>: 01b at least one error injected, 10b sequence finished.</li>
+      <li><strong>[11]</strong> Number of Retries Exceeded Threshold.</li>
+      <li>Status fields clear on the 0→1 of their enable bit.</li>
+    </ul><p class="src"><span class="sl">Spec</span>Table 9-74, p.511</p></div>
+    </div>
+    <div class="card"><h3>Retry injection builder</h3><p style="font-size:15px">Set the fields; get the 64-bit value for Retry Injection Control (D2DOFF + 40h).</p>
+      <div class="tool"><div class="row" id="rib"></div><div class="out" id="ribout" aria-live="polite"></div></div>
+      <p class="src"><span class="kind derived">Derived</span> from Table 9-77, p.513</p></div>
+  </div>
+</div></section>
+
+<section id="phc"><div class="wrap">
+  <h2>9 · PHY compliance: margining and stepping</h2>
+  <div class="twocol">
+    <div class="card"><h3>Getting into @PHY-Compliance</h3><div class="flow">
+      <div><span class="n">1</span><p>Put the Adapter in a compliance mode (01b or 10b) first.</p></div>
+      <div><span class="n">2</span><p>Set Compliance Enable (Compliance Control 1 bit 0) in every module.</p></div>
+      <div><span class="n">3</span><p>Retrain the link. On the next PHYRETRAIN the PHY enters PHY Compliance. RDI may reach Active but <code>pl_trdy</code> is never asserted.</p></div>
+      <div><span class="n">4</span><p>Use the operation trigger and setup registers; TRAINERROR in this mode does not reset them.</p></div>
+    </div><p class="src"><span class="sl">Spec</span>§9.5.4.5, p.514 · Table 9-78, p.514</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Operations you can trigger</h3><p style="font-size:15px">Operation Type: 001b Tx-initiated D2C point test, 010b Tx-initiated eye width sweep, 011b Rx-initiated point training, 100b Rx-initiated width sweep, 101b step from MBTRAIN.RXDESKEW to DATACENTER1 above 32 GT/s (for sweeping Tx EQ). Start with a 0→1 on the trigger bit.</p><p class="src"><span class="sl">Spec</span>Table 9-78, p.515</p></div>
+      <div class="card"><h3>Knobs</h3><p style="font-size:15px">Disable scrambling; add or subtract an Rx Vref offset (step by one each time); mask even/odd UIs, or UI groups A–D above 32 GT/s; choose per-lane or aggregate compare; enable Track.</p><p class="src"><span class="sl">Spec</span>Tables 9-78 to 9-80, p.514–517</p></div>
+      <div class="card"><h3>Per module</h3><p style="font-size:15px">Registers repeat per module at PHYOFF + 000h, 400h, 800h, C00h. All modules of a link must be in PHY Compliance together.</p><p class="src"><span class="sl">Spec</span>§9.5.4.5, p.514</p></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Spec cross-reference to watch</h3><p>§11.3 says the UHM DVSEC is "defined in Section 9.5.3.36". In Revision 3.0, §9.5.3.36 is Runtime Link Test Control; the UHM DVSEC is §9.5.3.40 (p.505). The reference looks stale from an earlier revision's numbering.</p><p class="src"><span class="kind derived">Derived</span> §11.3, p.581 vs table of contents, p.11</p></div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>10 · Why each rule exists</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§3.2.1.2 p.70</span></div>
+      <h3>Stall every 4 ms while resolving</h3>
+      <p class="rule">A retimer must resolve capabilities with its remote partner before answering its die, and send the Stall form of the message every 4 ms while it waits. The die's 8 ms timer resets on each Stall.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The external link may take far longer than 8 ms to come up or to fetch the other die's capabilities. Without Stall the local die would time out and take RDI to LinkError. Sending at half the timeout guarantees the timer never expires while the retimer is still working.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An optical link takes 30 ms to lock. Retimer 0 sends a Stall to Die 0 roughly every 4 ms (seven or eight of them) and then the merged capabilities.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Die 0 logs Adapter Timeout 0001b (parameter exchange) and the link goes to LinkError. The retimer must also not stall forever: it is responsible for not stalling the link indefinitely.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Timeout and Stall <span class="ref">§3.2.1.2, p.70</span></li><li><span class="kind spec">Spec</span>Not indefinitely <span class="ref">§1.3, p.48</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§3.5 p.90</span></div>
+      <h3>Answer a state request only after the far die has</h3>
+      <p class="rule">For Adapter LSM requests, the retimer forwards the request, waits until the far die has responded, and only then responds to its own die.</p>
+      <div class="part"><span class="l l-why">Why</span><p>If Retimer 0 said Active to Die 0 on its own, Die 0 could start sending protocol traffic while Die 1 is still in Reset, and those flits would have nowhere to go. Waiting makes both dies reach each state together.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 sends Active Request; Retimer 0 relays through Retimer 1; Die 1 replies Active Status; only then does Retimer 0 reply Active Status to Die 0.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>One die in Active and the other not: traffic stalls or is dropped, and the external link may be put to sleep while one side is still active.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Retimer state resolution <span class="ref">§3.5, p.90</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§1.3 p.48</span></div>
+      <h3>No credit, no send</h3>
+      <p class="rule">The die must not send data to the retimer without a credit. One credit is 256 B including FEC and CRC. Data in the buffer must be consumable by the far die without any other dependency.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The retimer cannot push back on the die any other way: there is no ready signal on the wires. A fixed buffer and credits stop overflow; the no-dependency rule stops a deadlock where buffered data waits on something stuck behind it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Retimer_Credits = 64 (16 KB). Die 0 bursts 64 flits; with no credits left it idles until Retimer 0 forwards data and returns credits on the Valid wire.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Retimer receiver buffer overflow: Uncorrectable Error Status bit 1, Header Log 2 [6:4] = 010b, link down.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Credit rules <span class="ref">§1.3, p.48</span></li><li><span class="kind spec">Spec</span>Overflow encoding <span class="ref">Table 9-33, p.486</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§1.3 p.48 · §4.1.2 p.100</span></div>
+      <h3>Credits reset whenever RDI leaves Active</h3>
+      <p class="rule">The die restores its credit counter to the advertised value whenever RDI leaves Active; the retimer drains or dumps its buffer before re-entering Active.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A retrain can drop credit-return frames in flight, leaving the two sides disagreeing about the count. Resetting both to a known value on every exit from Active is simpler and safer than reconciling.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A retrain happens with 10 credits outstanding. On return to Active, Die 0 starts again at 64 and Retimer 0's buffer is empty.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A die that keeps its old count slowly loses credits after each retrain; a retimer that keeps old data mixes pre-retrain flits into the new stream.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Reset and drain <span class="ref">§1.3, p.48</span></li><li><span class="kind spec">Spec</span>No credit-only first frame <span class="ref">§4.1.2, p.100</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§3.9 p.96</span></div>
+      <h3>Parity bytes stay on the local link</h3>
+      <p class="rule">Runtime-link-testing parity bytes use no retimer credits, are not buffered and are not forwarded to the remote retimer.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Parity measures the health of one UCIe link. Forwarding it would mix two links' results, and charging credits for it would steal buffer space from real traffic.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software enables parity on Die 0 → Retimer 0 to check UCIe Link 0 alone; Die 1 never sees those bytes.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A retimer that counts parity against credits gives the die fewer credits than it advertised.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Parity and retimers <span class="ref">§3.9, p.96</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§4.5.2 p.130</span></div>
+      <h3>Match speed and width by retraining from LINKSPEED</h3>
+      <p class="rule">If the retimer needs both UCIe links at the same rate and width, it retrains its local link from LINKSPEED after learning the remote configuration. This may happen several times.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Each UCIe link trains on its own channel and may settle at a different rate or width. A retimer without deep buffering usually cannot bridge a mismatch, so it forces a common configuration before LINKINIT.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>UCIe Link 0 trains at 32 GT/s, Link 1 only at 24 GT/s. Retimer 0 retrains Link 0 down to 24 GT/s before letting it go to ACTIVE.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The faster side outruns the slower one and fills the retimer's buffer and the external link.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Speed/width match <span class="ref">§4.5.2, Figure 4-32, p.130</span></li><li><span class="kind derived">Derived</span>buffering reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>§11.0 p.579</span></div>
+      <h3>The sideband must work without firmware</h3>
+      <p class="rule">For compliance, the DUT's sideband is expected to come up without firmware initialization.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Compliance software sets up every test and reads every result through sideband register accesses. If the sideband needed vendor firmware, the Golden Die could not test a DUT on its own.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A bare DUT is powered on; the Golden Die reads its PHY Capability over the sideband before any firmware has run.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The DUT cannot be tested in the standard setup.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Sideband role <span class="ref">§11.0, p.579</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>Table 9-72 p.509</span></div>
+      <h3>Compliance mode changes at the next Retrain</h3>
+      <p class="rule">Writes to Compliance Mode take effect after the next RDI entry to Retrain. In modes 01b and 10b, a transition to LinkError does not reset any registers.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Switching modes in the middle of Active traffic would leave the Adapter half in one mode and half in another. Retrain is a clean boundary. Keeping registers through LinkError lets a test cause errors on purpose and still read the setup and results.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software writes 10b, then sets Retrain. After the retrain, the Adapter brings RDI to Active without parameter exchange and waits for injection triggers.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Expecting the mode to apply immediately: the next test runs in normal mode.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Compliance Mode, Force Link Reset <span class="ref">Table 9-72, p.509</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>§11.2 p.581</span></div>
+      <h3>Test flits use the retry buffer; NOP flits do not</h3>
+      <p class="rule">Test flits (header Byte 1 [7:6] = 01b) pass through the Tx retry buffer when Retry is on, are CRC-checked and trigger Retry on errors, but are never forwarded to the Protocol Layer.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The point is to exercise Retry without a working Protocol Layer. Flits that skip the retry buffer (like NOPs) could not be replayed, so they cannot test it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>With Protocol Layers held in Reset, the DUT injects 1000 Test flits while Retry Injection flips one bit every 50 flits; the Golden Die naks, the DUT replays.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that forwards Test flits hands garbage to the Protocol Layer.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Test flit rules <span class="ref">§11.2, p.581</span></li><li><span class="kind spec">Spec</span>Flit Type field <span class="ref">Table 9-73, p.509</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>§9.5.4.5 p.514</span></div>
+      <h3>All modules enter PHY Compliance together</h3>
+      <p class="rule">Every module of a link must be in PHY Compliance at the same time; behavior is undefined otherwise. Each module has its own copy of the registers.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Modules of one link share training state and the Adapter. Half the link in compliance and half in mission mode would leave training and data flow inconsistent. Per-module registers let each module be margined separately.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A two-module Standard Package link: software sets Compliance Enable at PHYOFF + 000h and + 400h before retraining.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Undefined link behavior and meaningless results.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Module rules <span class="ref">§9.5.4.5, p.514</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>11 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>12 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>What does one retimer credit represent? <span class="lvl">Basic</span></summary><div><p>256 bytes of data in the retimer's receiver buffer, including any FEC and CRC. Retimer_Credits is a 9-bit value in parameter exchange.</p><p class="src"><span class="sl">Spec</span>§1.3, p.48 · §3.2.1.2, p.64</p></div></details>
+  <details><summary>How does a retimer return credits to its die? <span class="lvl">Basic</span></summary><div><p>On the Valid wire: 11110000b for no data + 1 credit, 11111111b for data + 1 credit.</p><p class="src"><span class="sl">Spec</span>Table 4-1, p.101</p></div></details>
+  <details><summary>The external link takes 50 ms to come up. Why doesn't the die's 8 ms parameter exchange timer fire? <span class="lvl">Intermediate</span></summary><div><p>The retimer sends the Stall form of the capability message every 4 ms while it resolves with its partner, and each Stall resets the die's timer.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.70</p></div></details>
+  <details><summary>Name the three options for reliability across the off-package link. <span class="lvl">Intermediate</span></summary><div><p>Tunnel the protocol's own FEC/CRC in Raw Format; the retimer provides its own FEC, CRC and Retry (three independent links); or retimer FEC with the protocol's own CRC and Replay.</p><p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p></div></details>
+  <details><summary>How do Test flits differ from NOP flits in compliance testing? <span class="lvl">Intermediate</span></summary><div><p>Test flits use header Byte 1 [7:6] = 01b, go through the retry buffer when Retry is enabled and are CRC-checked, so they can exercise Retry; NOP flits bypass the retry buffer. Neither reaches the Protocol Layer.</p><p class="src"><span class="sl">Spec</span>§11.2, p.581 · Table 9-73, p.509</p></div></details>
+  <details><summary>How does the PHY enter PHY Compliance, and what stops mission traffic? <span class="lvl">Advanced</span></summary><div><p>Adapter first in a compliance mode, then set Compliance Enable in every module and retrain; the PHY enters compliance on the next PHYRETRAIN. It never asserts <code>pl_trdy</code> in this mode, even if RDI is Active.</p><p class="src"><span class="sl">Spec</span>§9.5.4.5, Table 9-78, p.514</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>13 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>§1.3, Figure 1-18</td><td>UCIe Retimers</td><td class="num">47–48</td></tr>
+      <tr><td>§3.2.1.2</td><td>Parameter exchange: Retimer, Retimer_Credits, DP/UP, timeout and Stall</td><td class="num">63–70</td></tr>
+      <tr><td>§3.5</td><td>State Machine Hierarchy (retimer state resolution)</td><td class="num">90</td></tr>
+      <tr><td>§3.9</td><td>Runtime Link Testing using Parity (retimer note)</td><td class="num">96</td></tr>
+      <tr><td>§4.1.2, §4.1.2.1, Table 4-1</td><td>Valid Framing; Valid Framing for Retimers</td><td class="num">100–101</td></tr>
+      <tr><td>§4.5.2, Figure 4-32</td><td>Link Training with Retimer</td><td class="num">130</td></tr>
+      <tr><td>§8.2.6</td><td>Retimers and Management Transport</td><td class="num">391</td></tr>
+      <tr><td>§9.3</td><td>Register location (retimer access via mailbox)</td><td class="num">457–458</td></tr>
+      <tr><td>§9.5.4</td><td>Test/Compliance Register Block</td><td class="num">507–518</td></tr>
+      <tr><td>§11.0–11.3</td><td>Compliance: Protocol, Adapter, PHY</td><td class="num">579–581</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025): §1.3, Chapters 3, 4, 8, 9 and 11. The separate compliance document (test setup, channel model, Golden Die details) is not part of this spec.</div></footer>
+
+<script>
+(function () {
+  function e(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  /* ---- Retry Injection Control builder (Table 9-77) ---- */
+  (function () {
+    var box = document.getElementById("rib"), out = document.getElementById("ribout");
+    if (!box || typeof BigInt === "undefined") return;
+    var F = [
+      { k: "en", name: "[0] Retry Injection Enable", lo: 0, w: 1, opts: [[1, "1: enable / start"], [0, "0: off"]] },
+      { k: "typ", name: "[3:1] Error type", lo: 1, w: 3, opts: [[1, "001b: 1-bit error"], [2, "010b: 2-bit error"], [3, "011b: 3-bit error"], [0, "000b: none"]] },
+      { k: "off", name: "[11:4] Byte Offset (0–255)", lo: 4, w: 8, num: 10 },
+      { k: "gap", name: "[19:12] Flits between errors (0 = random 1–31)", lo: 12, w: 8, num: 50 },
+      { k: "cnt", name: "[27:20] Number of errors (0 = until disabled)", lo: 20, w: 8, num: 20 },
+      { k: "ft", name: "[30:28] Flit type", lo: 28, w: 3, opts: [[3, "011b: Test flits only"], [0, "000b: any flit"], [1, "001b: NOP flits only"], [2, "010b: payload (protocol or test)"], [4, "100b: payload, same sequence number"]] },
+      { k: "thr", name: "[35:32] Tx Retry Error Threshold (0–15)", lo: 32, w: 4, num: 4 }
+    ];
+    var el = {};
+    F.forEach(function (f) {
+      var l = document.createElement("label"); l.textContent = f.name;
+      var x;
+      if (f.opts) { x = document.createElement("select"); f.opts.forEach(function (o) { var op = document.createElement("option"); op.value = o[0]; op.textContent = o[1]; x.appendChild(op); }); }
+      else { x = document.createElement("input"); x.type = "number"; x.min = 0; x.max = (1 << f.w) - 1; x.value = f.num; x.inputMode = "numeric"; }
+      x.addEventListener("input", run); x.addEventListener("change", run);
+      l.appendChild(x); box.appendChild(l); el[f.k] = x;
+    });
+    function run() {
+      var v = BigInt(0), notes = [];
+      F.forEach(function (f) {
+        var n = parseInt(el[f.k].value, 10); if (isNaN(n) || n < 0) n = 0;
+        var max = (1 << f.w) - 1; if (n > max) { notes.push(f.name + ": maximum is " + max + "."); n = max; }
+        v = v | (BigInt(n) << BigInt(f.lo));
+      });
+      var hx = v.toString(16).toUpperCase(); while (hx.length < 16) hx = "0" + hx;
+      var gap = +el.gap.value, cnt = +el.cnt.value, ft = +el.ft.value;
+      var desc = (+el.typ.value === 0 ? "No errors will be injected." : (+el.typ.value) + "-bit error in byte " + (+el.off.value) + " of " + (ft === 0 ? "any" : ft === 1 ? "NOP" : ft === 3 ? "Test" : "payload") + " flits, " + (ft === 4 ? "repeated on the same sequence number" : (gap === 0 ? "a random 1–31 flits apart" : "every " + gap + " flits")) + ", " + (cnt === 0 ? "until disabled" : cnt + " times") + ".");
+      if (+el.thr.value) desc += " More than " + (+el.thr.value) + " independent retry events sets 'Number of Retries Exceeded Threshold' and triggers Retrain on RDI.";
+      out.innerHTML = "<div class=\"big\">" + hx.slice(0, 8) + "_" + hx.slice(8) + "h</div><p style=\"margin:6px 0 0\">" + e(desc) + "</p>" + notes.map(function (n) { return "<p class=\"warn\" style=\"margin:6px 0 0\">" + e(n) + "</p>"; }).join("");
+    }
+    run();
+  })();
+
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+
+  window.PAGE = {
+    CW: 100,
+    wgroups: [["all", "All"], ["rt", "Retimers"], ["cp", "Compliance"]],
+    scenarios: [
+      {
+        id: "pe", tab: "Parameter exchange", unit: "steps", title: "Die 0 negotiates through Retimer 0 while the far side is still resolving",
+        desc: "Sideband parameter exchange between Die 0 (a Downstream Port) and Retimer 0. The order of retimer-to-retimer messages is implementation-specific and shown only as 'resolve'. Columns are steps; the Stall columns are about 4 ms apart.",
+        ref: "§3.2.1.2, p.63–70 · §1.3, p.48",
+        n: 7, gaps: [],
+        sig: [
+          { name: "Die 0 → Retimer 0", d: "sb", t: "note", v: ["AdvCap (DP=1)", "", "", "", "", "FinCap", ""] },
+          { name: "Retimer 0 → Die 0", d: "sb", t: "note", v: ["", "", "AdvCap.Stall", "AdvCap.Stall", "AdvCap merged", "", ""] },
+          { name: "Retimer 0 ↔ Retimer 1", d: "pl", t: "note", v: ["", "resolve", "resolve", "resolve", "done", "", ""] },
+          { name: "Die 0 8 ms timer", d: "lp", t: "bus", v: ["running", "running", "reset", "reset", "stopped", "stopped", "stopped"] },
+          { name: "RDI", d: "pl", t: "bus", v: ["Active", "Active", "Active", "Active", "Active", "Active", "Active"] }
+        ],
+        steps: [
+          { r: [0, 0], t: "Die 0 advertises", x: "With RDI Active, Die 0 sends {AdvCap.Adapter} with DP = 1. Its 8 ms (−0%/+50%) parameter exchange timer runs only while RDI is Active.", s: "§3.2.1.2, p.64, p.70" },
+          { r: [1, 3], t: "Retimer 0 must not answer yet", x: "It first resolves capabilities with Retimer 1 (which needs Die 1's) and merges its own. Meanwhile it sends the Stall form of {AdvCap.Adapter} once every 4 ms; each Stall resets Die 0's timer.", w: "Without Stall, a slow external link would make Die 0 time out (Adapter Timeout 0001b) and go to LinkError.", s: "§3.2.1.2, p.70" },
+          { r: [4, 4], t: "Merged answer", x: "Retimer 0 sends its own {AdvCap.Adapter}: Retimer = 1, Retimer_Credits (9-bit, 256 B each), DP = 0 and UP = 0, and only capabilities that work end to end.", s: "§3.2.1.2, p.63–64" },
+          { r: [5, 6], t: "Finalize", x: "Die 0, as Downstream Port, sends {FinCap.Adapter}. The Adapter LSM handshakes that follow are again resolved end to end by the retimers.", s: "§3.2.1.2, p.65 · §3.5, p.90" }
+        ]
+      },
+      {
+        id: "cr", tab: "Retimer credits", unit: "steps", title: "Die 0 spends and earns Retimer 0 credits",
+        desc: "Retimer_Credits = 4 so the picture stays small (real values go up to 511). One credit = 256 B, one flit here. Columns are steps.",
+        ref: "§1.3, p.48 · §4.1.2.1, Table 4-1, p.101",
+        n: 10, gaps: [],
+        sig: [
+          { name: "Die 0 → R0 data", d: "lp", t: "bus", v: ["idle", "Flit 1", "Flit 2", "Flit 3", "Flit 4", "must wait", "must wait", "Flit 5", "idle", "idle"] },
+          { name: "Die 0 credits", d: "lp", t: "bus", v: ["4", "3", "2", "1", "0", "0", "1", "0", "1", "4 (reset)"] },
+          { name: "R0 → Die 0 Valid", d: "pl", t: "note", v: ["", "", "", "", "", "", "11110000b", "", "11111111b", ""] },
+          { name: "R0 buffer (flits)", d: "pl", t: "bus", v: ["0", "1", "2", "3", "4", "4", "3", "4", "3", "drain/dump"] },
+          { name: "RDI", d: "pl", t: "bus", v: ["Active", "Active", "Active", "Active", "Active", "Active", "Active", "Active", "Active", "Retrain"] }
+        ],
+        steps: [
+          { r: [0, 0], t: "Start of Active", x: "Die 0's counter holds the advertised Retimer_Credits.", s: "§1.3, p.48" },
+          { r: [1, 4], t: "Spend", x: "Each 256 B sent uses one credit. These credits are separate from any protocol credits.", s: "§1.3, p.48" },
+          { r: [5, 5], t: "Out of credits", x: "With zero credits, Die 0 must not send anything to the retimer.", s: "§1.3, p.48" },
+          { r: [6, 6], t: "Credit without data", x: "Retimer 0 forwarded a flit to Retimer 1 and frees space. With no data to send back, it frames Valid as 11110000b: no flit data + 1 credit release.", s: "Table 4-1, p.101" },
+          { r: [7, 8], t: "Credit with data", x: "Die 0 sends Flit 5. Retimer 0 later sends data to Die 0 framed 11111111b: data + 1 credit. Retimer-to-die data itself is not credited.", s: "Table 4-1, p.101 · §1.3, p.48" },
+          { r: [9, 9], t: "Leaving Active resets everything", x: "RDI goes to Retrain: Die 0 restores its counter to the advertised value and Retimer 0 drains or dumps its buffer before re-entering Active.", w: "Because credits are re-advertised, the first transfer after Active cannot be a credit-only frame.", s: "§1.3, p.48 · §4.1.2, p.100" }
+        ]
+      },
+      {
+        id: "vref", tab: "PHY compliance", unit: "steps", title: "Upper Rx Vref margin sweep on a DUT",
+        desc: "Compliance software steps the DUT's Rx Vref up from its trained value until the point test fails. Single module shown. Columns are steps.",
+        ref: "§9.5.4.5, Tables 9-78 to 9-80, p.514–517",
+        n: 9, gaps: [],
+        sig: [
+          { name: "Software", d: "lp", t: "note", v: ["Mode ← 10b", "CompEn, Retrain", "", "Vref +1, trig", "", "Vref +2, trig", "", "Vref +3, trig", ""] },
+          { name: "LTSM", d: "pl", t: "bus", v: ["ACTIVE", "PHYRETRAIN", "@PHY-Compl.", "@PHY-Compl.", "@PHY-Compl.", "@PHY-Compl.", "@PHY-Compl.", "@PHY-Compl.", "@PHY-Compl."] },
+          { name: "pl_trdy", d: "pl", t: "bit", v: bits(9, [[0, 0]]) },
+          { name: "Op Trigger", d: "lp", t: "bit", v: bits(9, [[3, 3], [5, 5], [7, 7]]) },
+          { name: "Rx Vref Offset", d: "lp", t: "bus", v: ["0", "0", "0", "+1", "+1", "+2", "+2", "+3", "+3"] },
+          { name: "Vref status", d: "pl", t: "note", v: ["", "", "", "", "10b pass", "", "10b pass", "", "11b fail"] }
+        ],
+        steps: [
+          { r: [0, 0], t: "Adapter first", x: "Software sets Adapter Compliance Mode to 10b. It takes effect at the next RDI entry to Retrain, and it must be set before PHY compliance.", s: "Table 9-72, p.509 · §9.5.4.5, p.514" },
+          { r: [1, 2], t: "Into PHY Compliance", x: "Software sets Compliance Enable (Control 1 bit 0) in every module and retrains. On PHYRETRAIN the PHY enters PHY Compliance; it does not assert pl_trdy even if RDI reaches Active.", s: "Table 9-78, p.514" },
+          { r: [3, 4], t: "First step: +1", x: "Rx Vref Offset Enable = 01b (add), Offset = 1, Operation Type = 011b (Rx-initiated point training), then trigger 0→1. Errors are compared with the thresholds in Training Setup 4; under the threshold, status reads 10b.", s: "Tables 9-78, 9-80, p.515–517" },
+          { r: [5, 6], t: "Step by one", x: "Software must change the offset by one from the previous value. +2 also passes.", s: "Table 9-78, p.515" },
+          { r: [7, 8], t: "Fail: margin found", x: "At +3 the errors exceed a threshold, so status is 11b. The upper Vref margin is 2 steps above the trained value. Repeat with Enable = 10b (subtract) for the lower margin.", w: "11b also covers an offset beyond what the hardware supports, so check the requested value is in range.", s: "Table 9-80, p.517" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      waveEl.innerHTML = renderWave(s, st.r, false);
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+</script>
+</body>
+</html>

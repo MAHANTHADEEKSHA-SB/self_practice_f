@@ -1,0 +1,140 @@
+
+<section id="rationale"><div class="wrap">
+  <h2>10 · Why each rule exists</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§3.2.1.2 p.70</span></div>
+      <h3>Stall every 4 ms while resolving</h3>
+      <p class="rule">A retimer must resolve capabilities with its remote partner before answering its die, and send the Stall form of the message every 4 ms while it waits. The die's 8 ms timer resets on each Stall.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The external link may take far longer than 8 ms to come up or to fetch the other die's capabilities. Without Stall the local die would time out and take RDI to LinkError. Sending at half the timeout guarantees the timer never expires while the retimer is still working.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An optical link takes 30 ms to lock. Retimer 0 sends a Stall to Die 0 roughly every 4 ms (seven or eight of them) and then the merged capabilities.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Die 0 logs Adapter Timeout 0001b (parameter exchange) and the link goes to LinkError. The retimer must also not stall forever: it is responsible for not stalling the link indefinitely.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Timeout and Stall <span class="ref">§3.2.1.2, p.70</span></li><li><span class="kind spec">Spec</span>Not indefinitely <span class="ref">§1.3, p.48</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§3.5 p.90</span></div>
+      <h3>Answer a state request only after the far die has</h3>
+      <p class="rule">For Adapter LSM requests, the retimer forwards the request, waits until the far die has responded, and only then responds to its own die.</p>
+      <div class="part"><span class="l l-why">Why</span><p>If Retimer 0 said Active to Die 0 on its own, Die 0 could start sending protocol traffic while Die 1 is still in Reset, and those flits would have nowhere to go. Waiting makes both dies reach each state together.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 sends Active Request; Retimer 0 relays through Retimer 1; Die 1 replies Active Status; only then does Retimer 0 reply Active Status to Die 0.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>One die in Active and the other not: traffic stalls or is dropped, and the external link may be put to sleep while one side is still active.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Retimer state resolution <span class="ref">§3.5, p.90</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§1.3 p.48</span></div>
+      <h3>No credit, no send</h3>
+      <p class="rule">The die must not send data to the retimer without a credit. One credit is 256 B including FEC and CRC. Data in the buffer must be consumable by the far die without any other dependency.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The retimer cannot push back on the die any other way: there is no ready signal on the wires. A fixed buffer and credits stop overflow; the no-dependency rule stops a deadlock where buffered data waits on something stuck behind it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Retimer_Credits = 64 (16 KB). Die 0 bursts 64 flits; with no credits left it idles until Retimer 0 forwards data and returns credits on the Valid wire.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Retimer receiver buffer overflow: Uncorrectable Error Status bit 1, Header Log 2 [6:4] = 010b, link down.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Credit rules <span class="ref">§1.3, p.48</span></li><li><span class="kind spec">Spec</span>Overflow encoding <span class="ref">Table 9-33, p.486</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§1.3 p.48 · §4.1.2 p.100</span></div>
+      <h3>Credits reset whenever RDI leaves Active</h3>
+      <p class="rule">The die restores its credit counter to the advertised value whenever RDI leaves Active; the retimer drains or dumps its buffer before re-entering Active.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A retrain can drop credit-return frames in flight, leaving the two sides disagreeing about the count. Resetting both to a known value on every exit from Active is simpler and safer than reconciling.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A retrain happens with 10 credits outstanding. On return to Active, Die 0 starts again at 64 and Retimer 0's buffer is empty.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A die that keeps its old count slowly loses credits after each retrain; a retimer that keeps old data mixes pre-retrain flits into the new stream.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Reset and drain <span class="ref">§1.3, p.48</span></li><li><span class="kind spec">Spec</span>No credit-only first frame <span class="ref">§4.1.2, p.100</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§3.9 p.96</span></div>
+      <h3>Parity bytes stay on the local link</h3>
+      <p class="rule">Runtime-link-testing parity bytes use no retimer credits, are not buffered and are not forwarded to the remote retimer.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Parity measures the health of one UCIe link. Forwarding it would mix two links' results, and charging credits for it would steal buffer space from real traffic.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software enables parity on Die 0 → Retimer 0 to check UCIe Link 0 alone; Die 1 never sees those bytes.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A retimer that counts parity against credits gives the die fewer credits than it advertised.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Parity and retimers <span class="ref">§3.9, p.96</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="rt">
+      <div class="meta"><span>Retimer</span><span>§4.5.2 p.130</span></div>
+      <h3>Match speed and width by retraining from LINKSPEED</h3>
+      <p class="rule">If the retimer needs both UCIe links at the same rate and width, it retrains its local link from LINKSPEED after learning the remote configuration. This may happen several times.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Each UCIe link trains on its own channel and may settle at a different rate or width. A retimer without deep buffering usually cannot bridge a mismatch, so it forces a common configuration before LINKINIT.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>UCIe Link 0 trains at 32 GT/s, Link 1 only at 24 GT/s. Retimer 0 retrains Link 0 down to 24 GT/s before letting it go to ACTIVE.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The faster side outruns the slower one and fills the retimer's buffer and the external link.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Speed/width match <span class="ref">§4.5.2, Figure 4-32, p.130</span></li><li><span class="kind derived">Derived</span>buffering reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>§11.0 p.579</span></div>
+      <h3>The sideband must work without firmware</h3>
+      <p class="rule">For compliance, the DUT's sideband is expected to come up without firmware initialization.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Compliance software sets up every test and reads every result through sideband register accesses. If the sideband needed vendor firmware, the Golden Die could not test a DUT on its own.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A bare DUT is powered on; the Golden Die reads its PHY Capability over the sideband before any firmware has run.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The DUT cannot be tested in the standard setup.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Sideband role <span class="ref">§11.0, p.579</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>Table 9-72 p.509</span></div>
+      <h3>Compliance mode changes at the next Retrain</h3>
+      <p class="rule">Writes to Compliance Mode take effect after the next RDI entry to Retrain. In modes 01b and 10b, a transition to LinkError does not reset any registers.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Switching modes in the middle of Active traffic would leave the Adapter half in one mode and half in another. Retrain is a clean boundary. Keeping registers through LinkError lets a test cause errors on purpose and still read the setup and results.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software writes 10b, then sets Retrain. After the retrain, the Adapter brings RDI to Active without parameter exchange and waits for injection triggers.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Expecting the mode to apply immediately: the next test runs in normal mode.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Compliance Mode, Force Link Reset <span class="ref">Table 9-72, p.509</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>§11.2 p.581</span></div>
+      <h3>Test flits use the retry buffer; NOP flits do not</h3>
+      <p class="rule">Test flits (header Byte 1 [7:6] = 01b) pass through the Tx retry buffer when Retry is on, are CRC-checked and trigger Retry on errors, but are never forwarded to the Protocol Layer.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The point is to exercise Retry without a working Protocol Layer. Flits that skip the retry buffer (like NOPs) could not be replayed, so they cannot test it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>With Protocol Layers held in Reset, the DUT injects 1000 Test flits while Retry Injection flips one bit every 50 flits; the Golden Die naks, the DUT replays.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that forwards Test flits hands garbage to the Protocol Layer.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Test flit rules <span class="ref">§11.2, p.581</span></li><li><span class="kind spec">Spec</span>Flit Type field <span class="ref">Table 9-73, p.509</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="cp">
+      <div class="meta"><span>Compliance</span><span>§9.5.4.5 p.514</span></div>
+      <h3>All modules enter PHY Compliance together</h3>
+      <p class="rule">Every module of a link must be in PHY Compliance at the same time; behavior is undefined otherwise. Each module has its own copy of the registers.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Modules of one link share training state and the Adapter. Half the link in compliance and half in mission mode would leave training and data flow inconsistent. Per-module registers let each module be margined separately.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A two-module Standard Package link: software sets Compliance Enable at PHYOFF + 000h and + 400h before retraining.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Undefined link behavior and meaningless results.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Module rules <span class="ref">§9.5.4.5, p.514</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>11 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>12 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>What does one retimer credit represent? <span class="lvl">Basic</span></summary><div><p>256 bytes of data in the retimer's receiver buffer, including any FEC and CRC. Retimer_Credits is a 9-bit value in parameter exchange.</p><p class="src"><span class="sl">Spec</span>§1.3, p.48 · §3.2.1.2, p.64</p></div></details>
+  <details><summary>How does a retimer return credits to its die? <span class="lvl">Basic</span></summary><div><p>On the Valid wire: 11110000b for no data + 1 credit, 11111111b for data + 1 credit.</p><p class="src"><span class="sl">Spec</span>Table 4-1, p.101</p></div></details>
+  <details><summary>The external link takes 50 ms to come up. Why doesn't the die's 8 ms parameter exchange timer fire? <span class="lvl">Intermediate</span></summary><div><p>The retimer sends the Stall form of the capability message every 4 ms while it resolves with its partner, and each Stall resets the die's timer.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.70</p></div></details>
+  <details><summary>Name the three options for reliability across the off-package link. <span class="lvl">Intermediate</span></summary><div><p>Tunnel the protocol's own FEC/CRC in Raw Format; the retimer provides its own FEC, CRC and Retry (three independent links); or retimer FEC with the protocol's own CRC and Replay.</p><p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p></div></details>
+  <details><summary>How do Test flits differ from NOP flits in compliance testing? <span class="lvl">Intermediate</span></summary><div><p>Test flits use header Byte 1 [7:6] = 01b, go through the retry buffer when Retry is enabled and are CRC-checked, so they can exercise Retry; NOP flits bypass the retry buffer. Neither reaches the Protocol Layer.</p><p class="src"><span class="sl">Spec</span>§11.2, p.581 · Table 9-73, p.509</p></div></details>
+  <details><summary>How does the PHY enter PHY Compliance, and what stops mission traffic? <span class="lvl">Advanced</span></summary><div><p>Adapter first in a compliance mode, then set Compliance Enable in every module and retrain; the PHY enters compliance on the next PHYRETRAIN. It never asserts <code>pl_trdy</code> in this mode, even if RDI is Active.</p><p class="src"><span class="sl">Spec</span>§9.5.4.5, Table 9-78, p.514</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>13 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>§1.3, Figure 1-18</td><td>UCIe Retimers</td><td class="num">47–48</td></tr>
+      <tr><td>§3.2.1.2</td><td>Parameter exchange: Retimer, Retimer_Credits, DP/UP, timeout and Stall</td><td class="num">63–70</td></tr>
+      <tr><td>§3.5</td><td>State Machine Hierarchy (retimer state resolution)</td><td class="num">90</td></tr>
+      <tr><td>§3.9</td><td>Runtime Link Testing using Parity (retimer note)</td><td class="num">96</td></tr>
+      <tr><td>§4.1.2, §4.1.2.1, Table 4-1</td><td>Valid Framing; Valid Framing for Retimers</td><td class="num">100–101</td></tr>
+      <tr><td>§4.5.2, Figure 4-32</td><td>Link Training with Retimer</td><td class="num">130</td></tr>
+      <tr><td>§8.2.6</td><td>Retimers and Management Transport</td><td class="num">391</td></tr>
+      <tr><td>§9.3</td><td>Register location (retimer access via mailbox)</td><td class="num">457–458</td></tr>
+      <tr><td>§9.5.4</td><td>Test/Compliance Register Block</td><td class="num">507–518</td></tr>
+      <tr><td>§11.0–11.3</td><td>Compliance: Protocol, Adapter, PHY</td><td class="num">579–581</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025): §1.3, Chapters 3, 4, 8, 9 and 11. The separate compliance document (test setup, channel model, Golden Die details) is not part of this spec.</div></footer>

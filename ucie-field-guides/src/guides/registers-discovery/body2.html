@@ -1,0 +1,158 @@
+
+<section id="rationale"><div class="wrap">
+  <h2>9 · Why each rule exists</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="disc">
+      <div class="meta"><span>Discovery</span><span>§9.3 p.457 · §9.8 p.520</span></div>
+      <h3>Host links live in a UiRB found through ACPI</h3>
+      <p class="rule">Host UCIe Link DVSECs sit in a per-link UiRB at a static host address, enumerated by the UEDT ACPI table. Only UCIe link registers may live there.</p>
+      <div class="part"><span class="l l-why">Why</span><p>One link may be shared by two Root Ports, so the link's registers cannot belong to either port's config space. A separate region, described once in ACPI with both Root Ports listed, gives software a single place to manage the shared link.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU has two UCIe links, each carrying two Root Ports. UEDT has two UCLS records, each with stack size 2h and two Device/Function numbers.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Putting non-UCIe registers in the UiRB is not allowed; a UCIe-aware driver walking it could misread them.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>UiRB rules <span class="ref">§9.3, p.457</span></li><li><span class="kind spec">Spec</span>UCLS fields <span class="ref">Table 9-84, p.520</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="disc">
+      <div class="meta"><span>Discovery</span><span>§9.7 p.519</span></div>
+      <h3>MSI ends the UiRB capability list</h3>
+      <p class="rule">The Link DVSEC in the UiRB points to the MSI capability; MSI in the UiRB must have Next Capability = 0h, and software stops the walk when it sees ID 0005h.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The UiRB is not a PCIe function, so there is no standard config-space list to end it. A fixed, short chain (DVSEC then MSI) is easy for firmware to build and for software to walk.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A driver reads the DVSEC header, follows Next Capability to offset 100h, sees ID 0005h, programs MSI and stops.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A non-zero next pointer from MSI sends software into undefined UiRB space.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>MSI in UiRB <span class="ref">§9.7, p.519</span></li><li><span class="kind spec">Spec</span>Next Capability for UiRB <span class="ref">Table 9-5, p.464</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="ctl">
+      <div class="meta"><span>Control</span><span>Table 9-9 p.468–469</span></div>
+      <h3>Start training and Retrain are different buttons</h3>
+      <p class="rule">Start UCIe Link training does full training (through Link Down if the link was up). Retrain UCIe Link retrains an up link without Link Down, and does nothing if the link is down.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Going through Link Down resets everything beneath the link (protocol state included). Recovery from errors on a working link should not cost that, so a gentler retrain exists, but it cannot bring a dead link up.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Correctable CRC errors climb on an up link: software sets Retrain; traffic pauses but the PCIe hierarchy below survives. After a fatal error took the link down, software uses Start training.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Setting Retrain on a down link: nothing happens, and the bit clears. Setting Start on an up link: the link drops and everything below resets.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Bits 10 and 11 <span class="ref">Table 9-9, p.468–469</span></li><li><span class="kind spec">Spec</span>Link Status bit 15 <span class="ref">Table 9-10, p.471</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="ctl">
+      <div class="meta"><span>Control</span><span>Table 9-9 p.468</span></div>
+      <h3>Switch downstream ports train without software</h3>
+      <p class="rule">After a conventional reset, a switch DSP's hardware or firmware starts training on its own, without waiting for the Start bit. DSPs may default Raw Format Enable through straps or firmware.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Backward compatibility: an OS that knows nothing about UCIe expects devices below a switch to appear after reset, as they do with PCIe. If the DSP waited for UCIe-aware software, they never would.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A UCIe switch on a server with an older OS: its downstream links train after reset and the endpoints enumerate normally.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A DSP that waits for software leaves its endpoints missing on UCIe-unaware systems.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Bit 10 note; Raw Format Enable default <span class="ref">Table 9-9, p.468</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="ctl">
+      <div class="meta"><span>Status</span><span>Table 9-10 p.471</span></div>
+      <h3>Link Status means RDI and FDI both up</h3>
+      <p class="rule">Link Status bit 15 is 1 only if the RDI and the FDI are both up (with two stacks: RDI and any FDI). It stays 1 while the link is retraining.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Software cares whether traffic can flow, which needs the Adapter and the PHY. Keeping it 1 during retrain stops software treating a short retrain as a link loss; bit 16 tells you a retrain is in progress.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>During a retrain triggered for eye margining, bit 15 reads 1 and bit 16 reads 1; when bit 16 falls, the retrain is done.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Software that waits for bit 15 to drop to detect a retrain waits forever.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Bits 15–16 <span class="ref">Table 9-10, p.471</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="mbx">
+      <div class="meta"><span>Mailbox</span><span>§9.5.1.11 p.477</span></div>
+      <h3>The mailbox is not atomic</h3>
+      <p class="rule">Accesses to the mailbox are non-atomic; higher-level software must coordinate so one agent does not overwrite another's request.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A request is several separate register writes (index, data, then trigger). Two agents interleaving them would send a mix of both requests. Hardware arbitration was left out to keep the mailbox simple.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A BMC firmware reads remote eye data while an OS driver reads remote Link Status. Without a lock, the BMC's address and the driver's trigger produce a read of the wrong register.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Wrong data returned with Success status: nothing in hardware flags it.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Non-atomic note <span class="ref">§9.5.1.11, p.477</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="mbx">
+      <div class="meta"><span>Mailbox</span><span>Tables 9-17 to 9-20 p.478–479</span></div>
+      <h3>Wait for the trigger to clear before reading anything</h3>
+      <p class="rule">Read data and the Status field are valid only after the Write/Read trigger bit has cleared from 1. Data is undefined until then.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The access crosses the sideband to another die and back; the trigger is the only completion signal software has. Polling it keeps the hardware free of interrupts for this path.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software writes the trigger, polls Control bit 0 until it reads 0, checks Status = 11b, then reads Data Low.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Reading Data Low straight after the trigger returns stale or undefined data.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Data and Status validity <span class="ref">Tables 9-17, 9-20, p.478–479</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="err">
+      <div class="meta"><span>Errors</span><span>Tables 9-28, 9-31 p.483–485</span></div>
+      <h3>Every UCIe error is masked at reset</h3>
+      <p class="rule">All uncorrectable and correctable mask bits default to 1. A masked error still sets its status bit but is not forwarded to the protocol layer for escalation.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A UCIe-unaware OS does not know these errors exist. Forwarding them by default could surface unexplained PCIe/CXL "internal errors". UCIe-aware software opts in by unmasking.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A driver loads, clears stale status, then clears the UE mask bits it handles so fatal Adapter errors escalate through AER.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Forgetting to unmask: errors are logged in status but nothing tells the OS.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Mask defaults <span class="ref">Tables 9-28, 9-31</span></li><li><span class="kind derived">Derived</span>OS-compatibility reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="err">
+      <div class="meta"><span>Errors</span><span>Table 9-33 p.487</span></div>
+      <h3>Clear the status bit to re-arm "first fatal error"</h3>
+      <p class="rule">First Fatal Error Indicator keeps its value until software clears the matching UE status bit. Because of a race, it may not always point at the true first error.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The first error is usually the root cause; later errors are often side effects. Locking the field until it is acknowledged keeps the root cause from being overwritten.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An Adapter Timeout (bit 0) then an Internal Error (bit 2) are logged; the indicator reads 00h. Software clears bit 0; if bit 0 recurs later it can become "first" even though bit 2 is older.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Software that skips status bits it does not recognize never re-arms the indicator; the spec says it must still clear them.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>[22:18] and race note <span class="ref">Table 9-33, p.487</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="err">
+      <div class="meta"><span>Errors</span><span>Table 9-29 p.484</span></div>
+      <h3>Only one uncorrectable error defaults to non-fatal</h3>
+      <p class="rule">Severity defaults to fatal for every UE except "Sideband Non-Fatal Error Message received".</p>
+      <div class="part"><span class="l l-why">Why</span><p>The other five describe a link that cannot carry on: three are defined as bringing the link down, one is the partner reporting a fatal error, and one means no protocol or format could be agreed. A non-fatal message reports a problem the partner judged survivable, so it keeps that severity.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An endpoint sends a Non-Fatal {ErrMsg}; at the Root Port, UE bit 4 sets and is reported as non-fatal (if unmasked).</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Treating bit 4 as fatal by default resets a link that the partner said was still usable.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Severity defaults <span class="ref">Table 9-29, p.484</span></li><li><span class="kind spec">Spec</span>"brings Link Down" notes <span class="ref">Table 9-27, p.482</span></li><li><span class="kind derived">Derived</span>reasoning for the defaults</li></ul></div>
+    </article>
+    <article class="wcard" data-g="mon">
+      <div class="meta"><span>Health</span><span>Table 9-66 p.506</span></div>
+      <h3>Clear Eye Margin Valid before you retrain</h3>
+      <p class="rule">Hardware logs new eye margin measurements only while EMV is cleared. Software clears EMV, retrains, then reads margins once EMV is set.</p>
+      <div class="part"><span class="l l-why">Why</span><p>EMV acts as a latch: once set, the values stay stable for software to read, even if hardware retrains autonomously later. Clearing it is how software asks for a fresh measurement.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A fleet health tool reads margins weekly: clear EMV, retrain, wait, read. If EMV stays 0 after the retrain, the measurement had an error.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Retraining with EMV still set returns the old margins, not today's.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>EMV and flow <span class="ref">§9.5.3.40, p.505 · Table 9-66, p.506</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>10 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>11 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>Where is the UCIe Link DVSEC for a host Root Port, and how does software find it? <span class="lvl">Basic</span></summary><div><p>In the UiRB, a host-defined static memory region per UCIe link. The ACPI UEDT table lists each link's UiRB base and length and the Root Ports that share it.</p><p class="src"><span class="sl">Spec</span>Table 9-2, p.457 · §9.8, p.520</p></div></details>
+  <details><summary>Link Status bit 15 reads 1. Can the link be retraining right now? <span class="lvl">Basic</span></summary><div><p>Yes. Bit 15 stays 1 during retraining; bit 16 shows training or retraining in progress.</p><p class="src"><span class="sl">Spec</span>Table 9-10, p.471</p></div></details>
+  <details><summary>Code 2h in the width field: what width is it? <span class="lvl">Intermediate</span></summary><div><p>It depends on the register: x64 in Link Capability Max Link Width, x16 in Link Control Target Link Width, and x16 in Link Status Link Width enabled.</p><p class="src"><span class="sl">Spec</span>Tables 9-8 to 9-10, p.466–470</p></div></details>
+  <details><summary>Give the mailbox steps for reading a 32-bit register on the partner die. <span class="lvl">Intermediate</span></summary><div><p>Write Index Low (opcode, BE, Addr[18:0]) and Index High (Addr[23:19]); write 1 to the Control trigger; poll until it clears; check Status = 11b; read Data Low. On CA/UR, Header Log 1 holds the request header.</p><p class="src"><span class="sl">Spec</span>§9.5.1.11–9.5.1.16, p.477–479 · Table 9-32, p.485</p></div></details>
+  <details><summary>An Adapter Timeout is logged. Which register tells you which handshake timed out? <span class="lvl">Intermediate</span></summary><div><p>Header Log 2 in the D2D/PHY block (offset 2Ch): bits [3:0] give the reason; for an unanswered LSM request, [9:7] give the request and bit 10 the LSM.</p><p class="src"><span class="sl">Spec</span>Table 9-33, p.486</p></div></details>
+  <details><summary>Why might UCIe errors not reach the OS on a fresh system, even though status bits are set? <span class="lvl">Advanced</span></summary><div><p>All UE and CE mask bits default to 1, and all Error Notification Control enables default to 0. Software must unmask and enable reporting.</p><p class="src"><span class="sl">Spec</span>Tables 9-28, 9-31, p.483–485 · Table 9-12, p.473</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>12 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>§9.1, Table 9-1</td><td>High-level Software View of UCIe</td><td class="num">456</td></tr>
+      <tr><td>§9.2–9.3, Tables 9-2, 9-3</td><td>SW Discovery; Register Location Details and Access Mechanism</td><td class="num">457–458</td></tr>
+      <tr><td>§9.4</td><td>Software view examples (Figures 9-1, 9-2)</td><td class="num">459–461</td></tr>
+      <tr><td>§9.5, Table 9-4</td><td>Register attributes</td><td class="num">462</td></tr>
+      <tr><td>§9.5.1.1–9.5.1.3</td><td>UCIe Link DVSEC headers, Capability Descriptor</td><td class="num">464–465</td></tr>
+      <tr><td>§9.5.1.4–9.5.1.6</td><td>Link Capability, Control, Status</td><td class="num">466–472</td></tr>
+      <tr><td>§9.5.1.7–9.5.1.8</td><td>Link Event and Error Notification Control</td><td class="num">472–475</td></tr>
+      <tr><td>§9.5.1.9–9.5.1.10</td><td>Register Locators</td><td class="num">476–477</td></tr>
+      <tr><td>§9.5.1.11–9.5.1.19</td><td>Sideband Mailbox, Requester ID, Associated Ports, Length examples</td><td class="num">477–480</td></tr>
+      <tr><td>§9.5.2</td><td>UiSRB DVSEC Capability</td><td class="num">480–481</td></tr>
+      <tr><td>§9.5.3.1–9.5.3.9</td><td>D2D/PHY block header, error registers, header logs, link testing control</td><td class="num">482–489</td></tr>
+      <tr><td>§9.5.3.14–9.5.3.21</td><td>Advertised and finalized capability logs</td><td class="num">490–491</td></tr>
+      <tr><td>§9.5.3.22–9.5.3.39</td><td>PHY registers</td><td class="num">492–505</td></tr>
+      <tr><td>§9.5.3.40</td><td>UCIe Link Health Monitor (UHM) DVSEC</td><td class="num">505–506</td></tr>
+      <tr><td>§9.5.4–9.5.5</td><td>Test/Compliance and implementation-specific blocks</td><td class="num">507–518</td></tr>
+      <tr><td>§9.6–9.7</td><td>Streaming mode registers; MSI/MSI-X</td><td class="num">519</td></tr>
+      <tr><td>§9.8, Tables 9-83, 9-84</td><td>UCIe Early Discovery Table (UEDT)</td><td class="num">520</td></tr>
+      <tr><td>Table 7-6</td><td>Mapping of Addr[23:0] for sideband register accesses</td><td class="num">273</td></tr>
+      <tr><td>Appendix A</td><td>CXL/PCIe register applicability to UCIe</td><td class="num">582–584</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 9 Configuration and Parameters, with Chapter 7 for sideband addressing. The Test/Compliance register block is covered in the Compliance guide.</div></footer>
