@@ -2,6 +2,12 @@
 
 A standalone, lightweight edition of the DV Workbench Sites app, with the same React UI and workflow logic. It uses Vite instead of the Sites hosting runtime so it can run directly on a Windows laptop.
 
+## Continuing development with another agent
+
+Start with [AGENTS.md](AGENTS.md), then [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). The handoff records where work stopped, the code/data flow, compatibility requirements, known limitations, validation evidence and the separate GitHub/Sites release paths. It also includes a prompt you can paste into a new agent session.
+
+The agent needs repository access and must inspect current code. These documents do not carry your browser workspace, private PDFs, credentials or complete chat history.
+
 ## Run on Windows
 
 Install Node.js 24 (with npm), then open PowerShell:
