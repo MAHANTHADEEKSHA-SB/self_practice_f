@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe Electrical Layer and UCIe-3D Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the UCIe field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="../index.html"><strong>All guides</strong></a><a href="fdi.html">FDI</a><a href="rdi.html">RDI</a><a href="d2d-adapter.html">D2D Adapter</a><a href="link-training.html">Link Training</a><a href="logical-phy.html">Logical PHY</a><a href="sideband.html">Sideband</a><a href="protocol-mappings.html">Protocol Mappings</a><a href="manageability-uda.html">Manageability &amp; UDA</a><a href="registers-discovery.html">Registers &amp; Discovery</a><a href="retimers-compliance.html">Retimers &amp; Compliance</a><span class="here">Electrical &amp; UCIe-3D</span></div>
+    <div class="eyebrow">UCIe 3.0 · Chapter 5 Electrical Layer · Chapter 6 UCIe-3D</div>
+    <h1>UCIe Electrical Layer and UCIe-3D Field Guide</h1>
+    <p class="lede">Chapter 5 is 74 pages of tables keyed by package type and data rate; most questions are really "what applies at <em>my</em> rate on <em>my</em> package?". This guide sorts the electrical rules by that question, with a lookup tool, then covers UCIe-3D, which drops the Adapter and most of the PHY for stacked dies. Bump maps are summarized, not reproduced.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>transmitter / launch side</span><span><i class="sw" style="background:var(--pl)"></i>receiver / clock</span><span><i class="sw" style="background:var(--sb)"></i>sideband</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#pkg">2 · Package types</a><a href="#mod">3 · The module</a><a href="#clk">4 · Clocking</a><a href="#look">5 · Rate lookup</a><a href="#txrx">6 · Tx and Rx</a><a href="#chan">7 · Channel</a><a href="#idle">8 · Idle and BER</a><a href="#sbe">9 · Sideband electrical</a><a href="#red">10 · Repair and degrade</a><a href="#d3">11 · UCIe-3D</a><a href="#rationale">12 · Why each rule</a><a href="#live">13 · Live waveforms</a><a href="#quiz">14 · Test yourself</a><a href="#refs">15 · Spec index</a>
+</div></nav>
+<style>
+  .tool { display: grid; gap: 10px; }
+  .tool label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+  .tool input, .tool select { font-family: var(--font-mono); font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
+  .tool .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .out { font-family: var(--font-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+  .out table { width: 100%; border-collapse: collapse; }
+  .out td { padding: 4px 10px 4px 0; vertical-align: top; border: 0; border-bottom: 1px dashed var(--line); }
+  .out td:first-child { color: var(--muted); white-space: nowrap; }
+  .out td:last-child { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .out .big { font-size: 18px; font-weight: 600; color: var(--ink); }
+  .out .warn { color: var(--bad); }
+</style>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · What the electrical layer pins down</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Interoperability</div><h3>Any two compliant dies must link</h3><p>Every device supports 4 GT/s and every rate between 4 GT/s and its maximum, so two dies with different maximums always share rates. Bump maps fix signal order so modules from different vendors line up.</p><p class="src"><span class="sl">Spec</span>§5.1.1, p.184</p></div>
+    <div class="card"><div class="tagline">Simplicity</div><h3>Short, clean, single-ended</h3><p>Single-ended, unidirectional, DC-coupled point-to-point lanes with a forwarded clock and length-matched routing within a module. The forwarded clock replaces clock recovery, and the short channel allows a small, low-power PHY.</p><p class="src"><span class="sl">Spec</span>§5.0, p.184</p></div>
+    <div class="card"><div class="tagline">Two families</div><h3>Advanced (UCIe-A) vs Standard (UCIe-S)</h3><p>Advanced Package (silicon bridge or interposer, e.g. EMIB, CoWoS): fine bump pitch, 2 mm reach, 64 or 32 lanes per module. Standard Package (organic substrate): 100–130 µm pitch, 10–25 mm reach, 16 or 8 lanes.</p><p class="src"><span class="sl">Spec</span>§5.2.1, p.186 · Tables 1-1, 1-2, p.40</p></div>
+    <div class="card"><div class="tagline">UCIe-3D</div><h3>Stacked dies, almost no PHY</h3><p>Hybrid-bonded stacks at ≤ 10 µm pitch run at up to 4 GT/s (the SoC clock) with no Adapter, no CRC or replay and a near-inverter PHY. The design goal is energy and area per bit, not reach.</p><p class="src"><span class="sl">Spec</span>§6.2, p.258–259</p></div>
+  </div>
+</div></section>
+
+<section id="pkg"><div class="wrap">
+  <h2>2 · The three package types side by side</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th></th><th>UCIe-S (Standard)</th><th>UCIe-A (Advanced)</th><th>UCIe-3D</th></tr></thead>
+    <tbody>
+      <tr><td>Data rates (GT/s)</td><td>4, 8, 12, 16, 24, 32, 48, 64</td><td>4, 8, 12, 16, 24, 32, 48, 64</td><td>up to 4 (= SoC logic frequency)</td></tr>
+      <tr><td>Width per module</td><td>x16 (or x8)</td><td>x64 (or x32)</td><td>x80 per cluster (reduced widths x70, x60, …)</td></tr>
+      <tr><td>Bump pitch</td><td>100–130 µm</td><td>25–55 µm</td><td>≤ 10 µm optimized; &gt;10–25 µm functional</td></tr>
+      <tr><td>Channel reach</td><td>10 mm short, 25 mm long</td><td>2 mm</td><td>vertical (face-to-face bonding first)</td></tr>
+      <tr><td>Raw BER</td><td>1E-27 ≤ 8 GT/s · 1E-15 for 12–48 · 1E-12 at 64</td><td>1E-27 ≤ 12 GT/s · 1E-15 for 16–48 · 1E-12 at 64</td><td>&lt; 1E-27</td></tr>
+      <tr><td>Power target</td><td>0.50–0.75 pJ/b</td><td>0.25–0.50 pJ/b</td><td>&lt; 0.05 pJ/b at 9 µm</td></tr>
+      <tr><td>PHY latency (Tx+Rx)</td><td colspan="2">12–16 UI ≤ 32 GT/s; 24 UI at 48, 32 UI at 64 (targets)</td><td>0.125 ns at 4 GT/s (0.5 UI)</td></tr>
+      <tr><td>ESD</td><td colspan="2">30 V CDM</td><td>5 V CDM at introduction</td></tr>
+      <tr><td>Adapter, CRC, retry</td><td colspan="2">Yes (Chapter 3)</td><td>No Adapter; no CRC/replay needed</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>Tables 1-1, 1-2, p.40 · Tables 5-2, 5-3, p.188–189 · Table 5-32, p.251 · Table 6-1, p.259–260</p>
+</div></section>
+
+<section id="mod"><div class="wrap">
+  <h2>3 · Anatomy of a module</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Per direction</th><th>Advanced x64</th><th>Standard x16</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Data</td><td>64 (+4 redundant)</td><td>16</td><td>Single-ended data lanes</td></tr>
+        <tr><td>Valid</td><td>1 (+1 redundant)</td><td>1</td><td>Frames data; gates the clock to the data lanes</td></tr>
+        <tr><td>Clock</td><td>2 (Phase-1, Phase-2)</td><td>2</td><td>Forwarded clock</td></tr>
+        <tr><td>Track</td><td>1</td><td>1</td><td>Clock-like pattern for runtime recalibration</td></tr>
+        <tr><td>Clock/Track redundant</td><td>1</td><td>–</td><td>Repair for a clock or Track lane</td></tr>
+        <tr><td>Sideband</td><td>data + clock (+ redundant pair)</td><td>data + clock</td><td>800 MT/s training and register path</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>§5.2.1, p.186 · §5.3, p.190 · Table 5-18, p.209–210 · §5.9.1, p.249</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>x32 and x8 variants</h3><p style="font-size:15px">An x32 Advanced module has 32 data lanes plus 2 redundant. An x8 Standard module has 8 data lanes. Up to 4 modules can be grouped for bandwidth.</p><p class="src"><span class="sl">Spec</span>§5.3, p.190 · §5.2.1, p.186</p></div>
+      <div class="card"><h3>Mixing x64 and x32</h3><p style="font-size:15px">Optional for an x64 module. When used, the x32 always connects to the lower half of the x64; one wide module may not talk to two narrow ones at once.</p><p class="src"><span class="sl">Spec</span>§5.7.2.4, p.228</p></div>
+      <div class="card"><h3>Protect the receiver</h3><p style="font-size:15px">Keep the Tx output high (VOH) within 100 mV above the receiving chiplet's front-end supply; an over-stress protection circuit may be used if it is higher.</p><p class="src"><span class="sl">Spec</span>§5.2.1, p.186</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="clk"><div class="wrap">
+  <h2>4 · Clocking</h2>
+  <div class="twocol">
+    <div class="card"><h3>Common reference clock</h3><ul class="tight" style="font-size:15px">
+      <li>Both dies of a link use REFCLK from one source (package pin or forwarded by another die). 100 MHz recommended; 25–200 MHz allowed; ±300 ppm.</li>
+      <li>SSC allowed: 30–33 kHz modulation, 0 to −0.5% down-spread, ≤ 1250 ppm/µs slew.</li>
+      <li>Tx-to-Rx transport delay difference must be under 5 ns.</li>
+      <li>For a retimer, the off-package link need not share REFCLK; the local UCIe link must.</li>
+      <li>Link Speed settings may be run slower: e.g. the 32 GT/s setting covers 24–32 GT/s by adjusting REFCLK or the PLL divider (only while the link is down).</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.1.1–5.1.2, Table 5-1, p.184–186 · Table 5-4 and note, p.189–190</p></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Rate (GT/s)</th><th>Forwarded clock</th><th>Phases</th><th>Tx deskew</th></tr></thead>
+      <tbody>
+        <tr><td>4 / 8</td><td>2 / 4 GHz, half-rate</td><td>differential (90°/270°)</td><td>optional</td></tr>
+        <tr><td>12 / 16</td><td>6 / 8 GHz, half-rate</td><td>differential</td><td>required</td></tr>
+        <tr><td>24</td><td>12 GHz half-rate or 6 GHz quarter-rate</td><td>differential or quadrature (45°/135°)</td><td>required</td></tr>
+        <tr><td>32</td><td>16 GHz half-rate or 8 GHz quarter-rate</td><td>differential or quadrature</td><td>required</td></tr>
+        <tr><td>48 / 64</td><td>12 / 16 GHz, quarter-rate, always running</td><td>quadrature, with I/Q correction (1/64 UI steps, ±12)</td><td>required</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>Table 5-12, Table 5-13, p.203 · §5.5, p.201–202</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Differential at 16 GT/s and below, always</h3><p>At 24 and 32 GT/s the receiver chooses differential or quadrature clocking (advertised in PHY Capability). At 16 GT/s and below, differential must always be used so the link works with designs whose maximum is lower.</p><p class="src"><span class="sl">Spec</span>§5.5, p.202 · Table 9-47, p.492</p></div>
+    <div class="card"><h3>Track</h3><p>On request over sideband, the partner sends a clock-like pattern on its Track lane, aligned to Phase-1: <code>1010…</code> with half-rate clocking, <code>1100…</code> with quarter-rate. The receiver uses it to correct slow voltage, temperature and aging drift between data and clock.</p><p class="src"><span class="sl">Spec</span>§5.5.1, p.202 · §5.3, p.190</p></div>
+  </div>
+</div></section>
+
+<section id="look"><div class="wrap">
+  <h2>5 · What applies at your rate: lookup</h2>
+  <div class="card"><p style="font-size:15px">Pick a package and data rate. For Standard Package, add channel length and Tx swing to see the termination rule.</p>
+    <div class="tool"><div class="row">
+      <label>Package<select id="lkpkg"><option value="A">Advanced (UCIe-A)</option><option value="S">Standard (UCIe-S)</option></select></label>
+      <label>Data rate<select id="lkrate"></select></label>
+      <label>Channel length, mm (Standard)<input id="lklen" type="number" min="1" max="25" value="10" inputmode="numeric"></label>
+      <label>Tx swing (Standard)<select id="lksw"><option value="0.4">0.4 V (minimum)</option><option value="0.85">0.85 V (max recommended)</option></select></label>
+    </div><div class="out" id="lkout" aria-live="polite"></div></div>
+    <p class="src"><span class="kind derived">Derived</span> lookup over Tables 5-2 to 5-16, 5-32 and §5.3–5.5, §5.11. Values are the spec's limits and targets; your design's datasheet takes precedence.</p></div>
+</div></section>
+
+<section id="txrx"><div class="wrap">
+  <h2>6 · Transmitter and receiver</h2>
+  <div class="twocol">
+    <div class="card"><h3>Transmitter</h3><ul class="tight" style="font-size:15px">
+      <li>Data and clock swing at least 0.4 V. Driver impedance 25 Ω ± 3 (Advanced), 30 Ω ± 3 (Standard).</li>
+      <li>Phase adjustment (deskew) lives on the transmitter; training sets it for best margin.</li>
+      <li>Tri-state outputs in low-power states.</li>
+      <li><strong>24/32 GT/s EQ</strong> (must support; recommended at 16): de-emphasis only, settings 0 dB and −2.2 dB (C+1 = −0.112).</li>
+      <li><strong>48/64 GT/s EQ</strong> (required): 3-tap FIR presets P0–P5. Pick the largest eye; on a tie, the largest C0.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.3–5.3.4, Tables 5-5 to 5-7, p.190–194</p></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Preset</th><th class="num">C−1</th><th class="num">C0</th><th class="num">C+1</th></tr></thead>
+      <tbody>
+        <tr><td>P0 (0000b)</td><td class="num">0</td><td class="num">1</td><td class="num">0</td></tr>
+        <tr><td>P1 (0001b)</td><td class="num">−0.05</td><td class="num">0.95</td><td class="num">0</td></tr>
+        <tr><td>P2 (0010b)</td><td class="num">0</td><td class="num">0.90</td><td class="num">−0.10</td></tr>
+        <tr><td>P3 (0011b)</td><td class="num">−0.05</td><td class="num">0.85</td><td class="num">−0.10</td></tr>
+        <tr><td>P4 (0100b)</td><td class="num">0</td><td class="num">0.80</td><td class="num">−0.20</td></tr>
+        <tr><td>P5 (0101b)</td><td class="num">−0.05</td><td class="num">0.75</td><td class="num">−0.20</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>Table 5-7, p.194 (accuracy ±0.025 except P0). |C−1| + C0 + |C+1| = 1.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Receiver</h3><ul class="tight" style="font-size:15px">
+      <li>Clock and data paths delay-matched to reject supply-noise jitter; 2-way or 4-way interleaved.</li>
+      <li>Rx EQ may be used at 24/32 GT/s (about a 1st-order CTLE). At 48/64 GT/s Rx EQ is required with Tx EQ: reference CTLE with at least 7 settings from −6 to 0 dB in 1 dB steps; optional 1-tap DFE with h1/h0 &lt; 0.35.</li>
+      <li>Rx input impedance 50 Ω ± 5 at 48/64 GT/s.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.4, p.195 · §5.4.4, p.200–201 · Table 5-9, p.197</p></div>
+    <div class="card"><h3>Rx termination</h3><ul class="tight" style="font-size:15px">
+      <li><strong>Advanced</strong>: unterminated up to 32 GT/s; terminated to ground for 48/64 GT/s negotiated maximum.</li>
+      <li><strong>Standard</strong>, 0.4 V swing: unterminated recommended only up to 12 GT/s at 3 mm, 8 GT/s at 5 mm, 4 GT/s at 10 mm.</li>
+      <li><strong>Standard</strong>, 0.85 V swing: 16 GT/s at 5 mm, 12 GT/s at 10 mm, 8 GT/s and below at any supported length.</li>
+      <li>Otherwise terminate to ground.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.4.3, Tables 5-10, 5-11, p.197–199</p></div>
+  </div>
+</div></section>
+
+<section id="chan"><div class="wrap">
+  <h2>7 · The channel</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Eye masks</h3><p>Checked by channel simulation with ideal (noiseless, jitterless) behavioral Tx/Rx and the 19 largest aggressors. Rectangular mask ≤ 32 GT/s: 40 mV high and 0.75 UI wide up to 16 GT/s, 0.65 UI at 24/32 (with EQ). Diamond mask at 48/64 GT/s: 65 mV and 0.65 UI, searching only presets P0–P5 and the reference CTLE.</p><p class="src"><span class="sl">Spec</span>§5.7, Table 5-15, p.205–207</p></div>
+    <div class="card"><h3>Loss and crosstalk (VTF)</h3><p>Voltage Transfer Function metrics include Tx/Rx termination. Advanced: L(fN) &gt; −3 dB at 4–16 GT/s, &gt; −5 dB at 24/32; crosstalk below a line in loss and below −23/−24 dB. Standard (terminated): L(fN) &gt; −7.5 dB at 4/8 and 24/32, &gt; −6.5 dB at 12/16, with L(0) &gt; −4.5 dB.</p><p class="src"><span class="sl">Spec</span>§5.7.1, Table 5-17, p.208–209 · Tables 5-24, 5-25, p.235</p></div>
+    <div class="card"><h3>Lane matching</h3><p>Allowed channel mismatch around the lane centre: Advanced ±0.03 UI (4–32 GT/s), ±0.06 UI (48/64); Standard ±0.07, ±0.10, ±0.20 UI for 4–16, 24/32, 48/64 GT/s. It is the gap between Tx deskew range and Rx skew tolerance.</p><p class="src"><span class="sl">Spec</span>Table 5-16, p.208</p></div>
+    <div class="card"><h3>Bump pitch limits speed (Advanced)</h3><p>Recommended: 16-column map at 25–30 µm up to 12 GT/s and 31–37 µm up to 16; 10-column at 38–44 µm up to 24 and 45–50 µm up to 32; 8-column at 51–55 µm up to 32 GT/s. Check with the packaging vendor.</p><p class="src"><span class="sl">Spec</span>Table 5-19, p.215</p></div>
+  </div>
+</div></section>
+
+<section id="idle"><div class="wrap">
+  <h2>8 · Idle, clock gating and BER</h2>
+  <div class="twocol">
+    <div class="card"><h3>Going idle</h3><ul class="tight" style="font-size:15px">
+      <li>After Valid goes low, keep the clock running for a <strong>postamble</strong> of 8 cycles: 16 UI half-rate, 32 UI quarter-rate. Then gate it, unless free-running clock was negotiated.</li>
+      <li>Valid held low; data lanes hold the last bit (some may keep toggling like scrambled data without advancing the scrambler).</li>
+      <li><strong>Strobe mode</strong>: the parked clock level alternates between high and low on consecutive gating events. Before resuming, drive clock differential low for 1–8 UI. Gated period is a multiple of 8 UI.</li>
+      <li><strong>48/64 GT/s</strong>: the clock always runs (continuous mode).</li>
+      <li><strong>Electrical idle</strong> (some training states): Tx/Rx on, data, Valid and Track low, clock parked.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§4.1.3, p.101 · §5.11, p.251–253 · §5.12, p.253</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Raw BER sets the error handling</h3><p style="font-size:15px">At BER 1E-15 or worse, CRC and retry are required to reach FIT ≪ 1. At 1E-27, parity or CRC with error reporting is enough. 64 GT/s is 1E-12 on both package types.</p><p class="src"><span class="sl">Spec</span>§5.10, Table 5-32, p.251</p></div>
+      <div class="card"><h3>Valid protection at 48/64 GT/s</h3><p style="font-size:15px">Valid framing uses Hamming-distance-4 encodings. At 48 and 64 GT/s receivers must correct single-bit and detect double-bit Valid errors, which keeps Valid errors from causing frequent retrains.</p><p class="src"><span class="sl">Spec</span>§5.11, p.253</p></div>
+      <div class="card"><h3>Spec inconsistency to note at 48 GT/s</h3><p style="font-size:15px">§4.1.2.1 (retimer Valid framing) lets receivers at ≤ 48 GT/s retrain on any Valid error instead of correcting. §5.11 requires single-error correction at 48 GT/s. Implementing correction at 48 GT/s satisfies both.</p><p class="src"><span class="kind derived">Derived</span> §4.1.2.1, p.101 vs §5.11, p.253</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="sbe"><div class="wrap">
+  <h2>9 · Sideband, AUXCLK and Open Drain</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Sideband</div><h3>800 MT/s SDR on an always-on rail</h3><p>Data is launched edge-aligned with the strobe's rising edge and sampled on its falling edge. Runs from the always-on supply VCCAON (0.65 V in Table 5-33) and AUXCLK. Setup and hold 200 ps. Same reach as the mainband; Standard Package has an extended-reach option up to 100 mm (60 Ω driver). Redundancy and repair only on Advanced Package.</p><p class="src"><span class="sl">Spec</span>§5.13, Table 5-33, p.254</p></div>
+    <div class="card"><div class="tagline">AUXCLK</div><h3>Relaxed clock for the sideband</h3><p>Any source; 100 MHz recommended, 25–800 MHz allowed, SSC permitted. REFCLK can serve if it is always on. With a frequency-adjusted REFCLK the sideband runs 400–800 MT/s and its 8 ms timeouts scale to 16 ms at 400 MT/s.</p><p class="src"><span class="sl">Spec</span>§5.13.2, Table 5-34, p.255 · note, p.189</p></div>
+    <div class="card"><div class="tagline">Open Drain</div><h3>A shared low-latency wire</h3><p>Optional pin on a package-wide net with one pull-up (5–10 kΩ); any chiplet pulls low (120–240 Ω). Fall to VOL &lt; 100 ns, rise to VOH &lt; 2 µs. Used for UCIe low-latency events such as Fast Throttle, and vendor events.</p><p class="src"><span class="sl">Spec</span>§5.14, Table 5-35, p.255–256</p></div>
+    <div class="card"><div class="tagline">Sideband-only port</div><h3>For test and manageability</h3><p>A UCIe-S port may be sideband only. It uses the same RDI signals as a sideband with a mainband.</p><p class="src"><span class="sl">Spec</span>§5.7.4, p.248</p></div>
+  </div>
+</div></section>
+
+<section id="red"><div class="wrap">
+  <h2>10 · Repair (Advanced) and degrade (Standard)</h2>
+  <div class="twocol">
+    <div class="card"><h3>Advanced: spare bumps</h3><p style="font-size:15px">Each module has 4 redundant data bumps, 1 for clock and Track, 1 for Valid. On x64 the data spares are split two per half (TRD_P0/P1 for lanes 0–31, TRD_P2/P3 for 32–63). Sideband has a redundant data and clock pair. The logical remap is in the Logical PHY guide.</p><p class="src"><span class="sl">Spec</span>§5.9.1, p.249–250 · Table 5-18, p.209</p></div>
+    <div class="card"><h3>Standard: drop whole module pairs</h3><ul class="tight" style="font-size:15px">
+      <li>A degraded link is 1 or 2 modules, never 3.</li>
+      <li>4-module link: 1 or 2 failed pairs → 2 modules; 3 failed → 1 module.</li>
+      <li>2-module link: 1 failed pair → 1 module.</li>
+      <li>On a 4-module link with one failure, the other pair in the same half (along the die edge) is also disabled.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.7.3.4.1, Table 5-29, p.246–247</p></div>
+  </div>
+</div></section>
+
+<section id="d3"><div class="wrap">
+  <h2>11 · UCIe-3D</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Design rules</div><h3>Fit inside the bump area</h3><p>Circuit and logic must fit under the bumps (at 1 µm pitch, under 1 µm² per lane). No D2D Adapter, no CRC or replay. The PHY is a simple driver/inverter connected directly to SoC logic. Test and debug hooks sit in one common block per chiplet. Lane repair becomes bundle repair run by SoC logic.</p><p class="src"><span class="sl">Spec</span>§6.2, p.258–259</p></div>
+    <div class="card"><div class="tagline">Timing</div><h3>Launch on rise, sample on fall</h3><p>Data and clock buffers are delay-matched, so the data/clock differential is near zero and sampling half a UI later (rise-to-fall) gives the best margin. Unlike the 2D matched architecture, the 3D transceiver avoids its power cost while keeping supply-noise rejection.</p><p class="src"><span class="sl">Spec</span>§6.3, p.260 · Figure 6-4, p.261</p></div>
+    <div class="card"><div class="tagline">Budget</div><h3>Everything must fit in 1 UI</h3><p>Channel eye closure (0.1 UI), pulse-width deviation (0.08), Tx and Rx lane skew (0.12 each), RSS of Tx/Rx random jitter (0.05 each), aperture (0.03) and the Vcc-dependent spread of Tx/Rx data-clock delay (50 ps each, scaled by 1 + α·noise) must sum to less than 1 UI (250 ps at 4 GT/s). With the table's values the sum is about 0.98 UI, so there is almost no slack.</p><p class="src"><span class="sl">Spec</span>§6.4.1, Table 6-2, Equation 6-6, p.261–263 · <span class="kind derived">Derived</span> sum</p></div>
+    <div class="card"><div class="tagline">Module</div><h3>x80 bundles, 9 µm recommended</h3><p>A module is one Tx bundle (x80 + clock) and one Rx bundle. About 0.02 mm² at 9 µm pitch, scaling with pitch squared. x70 also defined. No sideband required; lanes may be assigned to Valid, mask, parity or ECC as needed. Tx swing 0.40–0.75 V. ESD 5 V CDM (≤ 10 µm pitch).</p><p class="src"><span class="sl">Spec</span>§6.4.2–6.4.3, Tables 6-3, 6-4, p.263–265</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Bundle repair calculator</h3><p style="font-size:15px">The spec's model: reserve 2k full modules, where k is the smallest value with 1 − Σ<sub>i=0..k</sub> P<sub>i</sub>(A·D0) &lt; δ, P<sub>i</sub> being Poisson. Check also that large defects are rare: 1 − e<sup>−A·D1</sup> &lt; δ.</p>
+    <div class="tool"><div class="row">
+      <label>UCIe-3D area A (mm²)<input id="rpA" type="number" min="0" step="any" value="50" inputmode="decimal"></label>
+      <label>Defect density D0 (per mm²)<input id="rpD0" type="number" min="0" step="any" value="0.02" inputmode="decimal"></label>
+      <label>Large-defect density D1 (per mm²)<input id="rpD1" type="number" min="0" step="any" value="0.00001" inputmode="decimal"></label>
+      <label>Acceptable yield loss δ<input id="rpd" type="number" min="0" step="any" value="0.001" inputmode="decimal"></label>
+    </div><div class="out" id="rpout" aria-live="polite"></div></div>
+    <p class="src"><span class="sl">Spec</span>§6.4.4, Equations 6-7 to 6-9, p.265–267 · <span class="kind illus">Illustrative</span> default inputs</p></div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>12 · Why each rule exists</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="clk">
+      <div class="meta"><span>Interop</span><span>§5.1.1 p.184</span></div>
+      <h3>Support every rate from 4 GT/s up to your maximum</h3>
+      <p class="rule">A device supporting 16 GT/s must also run 4, 8 and 12 GT/s.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Two dies from different vendors always share 4 GT/s, and training can step down through every rate when a channel cannot hold the top one (speed degrade in LINKSPEED).</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32 GT/s die meets a 16 GT/s die: they train at 16. Later the channel degrades and the link falls back to 12 GT/s.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A die that skips 12 GT/s strands its partner at 8 GT/s when 16 fails.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Data rates <span class="ref">§5.1.1, p.184</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="clk">
+      <div class="meta"><span>Clocking</span><span>§5.1.1 p.184</span></div>
+      <h3>One REFCLK, under 5 ns of transport delay difference</h3>
+      <p class="rule">Transmitter and partner receiver share a reference clock from one source, with Tx-to-Rx transport delay difference under 5 ns.</p>
+      <div class="part"><span class="l l-why">Why</span><p>With the same reference, both ends run at exactly the same frequency, so the receive FIFO only absorbs phase, not frequency drift. Limiting the delay difference keeps that FIFO shallow and its latency low.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 100 MHz package clock pin feeds both chiplets' PLLs; SSC is applied at the source, so both follow it.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Separate clocks drift by ppm; the FIFO eventually over- or under-runs.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>REFCLK rules <span class="ref">§5.1.1–5.1.2, p.184–185</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="clk">
+      <div class="meta"><span>Clocking</span><span>§5.5 p.202</span></div>
+      <h3>Differential clock at 16 GT/s and below, always</h3>
+      <p class="rule">Quadrature clocking is an option only at 24 and 32 GT/s; at 16 GT/s and below the differential clock is mandatory.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A design that tops out at 16 GT/s only knows differential clocking. If a faster die used quadrature at 16 GT/s, the slower die could not receive it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32 GT/s die with a quarter-rate receiver uses quadrature at 32 GT/s, but switches to differential when the link trains at 16.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>No link with lower-rate partners below 24 GT/s.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Clock phase rule <span class="ref">§5.5, p.202 · Table 5-12, p.203</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="idle">
+      <div class="meta"><span>Idle</span><span>§4.1.3 p.101</span></div>
+      <h3>Postamble before the clock stops</h3>
+      <p class="rule">After Valid drops, the clock keeps toggling for 8 cycles (16 UI half-rate, 32 UI quarter-rate) before it may be gated.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The receiver's data path is clocked by the forwarded clock itself. Extra edges after the last data push that data through the receiver's samplers and FIFO before the clock disappears.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A burst ends at UI 15; the clock runs to UI 31, then parks.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The last bytes of the burst stay stuck in the receive pipeline until the next burst.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Postamble <span class="ref">§4.1.3, p.101 · §5.11, p.251</span></li><li><span class="kind derived">Derived</span>pipeline reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="idle">
+      <div class="meta"><span>Idle</span><span>§5.11 p.251–253</span></div>
+      <h3>Continuous clock at 48 and 64 GT/s</h3>
+      <p class="rule">At 48/64 GT/s the forwarded clock must run continuously; clock gating is not used.</p>
+      <div class="part"><span class="l l-why">Why</span><p>At these speeds the clock receiver and I/Q-corrected phases need time to settle; restarting a gated clock would disturb the trained timing. The cost is higher idle power, which the spec accepts (20–25% idle-power target instead of 15%).</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64 GT/s link sits idle between bursts: Valid low, data preconditioned, clock still at 16 GHz.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Timing errors on the first data after idle, causing Valid framing errors and retrains.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Continuous mode <span class="ref">§5.11, p.253 · Table 5-3 note b, p.189</span></li><li><span class="kind derived">Derived</span>settling reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="txrx">
+      <div class="meta"><span>Tx/Rx</span><span>§5.4.3 p.197</span></div>
+      <h3>Advanced Package Rx: unterminated up to 32 GT/s</h3>
+      <p class="rule">Advanced Package receivers are unterminated up to 32 GT/s and ground-terminated for 48/64 GT/s.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A 2 mm interposer trace has little loss or reflection at lower rates, so skipping termination saves the static current it would draw. At 48/64 GT/s reflections matter and termination pays for itself.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A die-to-die link on a silicon interposer at 16 GT/s runs unterminated; a 64 GT/s die-to-die link on the same interposer terminates to 50 Ω.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Terminating at low rate wastes power; leaving 64 GT/s unterminated closes the eye.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Rx termination <span class="ref">§5.4.3, p.197</span></li><li><span class="kind derived">Derived</span>power/SI reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="txrx">
+      <div class="meta"><span>Tx/Rx</span><span>§5.3.4 p.194</span></div>
+      <h3>Among equal eyes, pick the largest C0</h3>
+      <p class="rule">At 48/64 GT/s the Tx preset with the largest eye opening wins; if presets tie, choose the one with the largest C0.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A larger main-cursor coefficient means less de-emphasis, so more signal swing at low frequencies and more margin against noise for the same eye.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>P2 (C0 0.90) and P4 (C0 0.80) give equal eyes: choose P2.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Not wrong electrically, but less margin than necessary.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Preset selection <span class="ref">§5.3.4, Table 5-7, p.194</span></li><li><span class="kind derived">Derived</span>margin reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="idle">
+      <div class="meta"><span>BER</span><span>§5.10 p.251</span></div>
+      <h3>Raw BER decides whether CRC and retry are needed</h3>
+      <p class="rule">At 1E-15 or worse, CRC and retry are required; at 1E-27, parity or CRC with error reporting suffices.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The target is far below 1 failure per 10⁹ device-hours. At 1E-15 and tens of Gb/s, a single lane sees an error every few hours and a wide link every few minutes, so errors must be caught and replayed. At 1E-27 they essentially never happen.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A x64 link at 32 GT/s carries about 2×10¹² bits per second: at 1E-15 that is an error roughly every 8 minutes, each needing a replay.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Running Raw Format at 1E-15 without protocol-level protection lets errors through.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>BER and FIT <span class="ref">§5.10, Table 5-32, p.251</span></li><li><span class="kind derived">Derived</span>error interval arithmetic</li></ul></div>
+    </article>
+    <article class="wcard" data-g="sb">
+      <div class="meta"><span>Sideband</span><span>§5.13 p.254</span></div>
+      <h3>Sideband on an always-on supply and clock</h3>
+      <p class="rule">The sideband should run from always-on power (VCCAON) and the auxiliary clock.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The sideband trains the mainband, wakes it from low power, and carries management traffic. It has to work while the mainband supply and REFCLK may be off.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>While the mainband sits in L1 with its clock stopped, the sideband stays up to carry the exit handshake.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A sideband on a switched rail cannot wake the link.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>VCCAON, AUXCLK <span class="ref">§5.13, p.254 · §5.6 note, p.205</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="red">
+      <div class="meta"><span>Degrade</span><span>§5.7.3.4.1 p.246–247</span></div>
+      <h3>Standard Package degrades to 1 or 2 modules, never 3</h3>
+      <p class="rule">If module pairs fail, the link runs on 1 or 2 modules; one failure on a 4-module link also disables the other pair in the same half.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Power-of-two module counts keep data striping across modules simple and symmetric. Disabling the neighbour in the same half keeps the two surviving modules in a supported pairing.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>On a x4 unstacked link, pair M0–M2 fails; M1–M3 next to it is disabled too, and the link runs on the other half as 2 modules.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A 3-module link is not a legal configuration.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Degrade rules, Table 5-29 <span class="ref">§5.7.3.4.1, p.246–247</span></li><li><span class="kind derived">Derived</span>striping reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="d3">
+      <div class="meta"><span>UCIe-3D</span><span>§6.2 p.258</span></div>
+      <h3>No Adapter, no CRC, no replay</h3>
+      <p class="rule">UCIe-3D has no D2D Adapter and needs no CRC or replay; the SoC logic connects straight to a minimal PHY.</p>
+      <div class="part"><span class="l l-why">Why</span><p>At ≤ 4 GT/s over a near-zero-length vertical bond the BER is below 1E-27, so retry would add area, power and latency for no benefit. At 1 µm pitch the whole lane budget is under 1 µm², with no room for an Adapter.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A cache die bonded on a compute die: SoC logic launches data on a clock edge; the other die samples it half a UI later, 0.125 ns in all.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Adding retry to UCIe-3D makes the PHY larger than its bump area.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Objectives <span class="ref">§6.2, p.258–259</span></li><li><span class="kind spec">Spec</span>KPIs <span class="ref">Table 6-1, p.259–260</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="d3">
+      <div class="meta"><span>UCIe-3D</span><span>§6.4.4 p.265</span></div>
+      <h3>Repair whole bundles, not lanes</h3>
+      <p class="rule">UCIe-3D reserves spare modules (bundles) and reroutes around a failed one; dense arrays reserve two full modules per single failure.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Defect size varies with process, pitch and SoC size. At micron pitch one defect can wipe out many adjacent bumps, so per-lane spares, sized for one defect size, would not cover them.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A particle under the stack kills a Tx bundle; SoC logic remaps traffic to a reserved module.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Lane-level spares sized for small defects leave yield loss from large ones.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Repair strategy <span class="ref">§6.4.4, p.265–267</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>13 · Live waveforms</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>14 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>Which signals make up one Advanced Package x64 module in one direction? <span class="lvl">Basic</span></summary><div><p>64 data lanes plus 4 redundant, Valid plus 1 redundant, two clock phases, Track, a redundant lane for clock/Track, and sideband data and clock with a redundant pair.</p><p class="src"><span class="sl">Spec</span>Table 5-18, p.209–210 · §5.9.1, p.249</p></div></details>
+  <details><summary>What is the forwarded clock frequency at 64 GT/s, and can it be gated? <span class="lvl">Basic</span></summary><div><p>16 GHz, quarter-rate, quadrature phases. It cannot be gated: at 48/64 GT/s the clock runs continuously.</p><p class="src"><span class="sl">Spec</span>Table 5-12, p.203 · §5.11, p.253</p></div></details>
+  <details><summary>How long is the clock postamble with half-rate clocking, and why count it in UI? <span class="lvl">Intermediate</span></summary><div><p>8 clock cycles = 16 UI at half rate (32 UI at quarter rate). Valid framing and gated periods are counted in 8-UI blocks, so UI is the natural unit.</p><p class="src"><span class="sl">Spec</span>§4.1.3, p.101 · §5.11, p.251</p></div></details>
+  <details><summary>When must a Standard Package receiver be terminated? <span class="lvl">Intermediate</span></summary><div><p>Whenever the rate and channel length fall outside Table 5-10 (0.4 V swing) or Table 5-11 (0.85 V): for example 16 GT/s needs termination at 0.4 V swing at any length, but at 0.85 V can stay unterminated up to 5 mm.</p><p class="src"><span class="sl">Spec</span>§5.4.3, Tables 5-10, 5-11, p.197–199</p></div></details>
+  <details><summary>Why does 64 GT/s need CRC and retry on both package types? <span class="lvl">Intermediate</span></summary><div><p>Its raw BER requirement is 1E-12; anything at 1E-15 or worse needs CRC and retry to reach FIT ≪ 1.</p><p class="src"><span class="sl">Spec</span>§5.10, Table 5-32, p.251</p></div></details>
+  <details><summary>Name three things UCIe-3D removes compared with UCIe-A. <span class="lvl">Advanced</span></summary><div><p>The D2D Adapter, CRC/replay, and the required sideband (initialization). The PHY becomes a near-inverter connected to SoC logic, and lane repair becomes bundle repair.</p><p class="src"><span class="sl">Spec</span>§6.2, p.258–259 · §6.4.3, p.265</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>15 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>Tables 1-1, 1-2</td><td>Characteristics of UCIe on Standard and Advanced Package</td><td class="num">40</td></tr>
+      <tr><td>§5.0–5.1</td><td>Electrical Layer; Interoperability; REFCLK</td><td class="num">184–186</td></tr>
+      <tr><td>§5.2</td><td>Overview; Electrical Summary (Tables 5-2, 5-3)</td><td class="num">186–189</td></tr>
+      <tr><td>§5.3</td><td>Transmitter; Tx EQ (Tables 5-4 to 5-7)</td><td class="num">190–194</td></tr>
+      <tr><td>§5.4</td><td>Receiver; termination; Rx EQ (Tables 5-8 to 5-11)</td><td class="num">195–201</td></tr>
+      <tr><td>§5.5–5.6</td><td>Clocking; Track; supply noise and clock skew</td><td class="num">201–205</td></tr>
+      <tr><td>§5.7</td><td>Ball-out and channel; eye masks; VTF; bump maps</td><td class="num">205–248</td></tr>
+      <tr><td>§5.7.3.4.1</td><td>Module Degrade Rules (Standard Package)</td><td class="num">246–247</td></tr>
+      <tr><td>§5.8–5.9</td><td>Tightly Coupled Mode; lane remapping</td><td class="num">249–250</td></tr>
+      <tr><td>§5.10–5.12</td><td>BER, CRC and Retry; Valid and clock gating; electrical idle</td><td class="num">250–253</td></tr>
+      <tr><td>§5.13–5.14</td><td>Sideband signaling; AUXCLK; Open Drain</td><td class="num">254–257</td></tr>
+      <tr><td>§6.1–6.3</td><td>UCIe-3D introduction, features, Tx/Rx and clocking</td><td class="num">258–260</td></tr>
+      <tr><td>§6.4</td><td>UCIe-3D timing budget, ESD, bump map, repair, channel extension</td><td class="num">261–267</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapters 5 and 6, with §4.1 and Chapter 1 for context. Bump maps and module naming tables are summarized only; use the spec figures for layout work.</div></footer>
+
+<script>
+(function () {
+  function e(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function fmt(x, d) { return (Math.round(x * Math.pow(10, d)) / Math.pow(10, d)).toString(); }
+
+  /* ---- rate lookup ---- */
+  (function () {
+    var pkg = document.getElementById("lkpkg"), rate = document.getElementById("lkrate"), len = document.getElementById("lklen"), sw = document.getElementById("lksw"), out = document.getElementById("lkout");
+    if (!pkg) return;
+    var R = [4, 8, 12, 16, 24, 32, 48, 64];
+    R.forEach(function (r) { var o = document.createElement("option"); o.value = r; o.textContent = r + " GT/s"; rate.appendChild(o); });
+    rate.value = "32";
+    var CLK = { 4: "2 GHz half-rate, differential", 8: "4 GHz half-rate, differential", 12: "6 GHz half-rate, differential", 16: "8 GHz half-rate, differential", 24: "12 GHz half-rate differential, or 6 GHz quarter-rate quadrature (Rx choice)", 32: "16 GHz half-rate differential, or 8 GHz quarter-rate quadrature (Rx choice)", 48: "12 GHz quarter-rate, quadrature, continuous", 64: "16 GHz quarter-rate, quadrature, continuous" };
+    var BER = { A: { 4: "1E-27", 8: "1E-27", 12: "1E-27", 16: "1E-15", 24: "1E-15", 32: "1E-15", 48: "1E-15", 64: "1E-12" }, S: { 4: "1E-27", 8: "1E-27", 12: "1E-15", 16: "1E-15", 24: "1E-15", 32: "1E-15", 48: "1E-15", 64: "1E-12" } };
+    var LAT = { 4: 12, 8: 12, 12: 12, 16: 12, 24: 16, 32: 16, 48: 24, 64: 32 };
+    var NOISE = { 4: 80, 8: 80, 12: 50, 16: 40, 24: 30, 32: 30, 48: 30, 64: 30 };
+    function band(r, a, b, c) { return r <= 16 ? a : r <= 32 ? b : c; }
+    function term(p, r, l, s) {
+      if (p === "A") return r <= 32 ? ["Unterminated", "§5.4.3, p.197"] : ["Terminated to ground (Rx 50 Ω ± 5)", "§5.4.3, p.197 · Table 5-9"];
+      if (r >= 24) return ["Terminated to ground" + (r >= 48 ? " (Rx 50 Ω ± 5)" : ""), "§5.4.3, Tables 5-10, 5-11, p.197–199"];
+      var T = s === "0.85" ? [[16, 5], [12, 10], [8, Infinity]] : [[12, 3], [8, 5], [4, 10]];
+      var ok = T.some(function (t) { return r <= t[0] && l <= t[1]; });
+      return [ok ? "Unterminated (recommended for this rate, length and swing)" : "Terminated to ground", "Table 5-" + (s === "0.85" ? "11, p.199" : "10, p.197")];
+    }
+    function run() {
+      var p = pkg.value, r = +rate.value, l = Math.max(0, +len.value || 0), s = sw.value, ui = 1000 / r;
+      var notes = [];
+      if (p === "S" && l > 25) notes.push("Standard Package mainband reach is up to 25 mm (100 mm applies only to extended-reach sideband).");
+      len.disabled = p === "A"; sw.disabled = p === "A";
+      var berv = BER[p][r], t = term(p, r, l, s);
+      var rows = [
+        ["Unit interval", fmt(ui, 2) + " ps", "1 / data rate"],
+        ["Forwarded clock", CLK[r], "Table 5-12, p.203"],
+        ["Tx per-lane deskew", r <= 8 ? "optional" : "required", "Table 5-12, p.203"],
+        ["Raw BER requirement", berv + (berv === "1E-27" ? " (parity or CRC with reporting suffices)" : " (CRC and retry required)"), "Table 5-32, §5.10, p.251"],
+        ["Eye mask (channel sim)", r <= 16 ? "rectangular, 40 mV × 0.75 UI" : r <= 32 ? "rectangular, 40 mV × 0.65 UI (EQ on)" : "diamond, 65 mV × 0.65 UI", "Table 5-15, §5.7, p.206"],
+        ["Tx equalization", r <= 12 ? "not required" : r === 16 ? "recommended (de-emphasis)" : r <= 32 ? "must support: de-emphasis 0 dB / −2.2 dB" : "required: 3-tap presets P0–P5", "§5.3.3–5.3.4, p.193–194"],
+        ["Rx equalization", r <= 16 ? "not specified" : r <= 32 ? "optional (≈ 1st-order CTLE)" : "required with Tx EQ: CTLE −6…0 dB, optional 1-tap DFE", "§5.4.4, p.200–201"],
+        ["Rx termination", t[0], t[1]],
+        ["Clock gating", r <= 32 ? "allowed; postamble 8 cycles (16 UI half-rate, 32 UI quarter-rate)" : "not allowed: continuous clock only", "§4.1.3 · §5.11, p.251–253"],
+        ["Valid framing", r >= 48 ? "single-error correct, double-error detect required" : "standard 8-UI framing", "§5.11, p.253"],
+        ["I/O VCC noise budget", NOISE[r] + " mVpp max", "Table 5-14, p.205"],
+        ["Channel matching tolerance", "±" + (p === "A" ? (r <= 32 ? "0.03" : "0.06") : band(r, "0.07", "0.10", "0.20")) + " UI", "Table 5-16, p.208"],
+        ["Tx lane-to-lane skew correction", "±" + (p === "A" ? band(r, "0.10", "0.15", "0.18") : band(r, "0.14", "0.22", "0.50")) + " UI", "Table 5-5, p.192"],
+        ["PHY latency target (Tx+Rx)", LAT[r] + " UI ≈ " + fmt(LAT[r] * ui / 1000, 2) + " ns", "Tables 5-2, 5-3, p.188–189"],
+        ["Idle power target", (r <= 32 ? "15" : (p === "A" ? "20" : "25")) + "% of peak", "Tables 5-2, 5-3"],
+        ["Channel reach", p === "A" ? "2 mm" : "up to 25 mm (10 mm short-reach class)", "Tables 1-1, 1-2, p.40"]
+      ];
+      out.innerHTML = "<table>" + rows.map(function (x) { return "<tr><td>" + e(x[0]) + "</td><td>" + e(x[1]) + "</td><td>" + e(x[2]) + "</td></tr>"; }).join("") + "</table>" + notes.map(function (n) { return "<p class=\"warn\" style=\"margin:6px 0 0\">" + e(n) + "</p>"; }).join("");
+    }
+    [pkg, rate, len, sw].forEach(function (x) { x.addEventListener("input", run); x.addEventListener("change", run); });
+    run();
+  })();
+
+  /* ---- UCIe-3D bundle repair ---- */
+  (function () {
+    var A = document.getElementById("rpA"), D0 = document.getElementById("rpD0"), D1 = document.getElementById("rpD1"), dl = document.getElementById("rpd"), out = document.getElementById("rpout");
+    if (!A) return;
+    function run() {
+      var a = +A.value, d0 = +D0.value, d1 = +D1.value, d = +dl.value;
+      if (!(a >= 0) || !(d0 >= 0) || !(d1 >= 0) || !(d > 0)) { out.innerHTML = "<span class=\"warn\">Enter non-negative numbers; δ must be above 0.</span>"; return; }
+      var x = a * d0, term = Math.exp(-x), cum = term, k = 0;
+      while (1 - cum >= d && k < 500) { k++; term = term * x / k; cum += term; }
+      var big = 1 - Math.exp(-a * d1);
+      var html = "<div class=\"big\">Reserve " + (2 * k) + " full modules (k = " + k + ")</div>" +
+        "<p style=\"margin:6px 0 0\">Expected small defects A·D0 = " + fmt(x, 4) + ". Probability of more than k defects = " + (1 - cum).toExponential(2) + " &lt; δ = " + d + ".</p>" +
+        "<p style=\"margin:6px 0 0\" class=\"" + (big < d ? "" : "warn") + "\">Large-defect check: 1 − e^(−A·D1) = " + big.toExponential(2) + (big < d ? " &lt; δ, so the model holds." : " ≥ δ: large defects are too common; more spare bundles are needed (simulate).") + "</p>";
+      if (k >= 500) html += "<p class=\"warn\">k capped at 500: check the inputs.</p>";
+      out.innerHTML = html;
+    }
+    [A, D0, D1, dl].forEach(function (x) { x.addEventListener("input", run); });
+    run();
+  })();
+
+  /* ---- waveform helpers ---- */
+  function rep(p, n) { var s = ""; while (s.length < n) s += p; return s.slice(0, n); }
+  function lab(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function frame() { return ["D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7"]; }
+
+  var gateClk = rep("10", 32) + rep("1", 12) + rep("0", 4) + rep("10", 8);
+  var gateVld = "1111000011110000" + rep("0", 32) + "11110000";
+  var gateDat = frame().concat(frame(), lab([["hold last bit", 32]]), frame());
+
+  var q = 40;
+  var qVld = "11110000" + rep("0", 16) + "11110000" + rep("0", 8);
+  var qDat = frame().concat(lab([["idle", 16]]), frame(), lab([["idle", 8]]));
+  var qTrk = rep("0", 16) + rep("1100", 24);
+
+  var d3n = 16, d3Dat = [], d3Note = [];
+  for (var i = 0; i < d3n; i++) { var L = String.fromCharCode(65 + Math.floor(i / 2)); d3Dat.push(L); d3Note.push(i % 2 ? "sample " + L : ""); }
+
+  window.PAGE = {
+    CW: 20,
+    wgroups: [["all", "All"], ["clk", "Clocking"], ["idle", "Idle & BER"], ["txrx", "Tx/Rx"], ["sb", "Sideband"], ["red", "Degrade"], ["d3", "UCIe-3D"]],
+    scenarios: [
+      {
+        id: "gate", tab: "Clock gating (≤ 32 GT/s)", unit: "UI", cw: 24, title: "Half-rate, strobe mode: two frames, postamble, gate, resume",
+        desc: "One data lane, Valid and clock Phase-1 on an unterminated link. Each column is 1 UI; the half-rate clock toggles every UI. Park level and pre-drive length are examples within the rules.",
+        ref: "§4.1.3, p.101 · §5.11, Figure 5-64, p.251–252",
+        n: 56, gaps: [],
+        sig: [
+          { name: "Phase", d: "note", t: "note", v: lab([["frame 1", 8], ["frame 2", 8], ["postamble: 16 UI", 16], ["gated, parked high", 12], ["drive low", 4], ["frame 3", 8]]) },
+          { name: "CLK (Phase-1)", d: "pl", t: "bit", v: gateClk },
+          { name: "VLD", d: "lp", t: "bit", v: gateVld },
+          { name: "DATA[n]", d: "lp", t: "bus", v: gateDat }
+        ],
+        steps: [
+          { r: [0, 15], t: "Two frames back to back", x: "Each 8-UI frame has Valid high for 4 UI and low for 4 UI. Data moves on every UI, on both clock edges.", s: "§5.11, p.251 · §4.1.2, p.100" },
+          { r: [16, 31], t: "Postamble", x: "Valid stays low. The clock keeps running for 8 cycles (16 UI at half rate) before it may stop. On an unterminated link the data lane holds its last bit.", w: "Some lanes may instead toggle like scrambled data, without advancing the scrambler.", s: "§4.1.3, p.101 · §5.11, p.251" },
+          { r: [32, 43], t: "Clock gated", x: "The clock parks. In strobe mode the park level alternates between high and low on consecutive gating events; this time it is high.", s: "§5.11, p.251" },
+          { r: [44, 47], t: "Pre-drive low", x: "Before normal operation the clock is driven differential low for 1 to 8 UI (4 here). The whole gated period, 16 UI, is a multiple of 8 UI.", s: "§5.11, p.251" },
+          { r: [48, 55], t: "Resume", x: "The clock restarts with the next frame. No preamble beyond the pre-drive is needed.", s: "Figure 5-64, p.251" }
+        ]
+      },
+      {
+        id: "q64", tab: "64 GT/s quarter-rate", unit: "UI", cw: 26, title: "64 GT/s: quarter-rate quadrature clock that never stops, with Track",
+        desc: "Advanced or Standard Package at 64 GT/s. Each column is 1 UI (15.6 ps). One clock period = 4 UI (16 GHz).",
+        ref: "Table 5-12, p.203 · §5.5.1, p.202 · §5.11, p.253",
+        n: q, gaps: [],
+        sig: [
+          { name: "CLK Phase-1", d: "pl", t: "bit", v: rep("1100", q) },
+          { name: "CLK Phase-2", d: "pl", t: "bit", v: rep("0110", q) },
+          { name: "TRK", d: "pl", t: "bit", v: qTrk },
+          { name: "VLD", d: "lp", t: "bit", v: qVld },
+          { name: "DATA[n]", d: "lp", t: "bus", v: qDat }
+        ],
+        steps: [
+          { r: [0, 7], t: "Quarter-rate quadrature", x: "16 GHz clock: one period every 4 UI. Phase-2 trails Phase-1 by a quarter period (1 UI), giving the receiver four sampling phases. I/Q correction trims that offset in 1/64 UI steps.", s: "Table 5-12, Table 5-13, p.203" },
+          { r: [8, 15], t: "Idle with the clock running", x: "At 48/64 GT/s only continuous clock mode exists. Valid stays low and the idle period is a multiple of 8 UI.", s: "§5.11, p.253" },
+          { r: [16, 23], t: "Track on request", x: "The partner asked over sideband for Track. The pattern is 1100… aligned with Phase-1 in quarter-rate mode; the receiver uses it to correct slow drift between data and clock.", s: "§5.5.1, p.202 · §5.3, p.190" },
+          { r: [24, 39], t: "Data with Track running", x: "Track may run during data transfer or electrical idle; once enabled, clock and Track stay on until the recalibration flow completes.", s: "§5.11, p.253" }
+        ]
+      },
+      {
+        id: "d3", tab: "UCIe-3D timing", unit: "half-UI", cw: 64, title: "UCIe-3D: launch on rise, sample on fall",
+        desc: "4 GT/s, one bit per lane per clock (data rate = SoC clock). Each column is half a UI (125 ps). Data and clock delays are matched, so Rx sees the same relationship as Tx.",
+        ref: "§6.3, p.260 · Figure 6-4, p.261 · Table 6-1, p.260",
+        n: d3n, gaps: [],
+        sig: [
+          { name: "Tx CLK", d: "lp", t: "bit", v: rep("10", d3n) },
+          { name: "Tx DATA", d: "lp", t: "bus", v: d3Dat },
+          { name: "Rx CLK", d: "pl", t: "bit", v: rep("10", d3n) },
+          { name: "Rx DATA", d: "pl", t: "bus", v: d3Dat },
+          { name: "Rx samples", d: "note", t: "note", v: d3Note }
+        ],
+        steps: [
+          { r: [0, 0], t: "Launch on the rising edge", x: "SoC logic launches bit A on the Tx clock rising edge.", s: "Figure 6-4, p.261" },
+          { r: [1, 1], t: "Sample on the falling edge", x: "With matched data and clock buffer delays, the Rx falling edge sits in the middle of the data eye, half a UI after launch. That is the whole PHY latency: 0.125 ns at 4 GT/s.", w: "On-die logic usually times rise-to-rise because combinational logic sits between flops; UCIe-3D has none, so rise-to-fall gives the best margin.", s: "§6.3, p.260 · Table 6-1, p.260" },
+          { r: [2, 15], t: "Every cycle, one bit", x: "Skew, jitter, channel closure and the Vcc-dependent delay spread must all fit inside 1 UI (Equation 6-6), about 0.98 UI with the table values.", s: "§6.4.1, Table 6-2, Equation 6-6, p.261–263" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      waveEl.innerHTML = renderWave(s, st.r, false);
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · §1.3, Chapter 3, §4.1.2.1, §4.5.2 · §9.5.4, Chapter 11</div>
+    <h1>UCIe Retimers and Compliance Field Guide</h1>
+    <p class="lede">Two topics the spec scatters across six chapters. <strong>Retimers</strong> carry a UCIe link off the package and must keep two dies, two UCIe links and one external link in step. <strong>Compliance</strong> is how a die is tested against a known-good Golden Die, using injection and margining registers. Retimer rules are collected here from §1.3, Chapter 3, Chapter 4 and Chapter 9; compliance from Chapter 11 and §9.5.4.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>UCIe die / software</span><span><i class="sw" style="background:var(--pl)"></i>retimer / hardware status</span><span><i class="sw" style="background:var(--sb)"></i>sideband traffic</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#topo">2 · Retimer topology</a><a href="#rel">3 · Reliability options</a><a href="#cred">4 · Credits</a><a href="#sync">5 · Staying in sync</a><a href="#swr">6 · Retimers in software</a><a href="#setup">7 · Compliance setup</a><a href="#adc">8 · Adapter compliance</a><a href="#phc">9 · PHY compliance</a><a href="#rationale">10 · Why each rule</a><a href="#live">11 · Live scenarios</a><a href="#quiz">12 · Test yourself</a><a href="#refs">13 · Spec index</a>
+</div></nav>
+<style>
+  .tool { display: grid; gap: 10px; }
+  .tool label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+  .tool input, .tool select { font-family: var(--font-mono); font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
+  .tool .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .out { font-family: var(--font-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+  .out .big { font-size: 18px; font-weight: 600; color: var(--ink); }
+  .out .warn { color: var(--bad); }
+</style>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why these exist</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Retimers</div><h3>UCIe stops at the package edge</h3><p>UCIe links are short, on-package channels. A UCIe Retimer sits on the package next to a die and drives an Off Package Interconnect (for example an electrical or optical cable) to a second retimer on another package, so two dies on different packages can talk.</p><p class="src"><span class="sl">Spec</span>§1.3, p.47 · §1.0, p.39</p></div>
+    <div class="card"><div class="tagline">Retimers</div><h3>Three links pretending to be one</h3><p>Die 0 ↔ Retimer 0 is one UCIe link, Retimer 1 ↔ Die 1 another, plus the external link. Each die must see what looks like one consistent link, so retimers resolve parameters, link states and flow control between the ends.</p><p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p></div>
+    <div class="card"><div class="tagline">Compliance</div><h3>Test against a known-good die</h3><p>A DUT is packaged with a <strong>Golden Die</strong> (a known-good UCIe implementation of every layer) on a known-good bridge, interposer or package. Each layer is checked on its own. Support is optional, but without it a device may not join the compliance program.</p><p class="src"><span class="sl">Spec</span>§11.0, p.579</p></div>
+    <div class="card"><div class="tagline">Compliance</div><h3>The spec defines hooks, not tests</h3><p>Chapter 11 defines the hardware the DUT must have (injection, compliance modes, margining). The test setup, channel model, test details and Golden Die details are left to a separate document.</p><p class="src"><span class="sl">Spec</span>§11.0, p.579</p></div>
+  </div>
+</div></section>
+
+<section id="topo"><div class="wrap">
+  <h2>2 · Retimer topology</h2>
+  <figure>
+    <svg viewBox="0 0 860 220" role="img" aria-label="Package 0 holds UCIe Die 0 and UCIe Retimer 0 joined by UCIe Link 0 (mainband and sideband). Retimer 0 connects over the Off Package Interconnect to Retimer 1 in Package 1, which connects to UCIe Die 1 over UCIe Link 1. Each retimer has a receiver buffer for flits from its local die.">
+      <defs>
+        <marker id="c-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      </defs>
+      <g font-family="var(--font-body)" style="color:var(--ink)">
+        <rect x="10" y="20" width="370" height="170" rx="12" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="24" y="42" font-size="12" fill="var(--muted)">Package 0</text>
+        <rect x="480" y="20" width="370" height="170" rx="12" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <text x="836" y="42" font-size="12" fill="var(--muted)" text-anchor="end">Package 1</text>
+        <rect x="30" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.6"/>
+        <text x="90" y="110" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">UCIe Die 0</text>
+        <text x="90" y="128" text-anchor="middle" font-size="11" fill="var(--muted)">e.g. Root Port (DP)</text>
+        <rect x="240" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.6"/>
+        <text x="300" y="86" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Retimer 0</text>
+        <rect x="252" y="100" width="96" height="30" rx="4" fill="var(--hl)" stroke="var(--pl)"/>
+        <text x="300" y="119" text-anchor="middle" font-size="10.5" fill="currentColor">Rx buffer (credits)</text>
+        <text x="300" y="156" text-anchor="middle" font-size="10.5" fill="var(--muted)">FEC/CRC/Retry (opt.)</text>
+        <rect x="500" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.6"/>
+        <text x="560" y="86" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Retimer 1</text>
+        <rect x="512" y="100" width="96" height="30" rx="4" fill="var(--hl)" stroke="var(--pl)"/>
+        <text x="560" y="119" text-anchor="middle" font-size="10.5" fill="currentColor">Rx buffer (credits)</text>
+        <text x="560" y="156" text-anchor="middle" font-size="10.5" fill="var(--muted)">FEC/CRC/Retry (opt.)</text>
+        <rect x="710" y="60" width="120" height="110" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.6"/>
+        <text x="770" y="110" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">UCIe Die 1</text>
+        <text x="770" y="128" text-anchor="middle" font-size="11" fill="var(--muted)">e.g. Endpoint (UP)</text>
+        <line x1="152" y1="95" x2="238" y2="95" stroke="var(--ink)" stroke-width="2" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="195" y="86" text-anchor="middle" font-size="11" fill="currentColor">UCIe Link 0</text>
+        <line x1="152" y1="140" x2="238" y2="140" stroke="var(--sb)" stroke-width="1.6" stroke-dasharray="4 3" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="195" y="158" text-anchor="middle" font-size="10.5" fill="var(--sb)">sideband</text>
+        <line x1="362" y1="115" x2="498" y2="115" stroke="var(--muted)" stroke-width="3" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="430" y="104" text-anchor="middle" font-size="11.5" fill="currentColor">Off Package</text>
+        <text x="430" y="135" text-anchor="middle" font-size="11.5" fill="currentColor">Interconnect</text>
+        <line x1="622" y1="95" x2="708" y2="95" stroke="var(--ink)" stroke-width="2" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="665" y="86" text-anchor="middle" font-size="11" fill="currentColor">UCIe Link 1</text>
+        <line x1="622" y1="140" x2="708" y2="140" stroke="var(--sb)" stroke-width="1.6" stroke-dasharray="4 3" marker-start="url(#c-ah)" marker-end="url(#c-ah)"/>
+        <text x="665" y="158" text-anchor="middle" font-size="10.5" fill="var(--sb)">sideband</text>
+        <text x="430" y="210" text-anchor="middle" font-size="11" fill="var(--muted)">Retimer 1 is Retimer 0's "remote Retimer partner"</text>
+      </g>
+    </svg>
+    <p class="src"><span class="sl">Spec</span>Figure 1-18, p.47 · §1.3, p.47 (DP/UP labels are illustrative)</p>
+  </figure>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>What a retimer is responsible for</h3><ul class="tight" style="font-size:15px"><li>Reliable flit transfer across the external link (one of three options, below).</li><li>Resolving link and protocol parameters with the remote retimer, so both dies end up with the same width, speed, protocol and flit format.</li><li>Resolving Adapter LSM and RDI states with the remote retimer.</li><li>Flow control from die to retimer using credits.</li></ul><p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p></div>
+    <div class="card"><h3>What is left to the implementation</h3><p style="font-size:15px">How retimers talk to each other over the external link (message transfer, parameter resolution, retimer-to-retimer flow control) is implementation-specific. UCIe only defines what each die sees on its own UCIe link.</p><p class="src"><span class="sl">Spec</span>§1.3, p.48</p></div>
+  </div>
+</div></section>
+
+<section id="rel"><div class="wrap">
+  <h2>3 · Three ways to make the external link reliable</h2>
+  <div class="tbl-wrap diff"><table>
+    <thead><tr><th></th><th>A · Tunnel the protocol's own FEC/CRC</th><th>B · Retimer does FEC, CRC and Retry</th><th>C · Retimer FEC, protocol CRC and Replay</th></tr></thead>
+    <tbody>
+      <tr><td>Who corrects errors</td><td>The protocol's native FEC and CRC (e.g. PCIe/CXL flits)</td><td>The retimer, with its own FEC, CRC and Retry</td><td>Retimer FEC (replacing or adding to native FEC); protocol CRC and Replay</td></tr>
+      <tr><td>Condition</td><td>External link meets the protocol's error model (BER, error correlation)</td><td>None stated beyond handling the external BER</td><td>None stated</td></tr>
+      <tr><td>UCIe flit format</td><td>Raw Format, tunnelling native bits</td><td>Any applicable flit format</td><td>Not restricted in §1.3</td></tr>
+      <tr><td>Ack/Nak</td><td>End to end by the protocol</td><td>Three independent links: each retimer acks/naks with its local die, and separately with the remote retimer</td><td>End to end by the protocol</td></tr>
+      <tr><td>Buffer sizing on the dies</td><td>Protocol Layer buffers sized for the full round trip</td><td>Not called out</td><td>Protocol Layer and Retry buffers sized for the full round trip</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>§1.3, p.47–48</p>
+</div></section>
+
+<section id="cred"><div class="wrap">
+  <h2>4 · Credits: the one flow-control rule a die must follow</h2>
+  <div class="twocol">
+    <div class="card"><h3>Die → retimer is credited, retimer → die is not</h3><ul class="tight" style="font-size:15px">
+      <li>Every retimer has a <strong>Receiver Buffer</strong> for flits from its local die.</li>
+      <li>It advertises the buffer size in parameter exchange: <strong>"Retimer" = 1</strong> and <strong>Retimer_Credits</strong>, a 9-bit count.</li>
+      <li><strong>1 credit = 256 B</strong> of data, including any FEC and CRC.</li>
+      <li>The die must not send without a credit. These credits sit on top of protocol credits (for example PCIe PH/PD).</li>
+      <li>Data sent to the retimer must be consumable by the remote die with no other dependency.</li>
+      <li>Retimer → die traffic has no UCIe credit flow control.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§1.3, p.48 · §3.2.1.2, p.63–64</p></div>
+    <div class="card"><h3>Credit returns ride on the Valid wire</h3><div class="tbl-wrap"><table>
+      <thead><tr><th>8-UI Valid</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>00000000b</code></td><td>No flit data, no credit</td></tr>
+        <tr><td><code>00001111b</code></td><td>Flit data, no credit (the normal Valid frame)</td></tr>
+        <tr><td><code>11110000b</code></td><td>No flit data + 1 credit release</td></tr>
+        <tr><td><code>11111111b</code></td><td>Flit data + 1 credit release</td></tr>
+      </tbody>
+    </table></div><p style="font-size:14px;margin:8px 0 0">Bit 0 is sent first. The encodings detect up to three bit flips. At ≤ 48 GT/s a receiver may retrain on any error or correct single-bit errors; above 48 GT/s it must correct single-bit errors.</p><p class="src"><span class="sl">Spec</span>§4.1.2.1, Table 4-1, p.101</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Reset on leaving Active</h3><p>The die resets its credit counter to the advertised value whenever RDI leaves Active. The retimer drains or dumps its buffer before re-entering Active. Because credits are re-advertised, the first transfer after Active entry cannot be a credit-only frame.</p><p class="src"><span class="sl">Spec</span>§1.3, p.48 · §4.1.2, p.100</p></div>
+    <div class="card"><h3>Parity bytes are invisible to the retimer</h3><p>Runtime-link-testing parity bytes do not consume retimer credits, are not written into the buffer and are not forwarded: the feature characterizes only the local UCIe link.</p><p class="src"><span class="sl">Spec</span>§3.9, p.96</p></div>
+  </div>
+</div></section>
+
+<section id="sync"><div class="wrap">
+  <h2>5 · Keeping both dies in step</h2>
+  <div class="twocol">
+    <div class="card"><h3>Link training with a retimer</h3><div class="flow">
+      <div><span class="n">1</span><p>External link and each UCIe link may come up independently.</p></div>
+      <div><span class="n">2</span><p>Each UCIe link trains SBINIT → MBINIT (local parameters) → MBTRAIN at its local data rate.</p></div>
+      <div><span class="n">3</span><p>The retimer asks for the remote side's rate and width over the external link.</p></div>
+      <div><span class="n">4</span><p>If they differ and the retimer needs a match, it retrains from LINKSPEED. This may repeat.</p></div>
+      <div><span class="n">5</span><p>When the configuration suits both ends, the link goes through LINKINIT to ACTIVE.</p></div>
+    </div><p class="src"><span class="sl">Spec</span>§4.5.2, Figure 4-32, p.130</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Parameter exchange: Stall, don't time out</h3><p style="font-size:15px">The Adapter's parameter exchange timeout is 8 ms (−0% / +50%), counted only while RDI is Active, and reset by any Stall message. A retimer resolves capabilities with its remote partner and merges its own before answering its die, sending the Stall message once every 4 ms meanwhile.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.70</p></div>
+      <div class="card"><h3>Link states: answer only when the far die has</h3><p style="font-size:15px">If Die 0 sends Active Request, Retimer 0 must confirm through Retimer 1 that Die 1 received it and replied Active Status, then reply to Die 0. Stall every 4 ms meanwhile. The external link enters low power only when both dies have.</p><p class="src"><span class="sl">Spec</span>§3.5, p.90</p></div>
+      <div class="card"><h3>Retimer and DP/UP bits</h3><p style="font-size:15px">A retimer's Adapter sets "Retimer" and clears "DP" and "UP". The dies set DP or UP so the retimer knows whether it faces a downstream or upstream port.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.64</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="swr"><div class="wrap">
+  <h2>6 · Retimers as software sees them</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Registers</div><h3>Reached only through the mailbox</h3><p>Retimer registers live in sideband config and sideband MMIO space, not visible to host software directly. The RP/DSP mailbox reaches the retimer nearest the host; the EP/USP mailbox reaches the far retimer. An EP/USP sets "Sideband mailbox Registers Present" only when paired with a retimer.</p><p class="src"><span class="sl">Spec</span>§9.3, p.457–458 · Table 9-7, p.465</p></div>
+    <div class="card"><div class="tagline">Identity</div><h3>Link Capability bit 8</h3><p>A retimer sets the "Retimer" bit in its UCIe Link Capability register so software can tell it apart. Its Link DVSEC Next Capability is 0h and Register Locator offsets are reserved.</p><p class="src"><span class="sl">Spec</span>Table 9-8, p.466 · Table 9-5, p.464 · Table 9-13, p.476</p></div>
+    <div class="card"><div class="tagline">Errors</div><h3>Forwarding across the external link is vendor-specific</h3><p>A retimer next to an RP/DSP reports errors to it with sideband error messages. A retimer next to an EP/USP reports to its partner retimer by a vendor-specific mechanism.</p><p class="src"><span class="sl">Spec</span>Table 9-12, p.473–475</p></div>
+    <div class="card"><div class="tagline">Management</div><h3>Optional management transport</h3><p>Retimers may join the UCIe management network. If they do, they follow all the generic chiplet rules and can forward management packets between their UCIe side and the retimed side.</p><p class="src"><span class="sl">Spec</span>§8.2.6, p.391</p></div>
+  </div>
+</div></section>
+
+<section id="setup"><div class="wrap">
+  <h2>7 · Compliance setup</h2>
+  <div class="twocol">
+    <div class="card"><h3>The test package</h3><ul class="tight" style="font-size:15px">
+      <li><strong>Golden Die</strong>: known-good UCIe across all layers. Its Adapter supports every flit format and can inject consistent and inconsistent sideband messages; it can force timeouts on sideband messages and state residency timers.</li>
+      <li><strong>DUT</strong>: one or more dies that have already passed sort/pre-bond testing.</li>
+      <li><strong>Channel</strong>: known-good bridge or interposer (Advanced Package) or package (Standard Package).</li>
+      <li><strong>Compliance software</strong>: runs on the Golden Die or on an external controller attached via a test/JTAG port.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§11.0, p.579 · §11.2, p.580 · §11.3, p.581</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Layers tested separately</h3><p style="font-size:15px"><strong>Protocol</strong>: PCIe/CXL use their own compliance; Streaming is out of scope. <strong>Adapter</strong>: injection hooks, required in any Adapter that supports a flit format, retimers included. <strong>PHY</strong>: margining, BER, lane skew, Tx EQ.</p><p class="src"><span class="sl">Spec</span>§11.1–11.3, p.580–581</p></div>
+      <div class="card"><h3>Two preconditions</h3><p style="font-size:15px">The sideband must come up without firmware, because it carries all compliance register accesses. Software reads the capability registers before testing any optional feature.</p><p class="src"><span class="sl">Spec</span>§11.0, p.579</p></div>
+      <div class="card"><h3>Test/Compliance register block</h3><p style="font-size:15px">Register Locator block ID 1h. 8 KB: Adapter registers at D2DOFF (offset 10h, normally 0), PHY registers at PHYOFF (offset 14h, normally 4 KB). Software must read both offsets rather than assume them.</p><p class="src"><span class="sl">Spec</span>§9.5.4–9.5.4.3, p.507–508</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="adc"><div class="wrap">
+  <h2>8 · Adapter compliance: injection hooks</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Register (from D2DOFF)</th><th>What it does</th><th>Key fields</th></tr></thead>
+    <tbody>
+      <tr><td>20h Adapter Compliance Control</td><td>Puts the Adapter in a compliance mode; takes effect at the next RDI entry to Retrain</td><td>Mode 00b normal · 01b PHY-only training (RDI to Active, no parameter exchange, FDI held in Reset) · 10b Adapter Compliance (acts only on the injection registers). Bit 2 Force Link Reset → RDI LinkError</td></tr>
+      <tr><td>28h Flit Tx Injection Control</td><td>Injects NOP or Test flits at the transmitter</td><td>Type: NOP (bypass retry buffer) / Test / alternate. Mode: continuous / N contiguous / N interleaved with protocol flits. Payload: fixed or LFSR 4B patterns, whole payload or at an offset</td></tr>
+      <tr><td>30h Adapter Test Status</td><td>Reports what happened</td><td>Compliance status, injection status, Rx test-flit status, link-state injection status, retry injection status, retries over threshold</td></tr>
+      <tr><td>34h / 38h Link State Injection Stack 0 / 1</td><td>Injects a link state request, or a chosen response when a matching request arrives</td><td>Encodings follow FDI state request/response. Only in Adapter Compliance mode; unexpected responses are discarded</td></tr>
+      <tr><td>40h Retry Injection Control</td><td>Injects 1-, 2- or 3-bit errors to force Retry</td><td>Byte offset, flits between errors (0 = random 1–31), number of errors, which flit types, Tx Retry Error Threshold</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>§9.5.4.4, Tables 9-72 to 9-77, p.509–513 · §11.2, p.580–581</p>
+  <div class="twocol" style="margin-top:14px">
+    <div class="grid" style="gap:12px">
+    <div class="card"><h3>Test flits vs NOP flits</h3><p>Test flits carry <code>01b</code> in Byte 1 bits [7:6] of the flit header, go through the Tx retry buffer if Retry is enabled, and are CRC-checked at the receiver like any flit, then cancelled (for example with <code>pl_flit_cancel</code>) so the Protocol Layer never sees them. NOP flits bypass the retry buffer.</p><p class="src"><span class="sl">Spec</span>§11.2, p.581 · Table 9-73, p.509</p></div>
+    <div class="card"><h3>Reading the results (Adapter Test Status, 30h)</h3><ul class="tight" style="font-size:15px">
+      <li><strong>[2:1] Flit Tx Injection</strong>: 00b none, 01b in progress (stays here in continuous mode), 10b finished, 11b stopped early.</li>
+      <li><strong>[4:3] Flit Rx Status</strong> (RW1C): 01b at least one Test flit received without CRC error.</li>
+      <li><strong>[10:9] Retry Injection</strong>: 01b at least one error injected, 10b sequence finished.</li>
+      <li><strong>[11]</strong> Number of Retries Exceeded Threshold.</li>
+      <li>Status fields clear on the 0→1 of their enable bit.</li>
+    </ul><p class="src"><span class="sl">Spec</span>Table 9-74, p.511</p></div>
+    </div>
+    <div class="card"><h3>Retry injection builder</h3><p style="font-size:15px">Set the fields; get the 64-bit value for Retry Injection Control (D2DOFF + 40h).</p>
+      <div class="tool"><div class="row" id="rib"></div><div class="out" id="ribout" aria-live="polite"></div></div>
+      <p class="src"><span class="kind derived">Derived</span> from Table 9-77, p.513</p></div>
+  </div>
+</div></section>
+
+<section id="phc"><div class="wrap">
+  <h2>9 · PHY compliance: margining and stepping</h2>
+  <div class="twocol">
+    <div class="card"><h3>Getting into @PHY-Compliance</h3><div class="flow">
+      <div><span class="n">1</span><p>Put the Adapter in a compliance mode (01b or 10b) first.</p></div>
+      <div><span class="n">2</span><p>Set Compliance Enable (Compliance Control 1 bit 0) in every module.</p></div>
+      <div><span class="n">3</span><p>Retrain the link. On the next PHYRETRAIN the PHY enters PHY Compliance. RDI may reach Active but <code>pl_trdy</code> is never asserted.</p></div>
+      <div><span class="n">4</span><p>Use the operation trigger and setup registers; TRAINERROR in this mode does not reset them.</p></div>
+    </div><p class="src"><span class="sl">Spec</span>§9.5.4.5, p.514 · Table 9-78, p.514</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Operations you can trigger</h3><p style="font-size:15px">Operation Type: 001b Tx-initiated D2C point test, 010b Tx-initiated eye width sweep, 011b Rx-initiated point training, 100b Rx-initiated width sweep, 101b step from MBTRAIN.RXDESKEW to DATACENTER1 above 32 GT/s (for sweeping Tx EQ). Start with a 0→1 on the trigger bit.</p><p class="src"><span class="sl">Spec</span>Table 9-78, p.515</p></div>
+      <div class="card"><h3>Knobs</h3><p style="font-size:15px">Disable scrambling; add or subtract an Rx Vref offset (step by one each time); mask even/odd UIs, or UI groups A–D above 32 GT/s; choose per-lane or aggregate compare; enable Track.</p><p class="src"><span class="sl">Spec</span>Tables 9-78 to 9-80, p.514–517</p></div>
+      <div class="card"><h3>Per module</h3><p style="font-size:15px">Registers repeat per module at PHYOFF + 000h, 400h, 800h, C00h. All modules of a link must be in PHY Compliance together.</p><p class="src"><span class="sl">Spec</span>§9.5.4.5, p.514</p></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Spec cross-reference to watch</h3><p>§11.3 says the UHM DVSEC is "defined in Section 9.5.3.36". In Revision 3.0, §9.5.3.36 is Runtime Link Test Control; the UHM DVSEC is §9.5.3.40 (p.505). The reference looks stale from an earlier revision's numbering.</p><p class="src"><span class="kind derived">Derived</span> §11.3, p.581 vs table of contents, p.11</p></div>
+</div></section>

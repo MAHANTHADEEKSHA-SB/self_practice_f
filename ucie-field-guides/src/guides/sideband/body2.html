@@ -1,0 +1,119 @@
+
+<section id="rationale"><div class="wrap">
+  <h2>7 · Why each rule exists, with real-time examples</h2>
+  <p class="sub">Each card gives a sideband rule, the reason, an example, and what breaks without it.</p>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+
+    <article class="wcard" data-g="arch">
+      <div class="meta"><span>Architecture</span><span>§7.0 p.268 · §7.1.1 p.269</span></div>
+      <h3>No direct Protocol Layer to Protocol Layer sideband</h3>
+      <p class="rule">The Protocol Layer can access local Adapter and PHY registers over FDI, and remote registers only through the Adapter's mailbox. It may never address the remote Protocol Layer over sideband.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Protocol-to-protocol traffic (config space, MMIO) belongs on the mainband, where protocol ordering and flow control apply. The sideband is for link-level control. Keeping remote access behind one mailbox also keeps the far die's sideband load bounded.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Host software wants the device die's PHY training status. It writes the mailbox Index and Control registers in the host Adapter; the Adapter sends a Configuration Read across the sideband and fills the mailbox Data register with the completion.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that emits remote-die requests on FDI uses dstid values that are reserved on FDI; the Adapter must reject them.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Mailbox mechanism; FDI only carries register access <span class="ref">§7.0, p.268</span></li><li><span class="kind spec">Spec</span>No PL ↔ PL over sideband <span class="ref">§7.1.1, p.269</span></li><li><span class="kind spec">Spec</span>Mailbox registers <span class="ref">§9.5.1.11–9.5.1.16, p.477–479</span></li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="arch">
+      <div class="meta"><span>Architecture</span><span>§7.0 p.268</span></div>
+      <h3>Fragmented registers: OR on the way up</h3>
+      <p class="rule">Bits a layer doesn't own are read-only 0 there. On a read, each layer ORs its own bits with the response from the layer below before answering.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Some registers describe things spread across layers (for example a status register with protocol, Adapter and PHY bits). Software sees one register at one address; the hardware assembles it without any layer needing to know the others' bit positions.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A status register with bit 0 in the Adapter and bit 7 in the PHY. The Adapter forwards the read to the PHY, gets 0x80, ORs its 0x01, and returns 0x81 up to the Protocol Layer.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A layer that returns X or stale values for bits it doesn't own corrupts the OR and software sees phantom status bits.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Hierarchical decoding <span class="ref">§7.0, p.268</span></li><li><span class="kind illus">Illustrative</span>Bit positions</li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="int">
+      <div class="meta"><span>Integrity</span><span>§7.1.3.2 p.298</span></div>
+      <h3>Parity only, because the link is that clean</h3>
+      <p class="rule">Each packet has even Control Parity (CP) over the header and Data Parity (DP) over data. There is no retry; any parity error is a fatal Uncorrectable Internal Error.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The sideband runs at 800 MT/s over short reach with BER 1e-27 or better. A retry protocol would add buffers and state on a link that, in practice, never errors. Detecting the impossible case and escalating is enough.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>At 800 Mb/s and BER 1e-27, the expected time between bit errors is about 1.25e18 seconds, roughly 40 billion years.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Computing CP over DP as well, or using odd parity: every packet looks corrupted to a compliant receiver and the link goes to LinkError at bring-up.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>No retry; parity → fatal UIE <span class="ref">§7.1.3.2, p.298</span></li><li><span class="kind spec">Spec</span>CP excludes DP; even parity <span class="ref">Table 7-5, p.272 · Table 7-7, p.274</span></li><li><span class="kind derived">Derived</span>Error interval</li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="int">
+      <div class="meta"><span>Integrity</span><span>Table 7-1 note a p.269</span></div>
+      <h3>Priority packets can't alias with normal ones</h3>
+      <p class="rule">Priority packets have a different header size and parity position. Their opcodes (11110b, 11111b) plus header bits 5 and 6 are chosen so a single bit error can never turn one format into the other.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Parity catches single-bit errors only if the receiver checks the right bit. If one flip changed the format, the receiver would check parity in the wrong place and might accept a corrupted packet.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Opcode 11011b (message with data) differs from 11111b in one bit, so bits 5 and 6 must also differ: a single flip cannot make a valid-looking priority packet.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A future vendor extension that reuses bits 5 and 6 freely could reintroduce aliasing; the spec says new packet types must preserve this property.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Note a of Table 7-1 <span class="ref">p.269</span></li><li><span class="kind derived">Derived</span>The opcode-distance example</li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>§7.1.3.1 p.298</span></div>
+      <h3>One credit size for everything</h3>
+      <p class="rule">On FDI and RDI each credit covers 64 bits of header plus 64 bits of data, even for a packet with no data. Maximum 32 credits; initial credits are design parameters.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Sideband traffic is low-rate; buffer efficiency matters less than simplicity. One credit type means one counter per direction and no fragmentation logic.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A receiver advertising 8 credits needs 8 × 128 bits = 128 bytes of buffer. A burst of 8 Link Management messages (header only) uses all 8 credits.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A transmitter that charges half a credit for header-only packets overruns a receiver that sized for full credits.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Credit size and maximum <span class="ref">§7.1.3.1, p.298</span></li><li><span class="kind derived">Derived</span>Buffer size</li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>§7.1.3.1 p.298 · §7.1.3.3 p.299</span></div>
+      <h3>Completions never wait for credits</h3>
+      <p class="rule">Transmitters do not check credits before sending Register Access Completions; receivers must always sink them. Completions do not consume end-to-end credits either.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Classic deadlock avoidance: if completions needed credits held by requests that are themselves waiting for completions, both directions could stall. Guaranteeing completions always drain breaks the cycle.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>The PHY's request buffer is full of remote reads. Their completions still flow back to the Adapter, freeing tags and letting new requests in.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Putting completions in the credited request queue: under load, requests and completions block each other and the sideband hangs.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Completion sinking rules <span class="ref">§7.1.3.1, p.298 · §7.1.3.3, p.299</span></li><li><span class="kind bg">Background</span>Deadlock reasoning</li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>§7.1.3.3 p.299</span></div>
+      <h3>Four end-to-end credits, one mailbox</h3>
+      <p class="rule">Each Adapter provisions for at least four remote register access requests; the sender's counter starts at 4 (at reset exit and on RDI Reset → Active) and saturates. The PHY must also provision space for at least one request and completion from each side in addition to local credits.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The mailbox allows one outstanding access, but if that access times out, software may want to issue debug reads without waiting for the lost credit. Four gives headroom. Re-initializing on every RDI Active entry recovers any credits lost while the link was down.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A remote read times out at 8 ms (completed as UR). Software reads the remote PHY's error log next; that request still has a credit, though the first credit has not returned yet.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A non-saturating counter that receives (N−4) extra credit returns from a bigger partner overflows and wraps to 0.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>4 credits, init points, saturating counter, extra returns <span class="ref">§7.1.3.3, p.299</span></li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>§7.1.3.3 p.299</span></div>
+      <h3>One outstanding Link Management request per MsgCode</h3>
+      <p class="rule">Every Link Management request has a response, and a source may have only one outstanding request per MsgCode. All non-vendor messages must sink and never block others.</p>
+      <div class="part"><span class="l l-why">Why</span><p>State machine handshakes are naturally one-at-a-time. Limiting them that way means the receiver's message buffer can be sized at design time (a fixed number of message types), so messages never need credits to be guaranteed.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>The PHY may have {LinkMgmt.RDI.Req.L1} (MsgCode 01h) and an Adapter LSM request (MsgCode 03h) outstanding at the same time, but not two RDI requests.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Sending Req.L1 and then Req.Active before the L1 response: the partner's single message slot for that MsgCode overflows.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>One per MsgCode; must sink <span class="ref">§7.1.3.3, p.299</span></li><li><span class="kind spec">Spec</span>MsgCodes <span class="ref">Table 7-8, p.275–277</span></li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>§7.0 p.268</span></div>
+      <h3>8 ms timeout, Stall every 4 ms</h3>
+      <p class="rule">Every sideband request expecting a response times out after 8 ms. A Retimer that needs longer must send a Stall response every 4 ms, and must not stall forever. A Stall resets the requester's timer.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A Retimer often has to ask the die on the far side of an off-package link before it can answer. Stalling at half the timeout guarantees the requester never expires while the Retimer is still working.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Retimer receives {LinkMgmt.Adapter0.Req.Active} at t = 0, forwards it over its external link, and sends Rsp.Active with MsgInfo FFFFh (Stall) at 4 ms and 8 ms. The real response arrives at 9 ms and is forwarded.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Stall interval of 8 ms or more: on the +0% tolerance edge the requester times out first.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Timeout, Stall, no indefinite stall <span class="ref">§7.0, p.268</span></li><li><span class="kind spec">Spec</span>Stall MsgInfo FFFFh <span class="ref">Table 7-8, p.276</span></li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>Table 7-7 p.274–275</span></div>
+      <h3>UR carries the request header back</h3>
+      <p class="rule">If a completer aborts a request, it returns UR with 64 bits of data holding the original request header. A request that times out completes with UR and no data. Poisoned writes are not applied and return UR.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The requester can log exactly which request failed without storing every header it sent, which keeps requester state small.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Configuration Read to a reserved RL encoding returns UR with the read's header as data; the mailbox status shows the failure and software can see the bad address.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Returning UR without data for an aborted request: the requester's header log stays empty.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Status encodings <span class="ref">Table 7-7, p.274–275</span></li><li><span class="kind spec">Spec</span>Reserved RL → UR; EP → UR <span class="ref">Tables 7-5, 7-6, p.272–273</span></li></ul></div>
+    </article>
+
+    <article class="wcard" data-g="fc">
+      <div class="meta"><span>Flow control</span><span>§4.7.1.1 p.178</span></div>
+      <h3>Multi-module: one sideband for shared traffic</h3>
+      <p class="rule">Register accesses and non-training messages use the sideband of the lowest Module ID past SBINIT; training messages go on each module's own sideband.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Training is per module; everything else belongs to the single link above them. Choosing one sideband keeps request/response ordering simple.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Four-module link: {MBTRAIN.*} messages run on all four sidebands in parallel; {AdvCap.Adapter} goes only on module 0's sideband.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Spreading register requests over modules for "bandwidth": completions may arrive on a different module and out of order relative to expectations.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Assignment rules <span class="ref">§4.7.1.1, p.178</span></li></ul></div>
+    </article>
+
+  </div>
+</div></section>

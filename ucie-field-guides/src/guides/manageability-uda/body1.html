@@ -1,0 +1,126 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 8 · System Architecture</div>
+    <h1>UCIe Manageability, MTP and UDA Field Guide</h1>
+    <p class="lede">Chapter 8 defines an optional management network that runs across the chiplets of a package, independent of the mainband protocol: discovery, configuration, firmware download, telemetry, power control, and a standard test and debug architecture (UDA). It is 150 pages in the spec; this guide gives the architecture, the packet, how it rides on sideband and mainband, how a path comes up, and how UDA uses it.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>chiplet A / requester</span><span><i class="sw" style="background:var(--pl)"></i>chiplet B / responder</span><span><i class="sw" style="background:var(--sb)"></i>sideband management traffic</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#arch">2 · Architecture</a><a href="#mtp">3 · The MTP packet</a><a href="#encap">4 · Encapsulation</a><a href="#setup">5 · Path setup</a><a href="#uda">6 · UDA</a><a href="#caps">7 · Capabilities</a><a href="#rationale">8 · Why each rule</a><a href="#live">9 · Live scenario</a><a href="#quiz">10 · Test yourself</a><a href="#refs">11 · Spec index</a>
+</div></nav>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why UCIe defines manageability</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Open ecosystem</div><h3>One way to manage chiplets from any vendor</h3><p>A package built from several vendors' chiplets needs common discovery, configuration and debug. Manageability standardizes generally useful features and lets the rest be vendor-defined.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303</p></div>
+    <div class="card"><div class="tagline">Protocol-agnostic</div><h3>Works whatever the mainband carries</h3><p>Management runs over sideband or mainband regardless of whether the mainband is PCIe, CXL, Streaming or a future protocol, so the same firmware base can manage any chiplet.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303</p></div>
+    <div class="card"><div class="tagline">Simple stays simple</div><h3>Core in hardware, extras optional</h3><p>Required core capabilities can be implemented in hardware, so simple chiplets need no firmware. Advanced capabilities and security features are a menu, chosen per market.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303</p></div>
+    <div class="card"><div class="tagline">Examples</div><h3>What it is used for</h3><p>Discovering the chiplets in a package, initializing structures and parameters (replacing serial EEPROMs), firmware download, telemetry, power and thermal control, test and debug.</p><p class="src"><span class="sl">Spec</span>§8.1.1, p.303 · §8.3–8.4</p></div>
+  </div>
+</div></section>
+
+<section id="arch"><div class="wrap">
+  <h2>2 · Architecture: entities, network, directors</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Management Domain</td><td>All chiplets in the package that support UCIe manageability.</td></tr>
+        <tr><td>Management Network</td><td>Those chiplets connected through Management Ports by chiplet-to-chiplet management links; fully connected (a path exists between any two).</td></tr>
+        <tr><td>Management Fabric</td><td>On-die interconnect between a chiplet's Management Entities (implementation-specific).</td></tr>
+        <tr><td>Management Element</td><td>Entity that implements a management service; supports Management Transport and one or more Management Protocols.</td></tr>
+        <tr><td>Management Port</td><td>Interface between the fabric and a point-to-point management link (UCIe sideband or mainband).</td></tr>
+        <tr><td>Management Bridge</td><td>Connects the Management Network to another interconnect, inside or outside the package.</td></tr>
+        <tr><td>Management Director</td><td>One active per SiP: configures the network and acts as manageability Root of Trust.</td></tr>
+        <tr><td>Security Director</td><td>Configures security parameters (for example security clearance groups).</td></tr>
+        <tr><td>DFx Management Hub (DMH)</td><td>Management Element that implements test and debug protocols (UDA).</td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Layering</h3><div class="flow">
+        <div><span class="n">4</span><p>Management Protocols: UCIe Memory Access Protocol, test/debug protocols, vendor protocols.</p></div>
+        <div><span class="n">3</span><p>UCIe Management Transport: end-to-end packets between entities, unmodified in flight.</p></div>
+        <div><span class="n">2</span><p>Link encapsulation: one mechanism for sideband, one for mainband.</p></div>
+        <div><span class="n">1</span><p>UCIe link: sideband wires or mainband flits.</p></div>
+      </div><p class="src"><span class="sl">Spec</span>§8.1.2, p.304–306 · Figure 8-3</p></div>
+      <div class="card"><h3>Port recommendations</h3><p style="font-size:15px">A manageable chiplet should have at least one sideband Management Port, and enough of them that a whole package can form one management domain over sideband alone. Chiplets that need high-bandwidth management (test, debug, telemetry) are strongly recommended to also support mainband Management Ports.</p><p class="src"><span class="sl">Spec</span>§8.1.2, p.305</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="mtp"><div class="wrap">
+  <h2>3 · The Management Transport Packet (MTP)</h2>
+  <div class="twocol">
+    <div class="card"><ul class="tight" style="font-size:15px">
+      <li><strong>Header</strong>: first two DWORDs. Destination and Source Management Network IDs, Management Protocol ID, Traffic Class, Packet Integrity Protection Present (PIPP), Security Clearance Group, Length.</li>
+      <li><strong>Length</strong> is the whole packet in DWORDs minus one (000h = 1 DWORD).</li>
+      <li><strong>Protocol-specific field</strong>: defined by the Management Protocol; whole DWORDs.</li>
+      <li><strong>Packet Integrity</strong> (optional, if PIPP ≠ 0): currently CRC only.</li>
+      <li>Fields are little-endian bit order; reserved fields are sent as 0, forwarded unmodified, ignored by receivers.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§8.1.3.1 and Table 8-1, p.307–308</p></div>
+    <div class="card"><h3>Traffic classes and access control</h3><ul class="tight" style="font-size:15px">
+      <li>Eight traffic classes. Each is its own ordering domain: no ordering between classes, nor between requests and responses.</li>
+      <li>The Management Director may route classes differently (for example TC0 over sideband, TC2 over mainband).</li>
+      <li>Forward progress is required on every class; QoS between classes is implementation-specific.</li>
+      <li>Requests carry a Security Clearance Group used by access control; responses carry 00h and are handled at the request's group.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§8.1.3.1.1, p.308–309 · Table 8-1</p></div>
+  </div>
+</div></section>
+
+<section id="encap"><div class="wrap">
+  <h2>4 · Getting MTPs across a UCIe link</h2>
+  <div class="twocol">
+    <div class="card"><h3>Management Port Gateways</h3><p style="font-size:15px">At each end of a UCIe link a Management Port Gateway (MPG) bridges the on-die fabric to the link. On sideband, MTPs travel as Management Port Messages (MPMs, opcodes 10111b and 11000b) in per-RxQ credited buffers; the PHY has extra RDI signals for this (Table 10-2). On mainband, MTPs ride in Management Flits, as their own protocol or multiplexed with CXL.io, PCIe or Streaming on the same stack.</p><p class="src"><span class="sl">Spec</span>§8.2.1, p.361–365 · §7.1.2.4–7.1.2.5 · §2.5, p.57</p></div>
+    <div class="card"><h3>Sideband vs mainband</h3><div class="tbl-wrap" style="border:0"><table><thead><tr><th></th><th>Sideband</th><th>Mainband</th></tr></thead><tbody>
+      <tr><td>Availability</td><td>Early, even with mainband down; may run on an aux Mgmt_clk</td><td>Only with the mainband up</td></tr>
+      <tr><td>Bandwidth</td><td>800 MT/s serial, shared</td><td>Full link rate</td></tr>
+      <tr><td>Negotiated in</td><td>MBINIT.PARAM (SBFE)</td><td>Adapter parameter exchange</td></tr>
+      <tr><td>Good for</td><td>Discovery, config, low-rate control</td><td>Test, debug, telemetry, firmware</td></tr>
+    </tbody></table></div><p class="src"><span class="sl">Spec</span>§8.1.2, p.305 · §8.2.3, p.371 · §10.1.2, p.529</p></div>
+  </div>
+</div></section>
+
+<section id="setup"><div class="wrap">
+  <h2>5 · Bringing up a sideband management path</h2>
+  <div class="twocol">
+    <div class="flow">
+      <div><span class="n">1</span><p><strong>Negotiation</strong> (in MBINIT.PARAM): does the partner support management transport, and how many RxQs does it have?</p></div>
+      <div><span class="n">2</span><p><strong>Capabilities</strong>: each MPG sends a Management Port Gateway Capabilities message once, with its Port ID and NumVC. Both enable MIN(NumVC sent, NumVC received) + 1 VCs.</p></div>
+      <div><span class="n">3</span><p><strong>Credits</strong>: Credit Return messages for each enabled VC, for requests and responses, on each enabled RxQ-ID (0 to MIN(RxQ local, RxQ remote) − 1).</p></div>
+      <div><span class="n">4</span><p><strong>Init Done</strong> per RxQ-ID after its last credit return. When sent and received on all RxQ-IDs, the MPG asserts <code>mp_mgmt_up</code> and <code>mp_mgmt_init_done</code>; the PHY sets SB_MGMT_UP.</p></div>
+      <div><span class="n">5</span><p><strong>Running</strong>: MTPs flow, independent of mainband state.</p></div>
+    </div>
+    <div class="grid" style="gap:12px">
+      <div class="card" style="border-left:4px solid var(--bad)"><h3>Heartbeat</h3><p style="font-size:15px">After init, each receiver runs an 8 ms Heartbeat timer, restarted by any MPM. Each MPG must send some MPM at least every 4 ms per RxQ-ID path (a credit return if it has nothing else). On timeout, the MPG drops <code>mp_mgmt_up</code> after 16 ms, the PHY clears SB_MGMT_UP, and the path must be set up again. The timer pauses across sideband L1/L2.</p><p class="src"><span class="sl">Spec</span>§8.2.5.1.3, p.384 · §8.2.3.1, p.372–373</p></div>
+      <div class="card"><h3>When it is redone</h3><p style="font-size:15px">After a Management Reset, after software writes Retrain Link in the Sideband Management Port Structure, or after a Heartbeat timeout. Once up, it stays up across mainband retrains.</p><p class="src"><span class="sl">Spec</span>§8.2.3.1, p.371</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="uda"><div class="wrap">
+  <h2>6 · UDA: the UCIe Debug and Test Architecture</h2>
+  <div class="twocol">
+    <div class="card"><ul class="tight" style="font-size:15px">
+      <li>Built on the manageability infrastructure; needs working UCIe links and a management network.</li>
+      <li><strong>Hub-and-spoke</strong> per chiplet: one DFx Management Hub (DMH) implements the test/debug protocols, discovery and global security control; DFx Management Spokes (DMS) implement the functions: scan controller, memory BIST, fabric debug, core debug, trace.</li>
+      <li>The DMH has a Management Network ID; each spoke has a Spoke-ID under it.</li>
+      <li>UCIe itself has DMS spokes: Spoke Type 0 registers in the Adapter, Type 1 in the PHY, Type 2 split. They are reached over the FDI config bus with the DMS Register Read/Write opcodes.</li>
+      <li>Bring-up of the links and UDA elements themselves can use any other interface (JTAG, GPIO, sideband-only UCIe).</li>
+    </ul><p class="src"><span class="sl">Spec</span>§8.3.1, p.391–395 · §8.3.5 · Table 7-1, p.269</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Three use cases</h3><ul class="tight" style="font-size:15px"><li><strong>Sort / pre-bond</strong>: test a bare chiplet before packaging.</li><li><strong>SiP-level</strong>: test chiplets after assembly through the package's management network.</li><li><strong>System debug</strong>: in-field debug access via the same structures.</li></ul><p class="src"><span class="sl">Spec</span>§8.3.2–8.3.4, p.395–397</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="caps"><div class="wrap">
+  <h2>7 · Management capabilities</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Early Firmware Download</h3><p style="font-size:15px">Lets one Management Element (initiator) load firmware into another (target), for any hardware block in the target chiplet that needs firmware. A capability structure can download several distinct firmware images; a vendor-defined PROCESSING state can verify the payload (for example integrity checks) and report failure.</p><p class="src"><span class="sl">Spec</span>§8.4.1, p.412–418</p></div>
+    <div class="card"><h3>Power Management: Fast Throttle</h3><p style="font-size:15px">An optional, package-wide fast signal for "throttle now": when any trigger-enabled Power Management Element sees a threshold (for example temperature) crossed, all enabled responders throttle immediately, before limits are reached. The threshold sits just inside the operating range.</p><p class="src"><span class="sl">Spec</span>§8.4.2, p.418–419 · §5.14 Open Drain</p></div>
+  </div>
+</div></section>

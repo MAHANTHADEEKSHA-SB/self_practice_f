@@ -1,0 +1,130 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 4.1 to 4.3, 4.7, 4.8 · Logical Physical Layer data path</div>
+    <h1>UCIe Logical PHY Field Guide</h1>
+    <p class="lede">How bytes from RDI become bits on bumps and back: byte-to-lane striping, Valid framing, clock gating, the sideband serial format, lane reversal, lane repair and width degrade, and how two or four modules act as one link. The LTSM guide covers <em>when</em> these are set up; this guide covers <em>what</em> they do to the data.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw" style="background:var(--lp)"></i>transmit side / logical lane</span>
+      <span><i class="sw" style="background:var(--pl)"></i>receive side / physical lane, Valid</span>
+      <span><i class="sw" style="background:var(--sb)"></i>sideband</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a><a href="#bytes">2 · Bytes to lanes</a><a href="#valid">3 · Valid and clock</a><a href="#sb">4 · Sideband format</a><a href="#reversal">5 · Lane reversal</a><a href="#repair">6 · Repair and degrade</a><a href="#mm">7 · Multi-module</a><a href="#rationale">8 · Why each rule</a><a href="#live">9 · Live scenarios</a><a href="#silicon">10 · Real silicon</a><a href="#verify">11 · Verification</a><a href="#quiz">12 · Test yourself</a><a href="#refs">13 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+<section id="why">
+  <div class="wrap">
+    <h2>1 · What the Logical PHY does</h2>
+    <p class="sub">The spec lists its jobs: link initialization and power states (the LTSM), byte-to-lane mapping, redundancy remapping, sideband messaging, scrambling and patterns, and width degrade. This page covers the data-path ones.</p>
+    <div class="grid g3">
+      <div class="card"><div class="tagline">Width</div><h3>One byte per lane</h3><p>Every lane carries one whole byte per 8 UI, bit 0 first. Wide RDI beats become parallel lanes, not serial bits on one lane.</p><p class="src"><span class="sl">Spec</span>§4.1.1, p.98</p></div>
+      <div class="card"><div class="tagline">Framing</div><h3>Valid marks the bytes</h3><p>A Valid lane, 4 UI high then 4 UI low per 8-UI block, says which 8 UI carry data. No headers or symbols on the wire.</p><p class="src"><span class="sl">Spec</span>§4.1.2, p.100</p></div>
+      <div class="card"><div class="tagline">Yield</div><h3>Route around bad bumps</h3><p>Advanced Package repairs up to two data lanes per 32 using redundant lanes, plus one clock/track lane and the Valid lane. Standard Package halves width instead.</p><p class="src"><span class="sl">Spec</span>§4.3, p.107–118</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="bytes">
+  <div class="wrap">
+    <h2>2 · Bytes to lanes</h2>
+    <p class="sub">Byte 0 goes on lane 0, byte 1 on lane 1, and so on; within a byte, bit 0 is sent first. When the width changes, the rule is the same: one byte per lane per 8 UI. Pick a width to see where a 256B flit's bytes go.</p>
+    <div class="chips" role="group" id="bmchips"></div>
+    <figure><div id="bmap" class="tbl-wrap" style="border:0"></div><figcaption id="bmcap"></figcaption></figure>
+    <div class="callout" style="margin-top:12px"><p><strong>RDI byte k = lane k.</strong> RDI byte order (flit byte 0 on RDI byte 0) and lane order line up, so the PHY needs no knowledge of flit formats: a 64B RDI beat on a x64 module is exactly one 8-UI Valid frame. Multi-module and degraded links keep "ascending bytes on ascending active lanes and module IDs".</p><p class="src"><span class="sl">Spec</span>§4.1.1, p.98 · §10.3.1, p.559–561 · §4.7.1, p.175</p></div>
+  </div>
+</section>
+
+<section id="valid">
+  <div class="wrap">
+    <h2>3 · Valid framing and clock gating</h2>
+    <div class="twocol">
+      <div class="card">
+        <h3>8-UI blocks, aligned forever</h3>
+        <ul class="tight" style="font-size:15px">
+          <li>For each 8-bit transfer, Valid is high for the first 4 UI and low for 4 UI.</li>
+          <li>In Active, every transfer starts an integer multiple of 8 UI after the rising edge of the first transfer's Valid. The receiver tracks this alignment.</li>
+          <li>An invalid Valid encoding is a framing error: the PHY raises <code>pl_error</code> and retrains.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§4.1.2, p.100 · Table 10-1 (pl_error), p.524</p>
+      </div>
+      <div class="card">
+        <h3>Retimers return credits on Valid</h3>
+        <div class="tbl-wrap" style="border:0"><table><thead><tr><th>Valid bits (bit 0 first, right to left)</th><th>Meaning</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px"><tr><td>0000 0000</td><td>no data, no credit</td></tr><tr><td>0000 1111</td><td>data, no credit</td></tr><tr><td>1111 0000</td><td>no data, 1 credit</td></tr><tr><td>1111 1111</td><td>data, 1 credit</td></tr></tbody></table></div>
+        <p style="font-size:14.5px">Each credit = 256B. The encodings guarantee detection of 3 bit flips. At ≤ 48 GT/s a receiver may retrain on any bit error or correct single-bit errors; above 48 GT/s it must correct single-bit errors.</p>
+        <p class="src"><span class="sl">Spec</span>§4.1.2.1 and Table 4-1, p.101</p>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card"><h3>Clock gating with a postamble</h3><p style="font-size:15px">When Valid goes low, the forwarded clock keeps toggling for a fixed postamble, then stops: 16 UI (8 cycles) at half-rate clocking, 32 UI (8 cycles) at quarter-rate. Not gated if free-running clock was negotiated or the partner requested Runtime Recalibration.</p><p class="src"><span class="sl">Spec</span>§4.1.3, p.101 · §5.11</p></div>
+      <div class="card"><h3>Free-running clock mode</h3><p style="font-size:15px">The forwarded clock keeps toggling even with Valid low. Must be supported (to turn off dynamic clock gating for normal operation or debug) and negotiated before mainband training. Always used above 32 GT/s.</p><p class="src"><span class="sl">Spec</span>§4.1.4, p.101 · §4.5.3.3.1, p.137</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="sb">
+  <div class="wrap">
+    <h2>4 · Sideband serial format</h2>
+    <div class="twocol">
+      <div class="card"><ul class="tight" style="font-size:15px">
+        <li>One serial data + clock pair per direction per module, 800 MT/s single data rate.</li>
+        <li>Messages are a 64-bit header, optionally with 32 or 64 bits of data. Every serial packet is 64 UI; 32-bit data is padded with zeros in the MSBs.</li>
+        <li>Packets are separated by at least 32 UI of low. A message with data = header, 32 UI low, data, 32 UI low.</li>
+        <li><strong>PMO</strong> (Performant Mode, negotiated in MBINIT.PARAM SBFE): no 32-UI gap; packets back to back. Receivers must still accept gaps.</li>
+        <li><strong>PSPT</strong> (Priority Sideband Packet Transfer, needs PMO): a pending priority packet may interrupt a normal packet at an 8-UI boundary after 8 UI of idle. Opcode 11111b ends a priority chain and resumes the normal packet; 11110b says another priority packet follows.</li>
+      </ul><p class="src"><span class="sl">Spec</span>§4.1.5–4.1.5.2.1, p.102–104 · §5.13, p.254</p></div>
+      <div class="card"><h3>Who shares the sideband</h3><p style="font-size:15px">Link management packets (training, RDI and Adapter state messages) and Management Port Messages (MPMs) share each sideband. Arbitration is implementation-specific but must not delay link management packets into timeouts; an MPM with data must finish within 512 UI (with PMO) or 768 UI (without).</p><p class="src"><span class="sl">Spec</span>§4.8, p.182 · §8.2.5.1.2</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="reversal">
+  <div class="wrap">
+    <h2>5 · Lane reversal and Lane ID</h2>
+    <div class="twocol">
+      <div class="card"><p style="font-size:15px">Every device must support data lane reversal within a module: local physical data lane 0 connects to remote lane N−1, lane 1 to N−2, and so on (N = 8, 16, 32 or 64). On Advanced Package the redundant lanes reverse too. Track, Valid, Clock and sideband are never reversed.</p><p style="font-size:15px">Every logical data and redundant lane has a unique Lane ID (x64 Advanced: 0–63 data, 64–67 redundant; x32: 0–31 and 64–65). MBINIT.REVERSALMB sends each lane's ID in an unscrambled 16-bit pattern so the receiver can see which transmitter lane it is connected to.</p><p class="src"><span class="sl">Spec</span>§4.2–4.2.1, p.104–107 · Table 4-7, p.151</p></div>
+      <div class="card"><div class="tagline">Why reversal exists</div><p style="font-size:15px">Two identical dies placed face to face on a package, or one die rotated 180°, see each other's lanes in mirror order. Supporting reversal in silicon means the package designer does not need crossing routes, which on Advanced Package interposers with 25–55 µm bump pitch would cost routing layers.</p><p class="src"><span class="kind bg">Background</span>routing reasoning · <span class="kind spec">Spec</span>bump pitch, Table 1-2, p.40</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="repair">
+  <div class="wrap">
+    <h2>6 · Lane repair (Advanced) and width degrade (Standard)</h2>
+    <p class="sub">Advanced Package: each group of 32 data lanes has two redundant lanes (TRD0/TRD1 for lanes 0–31, TRD2/TRD3 for 32–63). One failure shifts toward TRD0; two failures shift the lower one toward TRD0 and the upper one toward TRD1. Click up to two lanes below to see the mapping for lanes 0–31.</p>
+    <figure>
+      <div id="rpgrid" style="display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px"></div>
+      <div id="rpgrid2" style="display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px;margin-top:3px"></div>
+      <figcaption id="rpcap"></figcaption>
+    </figure>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><h3>Limits</h3><p style="font-size:15px">Up to two data lanes per group of 32 (four per x64 module). If TRD0 (or TRD2) is itself faulty, no lane in that group can be repaired; if TRD1 (or TRD3) is faulty, one can. Unused redundant lanes are tri-stated and their receivers disabled.</p><p class="src"><span class="sl">Spec</span>§4.3, p.107–108</p></div>
+      <div class="card"><h3>Clock, Track, Valid</h3><p style="font-size:15px">One broken lane among clock (P/N) and track can be remapped onto the redundant clock/track lane (RDCK). Valid has its own redundant lane (RDVLD). Both are detected and repaired in MBINIT.</p><p class="src"><span class="sl">Spec</span>§4.3.4–4.3.6, p.115–118</p></div>
+      <div class="card"><h3>Standard: halve the width</h3><p style="font-size:15px">x16 → x8 using logical lanes 0–7 or 8–15, whichever half has no faults; x8 → x4 using 0–3 or 4–7. If faults are in both halves, width degrade cannot help. Disabled lanes are tri-stated.</p><p class="src"><span class="sl">Spec</span>§4.3.7, p.118 · Table 4-9, p.155</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="mm">
+  <div class="wrap">
+    <h2>7 · Multi-module links</h2>
+    <div class="twocol">
+      <div class="card"><ul class="tight" style="font-size:15px">
+        <li>Permitted configurations: one, two or four modules. Each has a Module ID, advertised in MBINIT.PARAM.</li>
+        <li>Each module trains on its own sideband through LINKSPEED step 2; the Multi-module PHY Logic (MMPL) then resolves one outcome for all.</li>
+        <li>All modules run at the same speed and width. If a module fails, MMPL degrades to the next permitted configuration (fewer modules, or lower speed), using the flowcharts in Figures 4-47 and 4-48.</li>
+        <li>The MMPL swizzles bytes so the remote receivers see bytes laid out from LSB to MSB in ascending Module ID and Lane ID across all active lanes, even if the partner's Module IDs differ.</li>
+      </ul><p class="src"><span class="sl">Spec</span>§4.7–4.7.1, p.175–178</p></div>
+      <div class="card"><h3>Which sideband carries what</h3><p style="font-size:15px">Training messages (Tables 7-9 and 7-11) go on each module's own sideband. Register accesses, RDI/Adapter link management and other non-vendor messages (Tables 7-8, 7-10) use one sideband: the lowest Module ID whose LTSM is past SBINIT. Retimer credits ride on the Valid of the lowest Module ID in Active. In both cases the receiver may see them arrive on a different module ID.</p><p class="src"><span class="sl">Spec</span>§4.7.1.1, p.178</p></div>
+    </div>
+    <div class="callout" style="margin-top:12px"><p><strong>Choosing between fewer modules and lower speed.</strong> For a speed difference, MMPL compares bandwidth: with CMLS = common maximum speed and HMLS = highest maximum speed of the next lower module count, if HMLS/2 &gt; CMLS it drops modules; otherwise all modules slow to CMLS. The "HMLS/2 &gt; CMLS" case also rescues a link where some modules fail even 4 GT/s (CMLS = 0): those are disabled instead of the whole link going to TRAINERROR.</p><p class="src"><span class="sl">Spec</span>§4.7.1, p.177 · Figures 4-47 and 4-48</p></div>
+  </div>
+</section>

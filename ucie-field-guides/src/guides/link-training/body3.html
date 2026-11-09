@@ -1,0 +1,150 @@
+
+<section id="live">
+  <div class="wrap">
+    <h2>11 · Live scenarios</h2>
+    <p class="sub">Each column is one step (one state or one handshake), not a fixed time. Step through; shaded columns are what the step describes.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="silicon">
+  <div class="wrap">
+    <h2>12 · Real silicon: what the theory turns into</h2>
+    <div class="twocol">
+      <div>
+        <h3 style="margin-bottom:8px">How long the pieces take</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Item</th><th class="num">Time</th><th>From</th></tr></thead>
+          <tbody>
+            <tr><td>RESET residency</td><td class="num">≥ 4 ms</td><td class="ref">§4.5.3.1</td></tr>
+            <tr><td>SBINIT search window</td><td class="num">≤ 8 ms</td><td class="ref">§4.5.3.2</td></tr>
+            <tr><td>One sideband message (64 UI at 800 MT/s) + ≥ 32 UI gap</td><td class="num">80 + 40 ns</td><td class="ref">§4.1.5 · §5.13</td></tr>
+            <tr><td>Req/resp handshake, wire time only</td><td class="num">≈ 240 ns</td><td class="ref">derived</td></tr>
+            <tr><td>4K UI LFSR test at 4 GT/s / 32 GT/s</td><td class="num">1.02 µs / 128 ns</td><td class="ref">derived</td></tr>
+            <tr><td>128 × Per Lane ID (16 UI) at 4 GT/s</td><td class="num">512 ns</td><td class="ref">derived</td></tr>
+            <tr><td>128 × clock repair (16 + 8 clock cycles) at 2 GHz clock</td><td class="num">1.54 µs</td><td class="ref">derived</td></tr>
+            <tr><td>Any sub-state, worst case before timeout</td><td class="num">8–12 ms</td><td class="ref">§4.5</td></tr>
+          </tbody>
+        </table></div>
+        <p style="font-size:14px;color:var(--muted)">Pattern and message times are tiny next to RESET and implementation-specific calibration; total bring-up time is dominated by those and by how many PI or Vref steps an implementation sweeps. <span class="kind illus">Illustrative</span>Real designs commonly land in single-digit to tens of milliseconds.</p>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="callout"><p><strong>Sideband traffic is the long pole.</strong> MBINIT and MBTRAIN together involve dozens of request/response pairs, each at least 240 ns of serial time. Sideband Performant Mode (PMO) removes the 32-UI gap between packets, cutting that by about a third.</p><p class="src"><span class="sl">Spec</span>§4.1.5.1, p.102 · <span class="kind derived">Derived</span>40 of 120 ns</p></div>
+        <div class="callout" style="border-left-color:var(--lp)"><p><strong>Degrade costs.</strong> Advanced x64: repair costs nothing if redundant lanes remain. Standard x16 → x8 halves bandwidth. A speed step 32 → 24 GT/s costs 25%, 16 → 12 GT/s also 25%, 8 → 4 GT/s 50%.</p><p class="src"><span class="sl">Derived</span>from the speed list in Table 10-1, p.525</p></div>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Link never trains after power-on, sideband looks idle</td><td>No training trigger: software never set Start UCIe Link Training and the Adapter never made NOP→Active.</td><td class="ref">§4.5, p.125</td></tr>
+        <tr><td>SBINIT works only if both dies are released together</td><td>Stops sending immediately after detection, or no 1 ms on/off retry.</td><td class="ref">§4.5.3.2, p.134</td></tr>
+        <tr><td>Retimer link times out in MBTRAIN.LINKSPEED</td><td>Retimer does not send done-resp with Stall every 4 ms while matching the far link.</td><td class="ref">§4.5.3.4.12, p.167</td></tr>
+        <tr><td>All lanes "fail" in REVERSALMB</td><td>Per Lane ID pattern scrambled, or valid framing missing.</td><td class="ref">§4.5.3.3.5, p.151–152</td></tr>
+        <tr><td>Training passes, errors appear minutes later</td><td>No recentering after deskew, or Runtime Recalibration not enabled.</td><td class="ref">§4.5.3.4.11 · §4.6</td></tr>
+        <tr><td>Two modules end at different speeds</td><td>Per-module LINKSPEED decisions without MMPL resolution.</td><td class="ref">§4.5.3.4.12, p.165–166</td></tr>
+        <tr><td>L1 exit returns at lower speed than before</td><td>SPEEDIDLE treated L1 entry as a degrade instead of restoring the last ACTIVE speed.</td><td class="ref">§4.5.3.4.3, p.158</td></tr>
+        <tr><td>Link retrains while software is still handling a fatal error</td><td>LTSM left TRAINERROR while RDI was in LinkError.</td><td class="ref">§4.5.3.8, p.171</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <h2>13 · Verification</h2>
+    <p class="sub">Model the remote die as a PHY BFM that speaks the full sideband message set and can inject channel faults per lane. Scale the 4 ms and 8 ms timers in simulation but keep their ratios.</p>
+    <div class="twocol">
+      <div class="card"><h3>Checkers</h3><ul class="tight">
+        <li>State sequence follows Figure 4-33 and the sub-state order; no skipped sub-state. <span class="ref">§4.5.3, p.131 · §4.5.3.4</span></li>
+        <li>Exit only after sent and received response for that sub-state. <span class="ref">§4.5.3.3–4.5.3.4</span></li>
+        <li>RESET residency ≥ 4 ms; timeouts at 8 ms (−0/+50%), reset by Stall. <span class="ref">§4.5, p.124 · §4.5.3.1</span></li>
+        <li>Transmitter states per sub-state (tri-state, low, clock gated or free-running). <span class="ref">each sub-state</span></li>
+        <li>Data rate 4 GT/s until SPEEDIDLE; SPEEDIDLE rate rules. <span class="ref">§4.5.3.4.3</span></li>
+        <li>Per Lane ID never scrambled; LFSR reset in LINKINIT. <span class="ref">§4.5.3.3.5 · §4.5.3.5</span></li>
+        <li>Retrain resolution matches Table 4-12; same across modules. <span class="ref">p.169</span></li>
+        <li>TRAINERROR held while RDI in LinkError. <span class="ref">§4.5.3.8</span></li>
+      </ul></div>
+      <div class="grid" style="gap:12px">
+        <div class="card"><h3>Fault scenarios</h3><ul class="tight">
+          <li>Each sideband data/clock bump open (all 15 non-zero Result patterns). <span class="ref">§4.5.3.2</span></li>
+          <li>Reset skew from 0 to 7 ms between dies. <span class="ref">§4.5.3.2</span></li>
+          <li>Clock-lane open vs short; valid open. <span class="ref">§4.5.3.3.3–4</span></li>
+          <li>Reversed wiring plus one broken lane. <span class="ref">§4.5.3.3.5</span></li>
+          <li>Failures exceeding repair resources (TRAINERROR) and exactly at the limit. <span class="ref">§4.5.3.3.6 · §4.3</span></li>
+          <li>Standard x16 failures in one half vs both halves. <span class="ref">§4.5.3.4.13</span></li>
+          <li>LINKSPEED error at every speed down to 4 GT/s. <span class="ref">§4.5.3.4.3</span></li>
+          <li>Partner silent mid-MBTRAIN; partner Stalling for 20 ms. <span class="ref">§4.5</span></li>
+        </ul></div>
+        <div class="card"><h3>Coverage</h3><ul class="tight">
+          <li>Every LTSM arc, every sub-state entry and exit message.</li>
+          <li>All 9 cells of Table 4-12; all rows of Table 4-10.</li>
+          <li>Each training trigger type; L1 and L2 exit; L2SPD wake.</li>
+          <li>Strobe vs continuous clock at each speed; Clock Phase on/off.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <h2>14 · Test yourself</h2>
+    <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>List the top-level LTSM states in bring-up order. <span class="lvl">Basic</span></summary><div><p>RESET → SBINIT → MBINIT → MBTRAIN → LINKINIT → ACTIVE. Plus PHYRETRAIN, L1/L2 and TRAINERROR off the main path.</p><p class="src"><span class="sl">Spec</span>Figure 4-33, p.131</p></div></details>
+    <details><summary>Which states have no 8 ms timeout? <span class="lvl">Basic</span></summary><div><p>RESET, ACTIVE, L1/L2 and TRAINERROR. All others time out after 8 ms, counted per sub-state, and the timer resets on a Stall message.</p><p class="src"><span class="sl">Spec</span>§4.5, p.124</p></div></details>
+    <details><summary>Why is MBINIT done at 4 GT/s? <span class="lvl">Basic</span></summary><div><p>Lowest speed, widest eye: an untrained link works, so clock, valid and data lanes can be checked for opens, shorts and reversal, and Vref set, before the harder calibration at the target speed.</p><p class="src"><span class="sl">Spec</span>Table 4-6, p.131</p></div></details>
+    <details><summary>How does SBINIT cope with two dies leaving reset at different times? <span class="lvl">Intermediate</span></summary><div><p>A die that detects the pattern sends four more iterations before stopping; a die that detects nothing alternates 1 ms sending and 1 ms quiet for up to 8 ms. Then both exchange {SBINIT Out of Reset} until each has received it.</p><p class="src"><span class="sl">Spec</span>§4.5.3.2, p.134</p></div></details>
+    <details><summary>Why are clock and valid repaired before data lanes? <span class="lvl">Intermediate</span></summary><div><p>Data is sampled with the forwarded clock and framed by valid. With a broken clock every data lane would look broken. REVERSALMB is only entered if clock and valid work.</p><p class="src"><span class="sl">Spec</span>§4.5.3.3.5, p.151</p></div></details>
+    <details><summary>What does DATATRAINCENTER2 do that DATATRAINCENTER1 didn't? <span class="lvl">Intermediate</span></summary><div><p>Recenters the clock on the aggregate data after the partner performed per-lane deskew in RXDESKEW, which shifted the combined eye.</p><p class="src"><span class="sl">Spec</span>§4.5.3.4.11, p.164</p></div></details>
+    <details><summary>LINKSPEED finds errors. What are the three outcomes and their order of preference? <span class="lvl">Advanced</span></summary><div><p>Repair (Advanced, if redundant lanes are enough) or width degrade (Standard, if failures are in one half) → MBTRAIN.REPAIR; otherwise speed degrade → SPEEDIDLE at the next lower rate (TRAINERROR if already 4 GT/s). A speed-degrade request overrides an outstanding repair request. A Runtime Link Test Control change instead sends it to PHYRETRAIN.</p><p class="src"><span class="sl">Spec</span>§4.5.3.4.12, p.164–167</p></div></details>
+    <details><summary>Die 0 sends retrain encoding 001b, Die 1 sends 100b. Where do they go? <span class="lvl">Advanced</span></summary><div><p>Both resolve to 100b and go to MBTRAIN.REPAIR. The more severe request always wins: 010b (speed degrade) over 100b (repair) over 001b.</p><p class="src"><span class="sl">Spec</span>Table 4-12, p.169</p></div></details>
+    <details><summary>Where does each of L1 exit and L2 exit land, and why the difference? <span class="lvl">Advanced</span></summary><div><p>L1 → MBTRAIN.SPEEDIDLE, restoring the last ACTIVE speed: settings survive, so only speed-dependent calibration repeats. L2 → RESET: deeper power-down may lose state, so full training (≥ 4 ms RESET included) and a fresh Adapter parameter exchange follow.</p><p class="src"><span class="sl">Spec</span>§4.5.3.9, p.172 · §4.5.3.4.3, p.158</p></div></details>
+    <details><summary>Why must the LTSM stay in TRAINERROR while RDI is in LinkError? <span class="lvl">Advanced</span></summary><div><p>LinkError means software has to handle the error first (for example DPC). Retraining underneath would bring the link up before software allows it. Once RDI leaves LinkError, the LTSM may go to RESET.</p><p class="src"><span class="sl">Spec</span>§4.5.3.8, p.171</p></div></details>
+  </div>
+</section>
+
+<section id="refs">
+  <div class="wrap">
+    <h2>15 · Spec reference index</h2>
+    <div class="tbl-wrap refidx"><table>
+      <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+      <tbody>
+        <tr><td>§3.8</td><td>Retry Rules (BER and Retry requirement)</td><td class="num">93</td></tr>
+        <tr><td>§4.1.5, §4.1.5.1</td><td>Sideband transmission; Performant Mode Operation</td><td class="num">102</td></tr>
+        <tr><td>§4.4, Figures 4-27 to 4-29</td><td>Data to Clock Training and Test Modes</td><td class="num">119–120</td></tr>
+        <tr><td>§4.4.1, Table 4-4</td><td>Scrambling and training pattern generation</td><td class="num">120–123</td></tr>
+        <tr><td>§4.5</td><td>Link Initialization and Training (timeouts, triggers)</td><td class="num">124–125</td></tr>
+        <tr><td>§4.5.1.1–4.5.1.4, Table 4-5</td><td>Point tests and eye width sweeps</td><td class="num">125–130</td></tr>
+        <tr><td>§4.5.2</td><td>Link Training with Retimer</td><td class="num">130</td></tr>
+        <tr><td>§4.5.3, Figure 4-33, Table 4-6</td><td>Link Training State Machine</td><td class="num">131</td></tr>
+        <tr><td>§4.5.3.1</td><td>RESET</td><td class="num">132–133</td></tr>
+        <tr><td>§4.5.3.2</td><td>Sideband Initialization (SBINIT)</td><td class="num">133–136</td></tr>
+        <tr><td>§4.5.3.3.1</td><td>MBINIT.PARAM (incl. TARR, Clock Mode)</td><td class="num">137–139</td></tr>
+        <tr><td>§4.5.3.3.2–4.5.3.3.4</td><td>MBINIT.CAL, REPAIRCLK, REPAIRVAL</td><td class="num">146–151</td></tr>
+        <tr><td>§4.5.3.3.5, Table 4-7</td><td>MBINIT.REVERSALMB; Per Lane ID pattern</td><td class="num">151–153</td></tr>
+        <tr><td>§4.5.3.3.6, Table 4-9</td><td>MBINIT.REPAIRMB; Standard Package lane map</td><td class="num">153–155</td></tr>
+        <tr><td>§4.5.3.4.1–4.5.3.4.11</td><td>MBTRAIN sub-states VALVREF … DATATRAINCENTER2</td><td class="num">156–164</td></tr>
+        <tr><td>§4.5.3.4.12</td><td>MBTRAIN.LINKSPEED</td><td class="num">164–167</td></tr>
+        <tr><td>§4.5.3.4.13</td><td>MBTRAIN.REPAIR</td><td class="num">167–168</td></tr>
+        <tr><td>§4.5.3.5, §4.5.3.6</td><td>LINKINIT, ACTIVE</td><td class="num">168</td></tr>
+        <tr><td>§4.5.3.7, Tables 4-10 to 4-12</td><td>PHYRETRAIN; retrain encodings</td><td class="num">168–171</td></tr>
+        <tr><td>§4.5.3.8</td><td>TRAINERROR</td><td class="num">171–172</td></tr>
+        <tr><td>§4.5.3.9, §4.5.3.9.1, Figure 4-42</td><td>L1/L2; L2 Sideband Power Down</td><td class="num">172–173</td></tr>
+        <tr><td>§4.6</td><td>Runtime Recalibration</td><td class="num">173–175</td></tr>
+        <tr><td>§5.13</td><td>Sideband signaling (800 MT/s SDR)</td><td class="num">254</td></tr>
+        <tr><td>Table 10-1</td><td>RDI signal list (pl_speedmode, pl_error)</td><td class="num">522–526</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapters 4.4 to 4.6, with Chapters 3.8, 4.1.5, 5.13 and 10.1 for context.</div></footer>

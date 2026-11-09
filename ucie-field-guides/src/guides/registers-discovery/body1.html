@@ -1,0 +1,217 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 9 · Configuration and Parameters</div>
+    <h1>UCIe Registers and Software Discovery Field Guide</h1>
+    <p class="lede">Chapter 9 is how software finds a UCIe link, reads what it can do, starts and retrains it, reaches registers on the far die, and gets told about errors. The spec spreads this across 65 pages of bit tables, with three different encodings for "link width" alone. This guide gives the map first, then the registers that matter, with two decoders you can type real values into.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>software / firmware action</span><span><i class="sw" style="background:var(--pl)"></i>hardware status</span><span><i class="sw" style="background:var(--sb)"></i>sideband traffic</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#where">2 · Where registers live</a><a href="#disc">3 · Discovery walk</a><a href="#dvsec">4 · Link DVSEC</a><a href="#ctl">5 · Control &amp; status</a><a href="#mbx">6 · Mailbox</a><a href="#blk">7 · D2D/PHY block &amp; errors</a><a href="#mon">8 · Interrupts &amp; health</a><a href="#rationale">9 · Why each rule</a><a href="#live">10 · Live scenarios</a><a href="#quiz">11 · Test yourself</a><a href="#refs">12 · Spec index</a>
+</div></nav>
+<style>
+  .tool { display: grid; gap: 10px; }
+  .tool label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+  .tool input, .tool select { font-family: var(--font-mono); font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
+  .tool .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .out { font-family: var(--font-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+  .out table { width: 100%; border-collapse: collapse; }
+  .out td { padding: 3px 8px 3px 0; vertical-align: top; border: 0; }
+  .out td:first-child { color: var(--muted); white-space: nowrap; }
+  .out .warn { color: var(--bad); }
+  .enc td.hit { background: var(--hl); font-weight: 500; }
+</style>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why UCIe has its own registers</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Reuse</div><h3>The protocol looks exactly like before</h3><p>A UCIe Root Port carrying CXL appears to software as a CXL Root Port; one carrying PCIe appears as a PCIe Root Port. All the PCIe/CXL capabilities still apply, so a UCIe-unaware OS keeps working.</p><p class="src"><span class="sl">Spec</span>§9.1, p.456</p></div>
+    <div class="card"><div class="tagline">What is new</div><h3>A link shared by up to two stacks</h3><p>One UCIe link can carry two protocol stacks (two Root Ports, for example). PCIe registers describe one port per link, so UCIe adds its own registers that describe the shared link and its Adapter and PHY.</p><p class="src"><span class="sl">Spec</span>§9.1, p.456</p></div>
+    <div class="card"><div class="tagline">The additions</div><h3>Two DVSECs and four register blocks</h3><p>The <strong>UCIe Link DVSEC</strong> (basic link control and status) and the <strong>UiSRB DVSEC</strong> (for switches), plus four MMIO blocks: D2D/PHY, Test/Compliance, Adapter implementation-specific, PHY implementation-specific.</p><p class="src"><span class="sl">Spec</span>§9.3, p.457 · Table 9-13, p.476</p></div>
+    <div class="card"><div class="tagline">Telling them apart</div><h3>The DVSEC is the UCIe badge</h3><p>Software may use the presence of the UCIe Link DVSEC to tell a UCIe device or Root Port from a standard PCIe or CXL one. Every UCIe DVSEC and register block header carries Vendor ID <code>D2DEh</code>.</p><p class="src"><span class="sl">Spec</span>§9.5.1, p.462 · Table 9-6, p.464</p></div>
+  </div>
+</div></section>
+
+<section id="where"><div class="wrap">
+  <h2>2 · Where the registers live</h2>
+  <p class="sub">The same registers sit in different places depending on what kind of port or device you are looking at. This is Table 9-3 turned around so each row is one thing you might be debugging.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>You are looking at</th><th>UCIe Link DVSEC</th><th>Register blocks (D2D/PHY, Test, Impl-specific)</th><th>How it is found</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Host Root Port</strong></td><td>In the <strong>UiRB</strong> (UCIe Register Block), a host-defined static memory region</td><td>Also in the UiRB</td><td>ACPI <strong>UEDT</strong> table gives each link's UiRB base and size, and which Root Ports share it</td></tr>
+      <tr><td><strong>Endpoint</strong></td><td>Config space of Dev0/Fn0</td><td>Endpoint BAR region</td><td>Normal PCIe capability walk; Register Locators point into a BAR</td></tr>
+      <tr><td><strong>Switch Upstream Port</strong></td><td>Config space of Dev0/Fn0</td><td>Switch USP BAR region</td><td>Normal capability walk</td></tr>
+      <tr><td><strong>Switch Downstream Port</strong></td><td>In the <strong>UiSRB</strong>, which lives in a USP BAR</td><td>Also in the UiSRB</td><td>UiSRB DVSEC in the USP gives the UiSRB base; one Link DVSEC per downstream link, chained</td></tr>
+      <tr><td><strong>UCIe Retimer</strong></td><td>Sideband config space</td><td>Sideband MMIO space</td><td>Not visible to host software directly; reached through the <a href="#mbx">sideband mailbox</a></td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Multi-stack rule</h3><p>When two stacks share a link, only one stack's Dev0/Fn0 carries the UCIe Link DVSEC (for endpoints and switch USPs). On the host, UEDT records that the link belongs to one or two Root Ports.</p><p class="src"><span class="sl">Spec</span>Table 9-2, p.457</p></div>
+    <div class="card"><h3>Remote die access is narrow</h3><p>Over the sideband, host software can read the partner die's UCIe DVSECs and the four UCIe register blocks. Nothing else on the remote die is reachable this way.</p><p class="src"><span class="sl">Spec</span>§9.3, p.458</p></div>
+  </div>
+</div></section>
+
+<section id="disc"><div class="wrap">
+  <h2>3 · Discovery walk: from power-on to the PHY registers</h2>
+  <div class="twocol">
+    <div class="card"><h3>Host Root Port</h3><div class="flow">
+      <div><span class="n">1</span><p><strong>UEDT</strong> (ACPI): one <strong>UCLS</strong> record per UCIe link with Host Bridge UID, stack size (1 or 2 RPs), UiRB <strong>Base</strong> (4 KB aligned), <strong>Length</strong> (12 KB to 2 MB) and the Device/Function of each associated RP.</p></div>
+      <div><span class="n">2</span><p>In the UiRB, read the <strong>UCIe Link DVSEC</strong>: Capability ID <code>0023h</code>, DVSEC Vendor ID <code>D2DEh</code>, DVSEC ID <code>0h</code>.</p></div>
+      <div><span class="n">3</span><p><strong>Capability Descriptor</strong> says how many Register Locators (2, 3, 4 or 1) and whether mailbox registers exist.</p></div>
+      <div><span class="n">4</span><p>Each <strong>Register Locator</strong> gives a block ID (0h D2D/PHY, 1h Test/Compliance, 2h Adapter impl, 3h PHY impl) and a 4 KB-aligned offset from the UiRB start.</p></div>
+      <div><span class="n">5</span><p>Each block starts with a header: Vendor ID <code>D2DEh</code>, block ID, version, and length (D2D/PHY default <code>2000h</code> = 8 KB).</p></div>
+      <div><span class="n">6</span><p>The DVSEC's Next Capability points to the <strong>MSI</strong> capability, whose next pointer is <code>0h</code>. Software stops the UiRB walk at MSI (ID <code>0005h</code>).</p></div>
+    </div><p class="src"><span class="sl">Spec</span>§9.8, p.520 · Tables 9-5 to 9-7, p.464–465 · Table 9-13, p.476 · Table 9-26, p.482 · §9.7, p.519</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Endpoint or Switch USP</h3><div class="flow">
+        <div><span class="n">1</span><p>Walk Dev0/Fn0 config space; find DVSEC with Vendor <code>D2DEh</code>, ID <code>0h</code>.</p></div>
+        <div><span class="n">2</span><p>Register Locator <strong>BIR</strong> picks the BAR (0–5 = BAR at 10h–24h); offset is from that BAR's base.</p></div>
+      </div><p class="src"><span class="sl">Spec</span>Table 9-2, p.457 · Table 9-13, p.476</p></div>
+      <div class="card"><h3>Switch Downstream Ports</h3><div class="flow">
+        <div><span class="n">1</span><p>In the USP, find the <strong>UiSRB DVSEC</strong> (Vendor <code>D2DEh</code>, ID <code>1h</code>); it gives the UiSRB base in a USP BAR.</p></div>
+        <div><span class="n">2</span><p>The UiSRB holds one Link DVSEC per downstream UCIe link, chained by Next Capability; the last one has <code>0h</code>.</p></div>
+        <div><span class="n">3</span><p>Each Link DVSEC lists its Associated Port Numbers (at most two DSPs per link).</p></div>
+      </div><p class="src"><span class="sl">Spec</span>§9.5.2, p.480–481 · Table 9-5, p.464 · Table 9-22, p.480</p></div>
+      <div class="card"><h3>Length field examples</h3><p style="font-size:15px">EP with 2 locators, no retimer: 48 bytes. Host UiRB with 3 locators: 84 bytes. Switch UiSRB with 3 locators and 1 DSP: 85 bytes.</p><p class="src"><span class="sl">Spec</span>§9.5.1.19, p.480</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="dvsec"><div class="wrap">
+  <h2>4 · The UCIe Link DVSEC, register by register</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Offset</th><th>Register</th><th>What you use it for</th></tr></thead>
+      <tbody>
+        <tr><td><code>0h</code></td><td>PCIe Extended Capability Header</td><td>ID <code>0023h</code> (DVSEC), Rev 1h, Next Capability</td></tr>
+        <tr><td><code>4h / 8h</code></td><td>DVSEC Header 1 / 2</td><td>Vendor <code>D2DEh</code>, Length, DVSEC ID <code>0h</code></td></tr>
+        <tr><td><code>Ah</code></td><td>Capability Descriptor</td><td>Number of Register Locators; mailbox present; number of switch DSPs</td></tr>
+        <tr><td><code>Ch</code></td><td>Link Capability</td><td>Max width and speed, Raw Format, Advanced/Standard package, flit formats supported, PMO, PSPT, L2SPD</td></tr>
+        <tr><td><code>10h</code></td><td>Link Control</td><td>Target width and speed, Raw Format enable, Start training, Retrain, which formats to advertise</td></tr>
+        <tr><td><code>14h</code></td><td>Link Status</td><td>Link up, width and speed reached, format negotiated, training in progress, change and error flags</td></tr>
+        <tr><td><code>18h</code></td><td>Link Event Notification Control</td><td>Interrupt on Link Status change or autonomous bandwidth change</td></tr>
+        <tr><td><code>1Ah</code></td><td>Error Notification Control</td><td>How correctable, non-fatal and fatal errors are reported</td></tr>
+        <tr><td><code>1Ch…</code></td><td>Register Locators 0–3 (Low/High)</td><td>Where the MMIO register blocks are</td></tr>
+        <tr><td>design-dependent</td><td>Sideband Mailbox Index, Data, Control, Status</td><td>Reach registers on the partner die or retimer</td></tr>
+        <tr><td>design-dependent</td><td>Requester ID; Associated Port Numbers</td><td>BDF used for host MSIs; switch DSP port numbers</td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Who implements what</h3><p style="font-size:15px">Not every register applies to every port. Control bits like Target Width, Start training and Retrain are RW only at RP/DSP; on EP/USP they are reserved, so software drives training from the downstream (RP/DSP) side.</p><p class="src"><span class="sl">Spec</span>Figure 9-4, p.463 · Table 9-9, p.468–469</p></div>
+      <div class="card"><h3>Writes go to both blocks</h3><p style="font-size:15px">Software writes to Link Control must be broadcast to both the D2D Adapter and the PHY, because a field may be implemented in either or both.</p><p class="src"><span class="sl">Spec</span>Figure 9-4 note e, p.463</p></div>
+      <div class="card"><h3>HWInit means "set by integration"</h3><p style="font-size:15px">Max Link Speed is HWInit: a 32 GT/s-capable chiplet routed in a package that only supports 16 GT/s gets its value set by a package strap or firmware.</p><p class="src"><span class="sl">Spec</span>Table 9-4 note b, p.462</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="ctl"><div class="wrap">
+  <h2>5 · Link control and status</h2>
+  <div class="twocol">
+    <div class="tbl-wrap diff"><table>
+      <thead><tr><th></th><th>Start UCIe Link training (bit 10)</th><th>Retrain UCIe Link (bit 11)</th></tr></thead>
+      <tbody>
+        <tr><td>Use when</td><td>Link is down (Link Status bit 15 = 0)</td><td>Link is up</td></tr>
+        <tr><td>What happens</td><td>Full training; if the link was up it goes through Link Down, resetting everything beneath</td><td>Retrain without going through Link Down</td></tr>
+        <tr><td>Ignored when</td><td>Link already training (between RESET and ACTIVE)</td><td>Link is down (no effect)</td></tr>
+        <tr><td>Clears</td><td>Automatically when training ends, success or error</td><td>Automatically when retraining ends, or if it never happened</td></tr>
+        <tr><td>Side effects</td><td>Uses the Target Width, Target Speed and format bits in Link Control</td><td>Width or speed may change for reliability; check Link Status</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>Table 9-9 bits 10–11, p.468–469</p></div>
+    <div class="card"><h3>Three encodings for "width"</h3><p style="font-size:15px">The same idea, x16, has a different code in each register. Click a width.</p>
+      <div class="chips" role="group" id="wchips" aria-label="Pick a width"></div>
+      <div class="tbl-wrap enc" style="margin-top:8px"><table id="wtable">
+        <thead><tr><th>Width</th><th>Capability Max Link Width [3:1]</th><th>Control Target Link Width [5:2]</th><th>Status Link Width enabled [10:7]</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p style="font-size:14px;margin:8px 0 0">Speed is kinder: all three registers use 0h = 4, 1h = 8, 2h = 12, 3h = 16, 4h = 24, 5h = 32, 6h = 48, 7h = 64 GT/s.</p>
+      <p class="src"><span class="sl">Spec</span>Table 9-8, p.466 · Table 9-9, p.468 · Table 9-10, p.470</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Link Status decoder</h3><p style="font-size:15px">Paste the 32-bit value you read at DVSEC offset 14h.</p>
+    <div class="tool"><div class="row"><label>Link Status (hex)<input id="lsin" value="01009A00" spellcheck="false" autocomplete="off"></label></div>
+    <div class="out" id="lsout" aria-live="polite"></div></div>
+    <p class="src"><span class="kind derived">Derived</span> decoding of Table 9-10, p.470–472. Example value: link up at x64, 16 GT/s, Format 4 (illustrative).</p></div>
+  <div class="card" style="margin-top:14px"><h3>Don't read link speed from the PCIe capability</h3><p>On a UCIe port the PCIe Link Capabilities and Link Status registers report fixed values: Max and Current Link Speed 0011b (8 GT/s), Max and Negotiated Width x16. Link Control speed and width writes are ignored. The real width and speed are in the UCIe Link DVSEC (Capability, Control, Status above). L1 Exit Latency is HWInit so firmware can set it according to whether a retimer is present.</p><p class="src"><span class="sl">Spec</span>Appendix A.2, Table A-2, p.582–583</p></div>
+</div></section>
+
+<section id="mbx"><div class="wrap">
+  <h2>6 · The sideband mailbox: reading the other die</h2>
+  <div class="twocol">
+    <div class="card"><h3>Six registers, one trigger</h3><div class="flow">
+      <div><span class="n">1</span><p><strong>Index Low</strong>: Opcode [4:0], byte enables BE[7:0] at [12:5], Addr[18:0] at [31:13].</p></div>
+      <div><span class="n">2</span><p><strong>Index High</strong>: Addr[23:19] at [4:0].</p></div>
+      <div><span class="n">3</span><p><strong>Data Low / High</strong>: write data, or read data after completion. High is unused for 32-bit accesses.</p></div>
+      <div><span class="n">4</span><p><strong>Control</strong> bit 0, Write/Read trigger: write 1 to send; it clears itself when the access completes on the sideband.</p></div>
+      <div><span class="n">5</span><p><strong>Status</strong> [1:0], RW1C: 00b CA, 01b UR, 11b Success. Valid only after the trigger has cleared.</p></div>
+    </div><p class="src"><span class="sl">Spec</span>§9.5.1.11–9.5.1.16, Tables 9-15 to 9-20, p.477–479</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Who has a mailbox</h3><p style="font-size:15px">Every host with UCIe links must implement it. Switches with downstream UCIe links, and EPs/USPs paired with a retimer, should. RP/DSP mailbox reaches the near retimer; the EP/USP mailbox reaches the far one.</p><p class="src"><span class="sl">Spec</span>§9.5.1.11, p.477 · §9.3, p.458</p></div>
+      <div class="card"><h3>Address format (from Chapter 7)</h3><p style="font-size:15px">Memory: <code>{RL[3:0], Offset[19:0]}</code>, RL 0–3 = Register Locator. Config: <code>{RL[3:0], Rsvd[7:0], Offset[11:0]}</code>, RL 0h = UCIe Link DVSEC. RL Fh = protocol registers shadowed in the Adapter. Other RL → UR.</p><p class="src"><span class="sl">Spec</span>Table 7-6, p.273</p></div>
+      <div class="card"><h3>On failure</h3><p style="font-size:15px">Header Log 1 (D2D block offset 24h) captures the request header of an access that got CA or UR. It re-arms on every 0→1 of the trigger.</p><p class="src"><span class="sl">Spec</span>Table 9-32, p.485</p></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Mailbox index calculator</h3><p style="font-size:15px">Pick an access; get the values to write into Index Low and Index High.</p>
+    <div class="tool"><div class="row">
+      <label>Opcode<select id="mbop"></select></label>
+      <label>RL (register locator)<select id="mbrl"></select></label>
+      <label>Byte offset (hex)<input id="mboff" value="14" spellcheck="false" autocomplete="off"></label>
+      <label>BE[7:0] (hex)<input id="mbbe" value="0F" spellcheck="false" autocomplete="off"></label>
+    </div><div class="out" id="mbout" aria-live="polite"></div></div>
+    <p class="src"><span class="kind derived">Derived</span> from Table 9-15, p.477, Table 9-16, p.478 and Table 7-6, p.273. The default (32b Config Read, RL 0h, offset 14h) reads the partner's Link Status.</p></div>
+</div></section>
+
+<section id="blk"><div class="wrap">
+  <h2>7 · The D2D/PHY register block and the error registers</h2>
+  <div class="twocol">
+    <div class="card"><h3>Layout: 8 KB</h3><div class="stage">
+      <div><b>0h–FFFh · D2D Adapter</b>Header, error status/mask/severity, header logs, link-testing control, parity logs, capability logs (advertised vs finalized)</div>
+      <div><b>1000h–1FFFh · PHY</b>Capability, Control, Status, Init &amp; Debug, Training Setup 1–4, Current Lane Map per module, Error Logs, Runtime Link Test, repair registers</div>
+      <div><b>PHY + 200h</b>Start of the PHY's extended capabilities (such as UHM). A NULL capability (<code>0h</code>) if there are none.</div>
+    </div><p class="src"><span class="sl">Spec</span>§9.5.3, p.482 · §9.5.3.22–9.5.3.40, p.492–506</p></div>
+    <div class="card"><h3>Capability logs: what was offered vs agreed</h3><p style="font-size:15px">The Adapter logs the capabilities it advertised and the finalized ones (Adapter, CXL, Multi-Protocol, and CXL for Stack 1). Comparing the two is the fastest way to see why a link came up in an unexpected format.</p><p class="src"><span class="sl">Spec</span>§9.5.3.14–9.5.3.21, p.490–491</p></div>
+  </div>
+  <h3 style="margin-top:18px">Uncorrectable errors (offset 10h) with mask (14h) and severity (18h) defaults</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Bit</th><th>Error</th><th>Set when</th><th class="num">Mask default</th><th class="num">Severity default</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>Adapter Timeout</td><td>An Adapter handshake with the partner took more than 8 ms. Header Log 2 [3:0] says which. Link goes down.</td><td class="num">1 (masked)</td><td class="num">1 (fatal)</td></tr>
+      <tr><td>1</td><td>Receiver Overflow</td><td>Retry buffer, retimer receiver buffer, FDI or RDI sideband buffer overflow. Header Log 2 [6:4]. Link goes down.</td><td class="num">1</td><td class="num">1</td></tr>
+      <tr><td>2</td><td>Internal Error</td><td>Datapath error (for example uncorrectable ECC in the retry buffer), sideband parity error, or LinkError on RDI. Link goes down.</td><td class="num">1</td><td class="num">1</td></tr>
+      <tr><td>3</td><td>Sideband Fatal ErrMsg received</td><td>RP/DSP/Retimer received a Fatal {ErrMsg}</td><td class="num">1</td><td class="num">1</td></tr>
+      <tr><td>4</td><td>Sideband Non-Fatal ErrMsg received</td><td>RP/DSP/Retimer received a Non-Fatal {ErrMsg}</td><td class="num">1</td><td class="num">0 (non-fatal)</td></tr>
+      <tr><td>5</td><td>Invalid Parameter Exchange</td><td>No valid protocol or flit format could be agreed</td><td class="num">1</td><td class="num">1</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>Tables 9-27 to 9-29, p.482–484</p>
+  <div class="twocol" style="margin-top:14px">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Bit</th><th>Correctable error (1Ch)</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>CRC error detected (only when Retry was negotiated)</td></tr>
+        <tr><td>1</td><td>Adapter LSM went to Retrain</td></tr>
+        <tr><td>2</td><td>Correctable internal error (for example correctable ECC, PHY-reported correctable error on RDI)</td></tr>
+        <tr><td>3</td><td>Sideband Correctable ErrMsg received (RP/DSP/Retimer)</td></tr>
+        <tr><td>4</td><td>Runtime Link Testing parity error</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>Table 9-30, p.484 · masks default 1, Table 9-31, p.485</p></div>
+    <div class="card"><h3>Header Log 2 (2Ch): the "why" register</h3>
+      <ul class="tight" style="font-size:15px">
+        <li><strong>[3:0] Adapter Timeout reason</strong>: 0001b parameter exchange, 0010b LSM request unanswered 8 ms ([9:7] which request, bit 10 which LSM), 0011b Active never arrived, 0100b Retry timeout (no Ack/Nak 8 ms), 0101b local sideband access, 0110b retimer credit return, 0111b remote register access.</li>
+        <li><strong>[6:4] Overflow type</strong>: 001b retry buffer, 010b retimer receiver, 011b FDI sideband, 100b RDI sideband.</li>
+        <li><strong>13</strong> Parameter Exchange Successful; <strong>[17:14]</strong> Flit Format 1–6.</li>
+        <li><strong>[22:18] First Fatal Error Indicator</strong>: which UE status bit was logged first.</li>
+      </ul><p class="src"><span class="sl">Spec</span>Table 9-33, p.486–487</p></div>
+  </div>
+</div></section>
+
+<section id="mon"><div class="wrap">
+  <h2>8 · Interrupts, error reporting and link health</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Two vectors</div><h3>MSI/MSI-X for UCIe events</h3><p>Hosts and switches request two vectors: one for link status events, one for link errors. If the OS grants only one MSI vector, both share it. Switch DSP links may use MSI-X (one of the first 32 entries), but a switch uses MSI or MSI-X for this, not both.</p><p class="src"><span class="sl">Spec</span>§9.7, p.519 · Table 9-11, p.472</p></div>
+    <div class="card"><div class="tagline">Error Notification Control</div><h3>Three paths for one error</h3><p>At RP/DSP an error can be reported through the protocol layer (as a PCIe/CXL "internal error") and/or a UCIe Link Error interrupt. At EP/USP the enable sends a sideband {ErrMsg} upstream instead. All default off. Enables never stop the status bits being set.</p><p class="src"><span class="sl">Spec</span>Table 9-12, p.473–475</p></div>
+    <div class="card"><div class="tagline">UHM DVSEC</div><h3>Eye margins per lane</h3><p>Required if the device supports compliance testing. Clear Eye Margin Valid, retrain, wait for training bit 16 to fall and EMV to set, then read left and right margins per lane and module in units of UI / Step Count (0 means 256).</p><p class="src"><span class="sl">Spec</span>§9.5.3.40, p.505 · Tables 9-66 to 9-68, p.506</p></div>
+    <div class="card"><div class="tagline">Remote register timeouts</div><h3>Four strikes, then link down</h3><p>Remote Register Access Threshold (offset 30h [3:0], default 4) is the number of consecutive remote register access timeouts before the Adapter logs a timeout (0111b) and escalates to Link Status = Down.</p><p class="src"><span class="sl">Spec</span>Table 9-34, p.488 · Table 9-33, p.486</p></div>
+  </div>
+</div></section>

@@ -1,0 +1,223 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 5 Electrical Layer · Chapter 6 UCIe-3D</div>
+    <h1>UCIe Electrical Layer and UCIe-3D Field Guide</h1>
+    <p class="lede">Chapter 5 is 74 pages of tables keyed by package type and data rate; most questions are really "what applies at <em>my</em> rate on <em>my</em> package?". This guide sorts the electrical rules by that question, with a lookup tool, then covers UCIe-3D, which drops the Adapter and most of the PHY for stacked dies. Bump maps are summarized, not reproduced.</p>
+    <div class="legend" aria-label="Color legend"><span><i class="sw" style="background:var(--lp)"></i>transmitter / launch side</span><span><i class="sw" style="background:var(--pl)"></i>receiver / clock</span><span><i class="sw" style="background:var(--sb)"></i>sideband</span></div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#pkg">2 · Package types</a><a href="#mod">3 · The module</a><a href="#clk">4 · Clocking</a><a href="#look">5 · Rate lookup</a><a href="#txrx">6 · Tx and Rx</a><a href="#chan">7 · Channel</a><a href="#idle">8 · Idle and BER</a><a href="#sbe">9 · Sideband electrical</a><a href="#red">10 · Repair and degrade</a><a href="#d3">11 · UCIe-3D</a><a href="#rationale">12 · Why each rule</a><a href="#live">13 · Live waveforms</a><a href="#quiz">14 · Test yourself</a><a href="#refs">15 · Spec index</a>
+</div></nav>
+<style>
+  .tool { display: grid; gap: 10px; }
+  .tool label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+  .tool input, .tool select { font-family: var(--font-mono); font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); min-width: 0; }
+  .tool .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .out { font-family: var(--font-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+  .out table { width: 100%; border-collapse: collapse; }
+  .out td { padding: 4px 10px 4px 0; vertical-align: top; border: 0; border-bottom: 1px dashed var(--line); }
+  .out td:first-child { color: var(--muted); white-space: nowrap; }
+  .out td:last-child { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .out .big { font-size: 18px; font-weight: 600; color: var(--ink); }
+  .out .warn { color: var(--bad); }
+</style>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · What the electrical layer pins down</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Interoperability</div><h3>Any two compliant dies must link</h3><p>Every device supports 4 GT/s and every rate between 4 GT/s and its maximum, so two dies with different maximums always share rates. Bump maps fix signal order so modules from different vendors line up.</p><p class="src"><span class="sl">Spec</span>§5.1.1, p.184</p></div>
+    <div class="card"><div class="tagline">Simplicity</div><h3>Short, clean, single-ended</h3><p>Single-ended, unidirectional, DC-coupled point-to-point lanes with a forwarded clock and length-matched routing within a module. The forwarded clock replaces clock recovery, and the short channel allows a small, low-power PHY.</p><p class="src"><span class="sl">Spec</span>§5.0, p.184</p></div>
+    <div class="card"><div class="tagline">Two families</div><h3>Advanced (UCIe-A) vs Standard (UCIe-S)</h3><p>Advanced Package (silicon bridge or interposer, e.g. EMIB, CoWoS): fine bump pitch, 2 mm reach, 64 or 32 lanes per module. Standard Package (organic substrate): 100–130 µm pitch, 10–25 mm reach, 16 or 8 lanes.</p><p class="src"><span class="sl">Spec</span>§5.2.1, p.186 · Tables 1-1, 1-2, p.40</p></div>
+    <div class="card"><div class="tagline">UCIe-3D</div><h3>Stacked dies, almost no PHY</h3><p>Hybrid-bonded stacks at ≤ 10 µm pitch run at up to 4 GT/s (the SoC clock) with no Adapter, no CRC or replay and a near-inverter PHY. The design goal is energy and area per bit, not reach.</p><p class="src"><span class="sl">Spec</span>§6.2, p.258–259</p></div>
+  </div>
+</div></section>
+
+<section id="pkg"><div class="wrap">
+  <h2>2 · The three package types side by side</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th></th><th>UCIe-S (Standard)</th><th>UCIe-A (Advanced)</th><th>UCIe-3D</th></tr></thead>
+    <tbody>
+      <tr><td>Data rates (GT/s)</td><td>4, 8, 12, 16, 24, 32, 48, 64</td><td>4, 8, 12, 16, 24, 32, 48, 64</td><td>up to 4 (= SoC logic frequency)</td></tr>
+      <tr><td>Width per module</td><td>x16 (or x8)</td><td>x64 (or x32)</td><td>x80 per cluster (reduced widths x70, x60, …)</td></tr>
+      <tr><td>Bump pitch</td><td>100–130 µm</td><td>25–55 µm</td><td>≤ 10 µm optimized; &gt;10–25 µm functional</td></tr>
+      <tr><td>Channel reach</td><td>10 mm short, 25 mm long</td><td>2 mm</td><td>vertical (face-to-face bonding first)</td></tr>
+      <tr><td>Raw BER</td><td>1E-27 ≤ 8 GT/s · 1E-15 for 12–48 · 1E-12 at 64</td><td>1E-27 ≤ 12 GT/s · 1E-15 for 16–48 · 1E-12 at 64</td><td>&lt; 1E-27</td></tr>
+      <tr><td>Power target</td><td>0.50–0.75 pJ/b</td><td>0.25–0.50 pJ/b</td><td>&lt; 0.05 pJ/b at 9 µm</td></tr>
+      <tr><td>PHY latency (Tx+Rx)</td><td colspan="2">12–16 UI ≤ 32 GT/s; 24 UI at 48, 32 UI at 64 (targets)</td><td>0.125 ns at 4 GT/s (0.5 UI)</td></tr>
+      <tr><td>ESD</td><td colspan="2">30 V CDM</td><td>5 V CDM at introduction</td></tr>
+      <tr><td>Adapter, CRC, retry</td><td colspan="2">Yes (Chapter 3)</td><td>No Adapter; no CRC/replay needed</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src"><span class="sl">Spec</span>Tables 1-1, 1-2, p.40 · Tables 5-2, 5-3, p.188–189 · Table 5-32, p.251 · Table 6-1, p.259–260</p>
+</div></section>
+
+<section id="mod"><div class="wrap">
+  <h2>3 · Anatomy of a module</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Per direction</th><th>Advanced x64</th><th>Standard x16</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Data</td><td>64 (+4 redundant)</td><td>16</td><td>Single-ended data lanes</td></tr>
+        <tr><td>Valid</td><td>1 (+1 redundant)</td><td>1</td><td>Frames data; gates the clock to the data lanes</td></tr>
+        <tr><td>Clock</td><td>2 (Phase-1, Phase-2)</td><td>2</td><td>Forwarded clock</td></tr>
+        <tr><td>Track</td><td>1</td><td>1</td><td>Clock-like pattern for runtime recalibration</td></tr>
+        <tr><td>Clock/Track redundant</td><td>1</td><td>–</td><td>Repair for a clock or Track lane</td></tr>
+        <tr><td>Sideband</td><td>data + clock (+ redundant pair)</td><td>data + clock</td><td>800 MT/s training and register path</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>§5.2.1, p.186 · §5.3, p.190 · Table 5-18, p.209–210 · §5.9.1, p.249</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>x32 and x8 variants</h3><p style="font-size:15px">An x32 Advanced module has 32 data lanes plus 2 redundant. An x8 Standard module has 8 data lanes. Up to 4 modules can be grouped for bandwidth.</p><p class="src"><span class="sl">Spec</span>§5.3, p.190 · §5.2.1, p.186</p></div>
+      <div class="card"><h3>Mixing x64 and x32</h3><p style="font-size:15px">Optional for an x64 module. When used, the x32 always connects to the lower half of the x64; one wide module may not talk to two narrow ones at once.</p><p class="src"><span class="sl">Spec</span>§5.7.2.4, p.228</p></div>
+      <div class="card"><h3>Protect the receiver</h3><p style="font-size:15px">Keep the Tx output high (VOH) within 100 mV above the receiving chiplet's front-end supply; an over-stress protection circuit may be used if it is higher.</p><p class="src"><span class="sl">Spec</span>§5.2.1, p.186</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="clk"><div class="wrap">
+  <h2>4 · Clocking</h2>
+  <div class="twocol">
+    <div class="card"><h3>Common reference clock</h3><ul class="tight" style="font-size:15px">
+      <li>Both dies of a link use REFCLK from one source (package pin or forwarded by another die). 100 MHz recommended; 25–200 MHz allowed; ±300 ppm.</li>
+      <li>SSC allowed: 30–33 kHz modulation, 0 to −0.5% down-spread, ≤ 1250 ppm/µs slew.</li>
+      <li>Tx-to-Rx transport delay difference must be under 5 ns.</li>
+      <li>For a retimer, the off-package link need not share REFCLK; the local UCIe link must.</li>
+      <li>Link Speed settings may be run slower: e.g. the 32 GT/s setting covers 24–32 GT/s by adjusting REFCLK or the PLL divider (only while the link is down).</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.1.1–5.1.2, Table 5-1, p.184–186 · Table 5-4 and note, p.189–190</p></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Rate (GT/s)</th><th>Forwarded clock</th><th>Phases</th><th>Tx deskew</th></tr></thead>
+      <tbody>
+        <tr><td>4 / 8</td><td>2 / 4 GHz, half-rate</td><td>differential (90°/270°)</td><td>optional</td></tr>
+        <tr><td>12 / 16</td><td>6 / 8 GHz, half-rate</td><td>differential</td><td>required</td></tr>
+        <tr><td>24</td><td>12 GHz half-rate or 6 GHz quarter-rate</td><td>differential or quadrature (45°/135°)</td><td>required</td></tr>
+        <tr><td>32</td><td>16 GHz half-rate or 8 GHz quarter-rate</td><td>differential or quadrature</td><td>required</td></tr>
+        <tr><td>48 / 64</td><td>12 / 16 GHz, quarter-rate, always running</td><td>quadrature, with I/Q correction (1/64 UI steps, ±12)</td><td>required</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>Table 5-12, Table 5-13, p.203 · §5.5, p.201–202</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Differential at 16 GT/s and below, always</h3><p>At 24 and 32 GT/s the receiver chooses differential or quadrature clocking (advertised in PHY Capability). At 16 GT/s and below, differential must always be used so the link works with designs whose maximum is lower.</p><p class="src"><span class="sl">Spec</span>§5.5, p.202 · Table 9-47, p.492</p></div>
+    <div class="card"><h3>Track</h3><p>On request over sideband, the partner sends a clock-like pattern on its Track lane, aligned to Phase-1: <code>1010…</code> with half-rate clocking, <code>1100…</code> with quarter-rate. The receiver uses it to correct slow voltage, temperature and aging drift between data and clock.</p><p class="src"><span class="sl">Spec</span>§5.5.1, p.202 · §5.3, p.190</p></div>
+  </div>
+</div></section>
+
+<section id="look"><div class="wrap">
+  <h2>5 · What applies at your rate: lookup</h2>
+  <div class="card"><p style="font-size:15px">Pick a package and data rate. For Standard Package, add channel length and Tx swing to see the termination rule.</p>
+    <div class="tool"><div class="row">
+      <label>Package<select id="lkpkg"><option value="A">Advanced (UCIe-A)</option><option value="S">Standard (UCIe-S)</option></select></label>
+      <label>Data rate<select id="lkrate"></select></label>
+      <label>Channel length, mm (Standard)<input id="lklen" type="number" min="1" max="25" value="10" inputmode="numeric"></label>
+      <label>Tx swing (Standard)<select id="lksw"><option value="0.4">0.4 V (minimum)</option><option value="0.85">0.85 V (max recommended)</option></select></label>
+    </div><div class="out" id="lkout" aria-live="polite"></div></div>
+    <p class="src"><span class="kind derived">Derived</span> lookup over Tables 5-2 to 5-16, 5-32 and §5.3–5.5, §5.11. Values are the spec's limits and targets; your design's datasheet takes precedence.</p></div>
+</div></section>
+
+<section id="txrx"><div class="wrap">
+  <h2>6 · Transmitter and receiver</h2>
+  <div class="twocol">
+    <div class="card"><h3>Transmitter</h3><ul class="tight" style="font-size:15px">
+      <li>Data and clock swing at least 0.4 V. Driver impedance 25 Ω ± 3 (Advanced), 30 Ω ± 3 (Standard).</li>
+      <li>Phase adjustment (deskew) lives on the transmitter; training sets it for best margin.</li>
+      <li>Tri-state outputs in low-power states.</li>
+      <li><strong>24/32 GT/s EQ</strong> (must support; recommended at 16): de-emphasis only, settings 0 dB and −2.2 dB (C+1 = −0.112).</li>
+      <li><strong>48/64 GT/s EQ</strong> (required): 3-tap FIR presets P0–P5. Pick the largest eye; on a tie, the largest C0.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.3–5.3.4, Tables 5-5 to 5-7, p.190–194</p></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Preset</th><th class="num">C−1</th><th class="num">C0</th><th class="num">C+1</th></tr></thead>
+      <tbody>
+        <tr><td>P0 (0000b)</td><td class="num">0</td><td class="num">1</td><td class="num">0</td></tr>
+        <tr><td>P1 (0001b)</td><td class="num">−0.05</td><td class="num">0.95</td><td class="num">0</td></tr>
+        <tr><td>P2 (0010b)</td><td class="num">0</td><td class="num">0.90</td><td class="num">−0.10</td></tr>
+        <tr><td>P3 (0011b)</td><td class="num">−0.05</td><td class="num">0.85</td><td class="num">−0.10</td></tr>
+        <tr><td>P4 (0100b)</td><td class="num">0</td><td class="num">0.80</td><td class="num">−0.20</td></tr>
+        <tr><td>P5 (0101b)</td><td class="num">−0.05</td><td class="num">0.75</td><td class="num">−0.20</td></tr>
+      </tbody>
+    </table><p class="src" style="padding:8px 12px"><span class="sl">Spec</span>Table 5-7, p.194 (accuracy ±0.025 except P0). |C−1| + C0 + |C+1| = 1.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Receiver</h3><ul class="tight" style="font-size:15px">
+      <li>Clock and data paths delay-matched to reject supply-noise jitter; 2-way or 4-way interleaved.</li>
+      <li>Rx EQ may be used at 24/32 GT/s (about a 1st-order CTLE). At 48/64 GT/s Rx EQ is required with Tx EQ: reference CTLE with at least 7 settings from −6 to 0 dB in 1 dB steps; optional 1-tap DFE with h1/h0 &lt; 0.35.</li>
+      <li>Rx input impedance 50 Ω ± 5 at 48/64 GT/s.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.4, p.195 · §5.4.4, p.200–201 · Table 5-9, p.197</p></div>
+    <div class="card"><h3>Rx termination</h3><ul class="tight" style="font-size:15px">
+      <li><strong>Advanced</strong>: unterminated up to 32 GT/s; terminated to ground for 48/64 GT/s negotiated maximum.</li>
+      <li><strong>Standard</strong>, 0.4 V swing: unterminated recommended only up to 12 GT/s at 3 mm, 8 GT/s at 5 mm, 4 GT/s at 10 mm.</li>
+      <li><strong>Standard</strong>, 0.85 V swing: 16 GT/s at 5 mm, 12 GT/s at 10 mm, 8 GT/s and below at any supported length.</li>
+      <li>Otherwise terminate to ground.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.4.3, Tables 5-10, 5-11, p.197–199</p></div>
+  </div>
+</div></section>
+
+<section id="chan"><div class="wrap">
+  <h2>7 · The channel</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Eye masks</h3><p>Checked by channel simulation with ideal (noiseless, jitterless) behavioral Tx/Rx and the 19 largest aggressors. Rectangular mask ≤ 32 GT/s: 40 mV high and 0.75 UI wide up to 16 GT/s, 0.65 UI at 24/32 (with EQ). Diamond mask at 48/64 GT/s: 65 mV and 0.65 UI, searching only presets P0–P5 and the reference CTLE.</p><p class="src"><span class="sl">Spec</span>§5.7, Table 5-15, p.205–207</p></div>
+    <div class="card"><h3>Loss and crosstalk (VTF)</h3><p>Voltage Transfer Function metrics include Tx/Rx termination. Advanced: L(fN) &gt; −3 dB at 4–16 GT/s, &gt; −5 dB at 24/32; crosstalk below a line in loss and below −23/−24 dB. Standard (terminated): L(fN) &gt; −7.5 dB at 4/8 and 24/32, &gt; −6.5 dB at 12/16, with L(0) &gt; −4.5 dB.</p><p class="src"><span class="sl">Spec</span>§5.7.1, Table 5-17, p.208–209 · Tables 5-24, 5-25, p.235</p></div>
+    <div class="card"><h3>Lane matching</h3><p>Allowed channel mismatch around the lane centre: Advanced ±0.03 UI (4–32 GT/s), ±0.06 UI (48/64); Standard ±0.07, ±0.10, ±0.20 UI for 4–16, 24/32, 48/64 GT/s. It is the gap between Tx deskew range and Rx skew tolerance.</p><p class="src"><span class="sl">Spec</span>Table 5-16, p.208</p></div>
+    <div class="card"><h3>Bump pitch limits speed (Advanced)</h3><p>Recommended: 16-column map at 25–30 µm up to 12 GT/s and 31–37 µm up to 16; 10-column at 38–44 µm up to 24 and 45–50 µm up to 32; 8-column at 51–55 µm up to 32 GT/s. Check with the packaging vendor.</p><p class="src"><span class="sl">Spec</span>Table 5-19, p.215</p></div>
+  </div>
+</div></section>
+
+<section id="idle"><div class="wrap">
+  <h2>8 · Idle, clock gating and BER</h2>
+  <div class="twocol">
+    <div class="card"><h3>Going idle</h3><ul class="tight" style="font-size:15px">
+      <li>After Valid goes low, keep the clock running for a <strong>postamble</strong> of 8 cycles: 16 UI half-rate, 32 UI quarter-rate. Then gate it, unless free-running clock was negotiated.</li>
+      <li>Valid held low; data lanes hold the last bit (some may keep toggling like scrambled data without advancing the scrambler).</li>
+      <li><strong>Strobe mode</strong>: the parked clock level alternates between high and low on consecutive gating events. Before resuming, drive clock differential low for 1–8 UI. Gated period is a multiple of 8 UI.</li>
+      <li><strong>48/64 GT/s</strong>: the clock always runs (continuous mode).</li>
+      <li><strong>Electrical idle</strong> (some training states): Tx/Rx on, data, Valid and Track low, clock parked.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§4.1.3, p.101 · §5.11, p.251–253 · §5.12, p.253</p></div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Raw BER sets the error handling</h3><p style="font-size:15px">At BER 1E-15 or worse, CRC and retry are required to reach FIT ≪ 1. At 1E-27, parity or CRC with error reporting is enough. 64 GT/s is 1E-12 on both package types.</p><p class="src"><span class="sl">Spec</span>§5.10, Table 5-32, p.251</p></div>
+      <div class="card"><h3>Valid protection at 48/64 GT/s</h3><p style="font-size:15px">Valid framing uses Hamming-distance-4 encodings. At 48 and 64 GT/s receivers must correct single-bit and detect double-bit Valid errors, which keeps Valid errors from causing frequent retrains.</p><p class="src"><span class="sl">Spec</span>§5.11, p.253</p></div>
+      <div class="card"><h3>Spec inconsistency to note at 48 GT/s</h3><p style="font-size:15px">§4.1.2.1 (retimer Valid framing) lets receivers at ≤ 48 GT/s retrain on any Valid error instead of correcting. §5.11 requires single-error correction at 48 GT/s. Implementing correction at 48 GT/s satisfies both.</p><p class="src"><span class="kind derived">Derived</span> §4.1.2.1, p.101 vs §5.11, p.253</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="sbe"><div class="wrap">
+  <h2>9 · Sideband, AUXCLK and Open Drain</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Sideband</div><h3>800 MT/s SDR on an always-on rail</h3><p>Data is launched edge-aligned with the strobe's rising edge and sampled on its falling edge. Runs from the always-on supply VCCAON (0.65 V in Table 5-33) and AUXCLK. Setup and hold 200 ps. Same reach as the mainband; Standard Package has an extended-reach option up to 100 mm (60 Ω driver). Redundancy and repair only on Advanced Package.</p><p class="src"><span class="sl">Spec</span>§5.13, Table 5-33, p.254</p></div>
+    <div class="card"><div class="tagline">AUXCLK</div><h3>Relaxed clock for the sideband</h3><p>Any source; 100 MHz recommended, 25–800 MHz allowed, SSC permitted. REFCLK can serve if it is always on. With a frequency-adjusted REFCLK the sideband runs 400–800 MT/s and its 8 ms timeouts scale to 16 ms at 400 MT/s.</p><p class="src"><span class="sl">Spec</span>§5.13.2, Table 5-34, p.255 · note, p.189</p></div>
+    <div class="card"><div class="tagline">Open Drain</div><h3>A shared low-latency wire</h3><p>Optional pin on a package-wide net with one pull-up (5–10 kΩ); any chiplet pulls low (120–240 Ω). Fall to VOL &lt; 100 ns, rise to VOH &lt; 2 µs. Used for UCIe low-latency events such as Fast Throttle, and vendor events.</p><p class="src"><span class="sl">Spec</span>§5.14, Table 5-35, p.255–256</p></div>
+    <div class="card"><div class="tagline">Sideband-only port</div><h3>For test and manageability</h3><p>A UCIe-S port may be sideband only. It uses the same RDI signals as a sideband with a mainband.</p><p class="src"><span class="sl">Spec</span>§5.7.4, p.248</p></div>
+  </div>
+</div></section>
+
+<section id="red"><div class="wrap">
+  <h2>10 · Repair (Advanced) and degrade (Standard)</h2>
+  <div class="twocol">
+    <div class="card"><h3>Advanced: spare bumps</h3><p style="font-size:15px">Each module has 4 redundant data bumps, 1 for clock and Track, 1 for Valid. On x64 the data spares are split two per half (TRD_P0/P1 for lanes 0–31, TRD_P2/P3 for 32–63). Sideband has a redundant data and clock pair. The logical remap is in the Logical PHY guide.</p><p class="src"><span class="sl">Spec</span>§5.9.1, p.249–250 · Table 5-18, p.209</p></div>
+    <div class="card"><h3>Standard: drop whole module pairs</h3><ul class="tight" style="font-size:15px">
+      <li>A degraded link is 1 or 2 modules, never 3.</li>
+      <li>4-module link: 1 or 2 failed pairs → 2 modules; 3 failed → 1 module.</li>
+      <li>2-module link: 1 failed pair → 1 module.</li>
+      <li>On a 4-module link with one failure, the other pair in the same half (along the die edge) is also disabled.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§5.7.3.4.1, Table 5-29, p.246–247</p></div>
+  </div>
+</div></section>
+
+<section id="d3"><div class="wrap">
+  <h2>11 · UCIe-3D</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Design rules</div><h3>Fit inside the bump area</h3><p>Circuit and logic must fit under the bumps (at 1 µm pitch, under 1 µm² per lane). No D2D Adapter, no CRC or replay. The PHY is a simple driver/inverter connected directly to SoC logic. Test and debug hooks sit in one common block per chiplet. Lane repair becomes bundle repair run by SoC logic.</p><p class="src"><span class="sl">Spec</span>§6.2, p.258–259</p></div>
+    <div class="card"><div class="tagline">Timing</div><h3>Launch on rise, sample on fall</h3><p>Data and clock buffers are delay-matched, so the data/clock differential is near zero and sampling half a UI later (rise-to-fall) gives the best margin. Unlike the 2D matched architecture, the 3D transceiver avoids its power cost while keeping supply-noise rejection.</p><p class="src"><span class="sl">Spec</span>§6.3, p.260 · Figure 6-4, p.261</p></div>
+    <div class="card"><div class="tagline">Budget</div><h3>Everything must fit in 1 UI</h3><p>Channel eye closure (0.1 UI), pulse-width deviation (0.08), Tx and Rx lane skew (0.12 each), RSS of Tx/Rx random jitter (0.05 each), aperture (0.03) and the Vcc-dependent spread of Tx/Rx data-clock delay (50 ps each, scaled by 1 + α·noise) must sum to less than 1 UI (250 ps at 4 GT/s). With the table's values the sum is about 0.98 UI, so there is almost no slack.</p><p class="src"><span class="sl">Spec</span>§6.4.1, Table 6-2, Equation 6-6, p.261–263 · <span class="kind derived">Derived</span> sum</p></div>
+    <div class="card"><div class="tagline">Module</div><h3>x80 bundles, 9 µm recommended</h3><p>A module is one Tx bundle (x80 + clock) and one Rx bundle. About 0.02 mm² at 9 µm pitch, scaling with pitch squared. x70 also defined. No sideband required; lanes may be assigned to Valid, mask, parity or ECC as needed. Tx swing 0.40–0.75 V. ESD 5 V CDM (≤ 10 µm pitch).</p><p class="src"><span class="sl">Spec</span>§6.4.2–6.4.3, Tables 6-3, 6-4, p.263–265</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Bundle repair calculator</h3><p style="font-size:15px">The spec's model: reserve 2k full modules, where k is the smallest value with 1 − Σ<sub>i=0..k</sub> P<sub>i</sub>(A·D0) &lt; δ, P<sub>i</sub> being Poisson. Check also that large defects are rare: 1 − e<sup>−A·D1</sup> &lt; δ.</p>
+    <div class="tool"><div class="row">
+      <label>UCIe-3D area A (mm²)<input id="rpA" type="number" min="0" step="any" value="50" inputmode="decimal"></label>
+      <label>Defect density D0 (per mm²)<input id="rpD0" type="number" min="0" step="any" value="0.02" inputmode="decimal"></label>
+      <label>Large-defect density D1 (per mm²)<input id="rpD1" type="number" min="0" step="any" value="0.00001" inputmode="decimal"></label>
+      <label>Acceptable yield loss δ<input id="rpd" type="number" min="0" step="any" value="0.001" inputmode="decimal"></label>
+    </div><div class="out" id="rpout" aria-live="polite"></div></div>
+    <p class="src"><span class="sl">Spec</span>§6.4.4, Equations 6-7 to 6-9, p.265–267 · <span class="kind illus">Illustrative</span> default inputs</p></div>
+</div></section>

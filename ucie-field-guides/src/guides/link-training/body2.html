@@ -1,0 +1,191 @@
+
+<section id="rationale">
+  <div class="wrap">
+    <h2>10 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives a training rule, the reason behind it, a worked example, and what breaks without it.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="flow">
+        <div class="meta"><span>Flow control</span><span>§4.5 p.124</span></div>
+        <h3>8 ms per state, reset by Stall</h3>
+        <p class="rule">Every state except RESET, ACTIVE, L1/L2 and TRAINERROR times out after 8 ms (per sub-state), going to TRAINERROR and then RESET. RDI sideband handshakes also time out at 8 ms. A Stall-encoded message resets the timer. Tolerance is −0%/+50%.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A die that died or hung must not leave its partner waiting forever. Per sub-state keeps the bound tight even though MBTRAIN has 13 sub-states. Stall lets a slow but healthy partner (typically a Retimer waiting on its far link) keep the link alive.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 1 stops answering in MBTRAIN.RXDESKEW because its firmware crashed. Die 0 times out between 8 and 12 ms later, enters TRAINERROR, then RESET, and waits for a new trigger.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A timer that spans all of MBTRAIN allows 13 × 8 ms ≈ 100 ms of hang before recovery; a timer that ignores Stall kills every Retimer link.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Timeout rule, Stall reset, tolerance <span class="ref">§4.5, p.124</span></li><li><span class="kind derived">Derived</span>8 ms × 1.5 = 12 ms maximum</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="flow">
+        <div class="meta"><span>Flow control</span><span>§4.5.3.4 p.155</span></div>
+        <h3>Every sub-state ends with "sent and received"</h3>
+        <p class="rule">A module leaves a sub-state only after it has sent its done/end request <em>and</em> received the partner's response. Modules enter every MBTRAIN sub-state, even ones with nothing to do.</p>
+        <div class="part"><span class="l l-why">Why</span><p>This keeps both dies in lock-step through 20-plus sub-states without any shared timing. Visiting every sub-state means the two state machines can never skip to different places.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 needs no deskew; Die 1 does. Die 0 enters RXDESKEW, sends its end request at once, and waits there until Die 1 has finished and responded. Both exit to DATATRAINCENTER2 together.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that skips RXDESKEW when it has nothing to do sends a DATATRAINCENTER2 message that the partner, still in RXDESKEW, does not expect; one side times out.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Enter each sub-state; exit through the handshake <span class="ref">§4.5.3.4, p.155</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="flow">
+        <div class="meta"><span>Flow control</span><span>§4.5.3.1 p.132</span></div>
+        <h3>RESET lasts at least 4 ms</h3>
+        <p class="rule">On every entry to RESET the PHY stays at least 4 ms, so PLLs stabilize and initialization completes, before any exit conditions are considered.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Mainband and sideband clocks must be stable before training patterns mean anything. A fixed floor also makes the two dies' timing predictable after a TRAINERROR, so retries do not race.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An L2 exit or a TRAINERROR recovery always costs at least 4 ms before SBINIT. This is why L2 exit is far slower than L1 exit, which never visits RESET.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Leaving RESET at 1 ms: SBINIT patterns are sent from an unlocked PLL and the partner fails detection.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>4 ms minimum; exit conditions <span class="ref">§4.5.3.1, p.132</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="sb">
+        <div class="meta"><span>Sideband</span><span>§4.5.3.2 p.133–134</span></div>
+        <h3>Keep sending after detection</h3>
+        <p class="rule">After a module detects the partner's SBINIT pattern, it sends four more iterations before stopping. If it sees nothing, it alternates 1 ms sending and 1 ms quiet, for up to 8 ms.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The two dies leave RESET at different times. If one stopped as soon as it detected the other, the late die might never see a pattern. The extra iterations cover that. The 1 ms on/off cycle is so a die that started early keeps re-offering the pattern while the other wakes up.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 leaves RESET 2.5 ms before Die 1. Its patterns in the first two windows go unheard; in its third sending window Die 1 is listening and detects it. Die 1 sends four more iterations; Die 0 detects those, and both stop.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Stopping immediately after detection leaves the late die sending into silence until its 8 ms timeout.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Steps 3–5 <span class="ref">§4.5.3.2, p.134</span></li><li><span class="kind illus">Illustrative</span>2.5 ms skew</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="sb">
+        <div class="meta"><span>Sideband</span><span>§4.5.3.2 p.134–135</span></div>
+        <h3>Advanced: four ways to make the sideband work</h3>
+        <p class="rule">Advanced Package has redundant sideband data and clock. The receiver tries all four data × clock combinations and picks by fixed priority: DATASB/CKSB, then DATASB/CKSBRD, then DATASBRD/CKSB, then DATASBRD/CKSBRD. The choice travels in {SBINIT Out of Reset} and both sides use it.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Without a sideband nothing else can be trained or repaired, so it needs its own redundancy. Any one good data lane plus any one good clock lane is enough. A fixed priority makes both sides' choices predictable.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>CKSB has an open bump. Results: [0]=0, [1]=1, [2]=0, [3]=1 → pattern xx10 → use DATASB with CKSBRD.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that picks the first combination it happened to detect, instead of the priority order, can disagree with what its own Out of Reset message advertised.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Pseudocode and assignment <span class="ref">§4.5.3.2, p.134–135</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3 p.136–155</span></div>
+        <h3>Prove it at 4 GT/s first</h3>
+        <p class="rule">All of MBINIT, plus VALVREF and DATAVREF in MBTRAIN, run at the lowest rate, 4 GT/s. Only then does SPEEDIDLE switch to the negotiated speed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>At 4 GT/s the eye is wide enough that an untrained link works. That makes it the right place to find opens, shorts and reversed wiring, and to get Vref close, before tighter calibration at speed. A failure at 4 GT/s is a real defect, not a tuning problem.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>At 4 GT/s a UI is 250 ps; at 32 GT/s it is 31 ps. A lane with a marginal bump can pass at 4 GT/s and still fail LINKSPEED at 32 GT/s; that is what REPAIR and speed degrade are for.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Training repair at full speed: a marginal but intact lane and an open lane look the same, so the PHY wastes redundant lanes on lanes that just needed centering.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>MBINIT at lowest speed; Vref states at 4 GT/s <span class="ref">Table 4-6, p.131 · §4.5.3.4.1–2, p.156–157</span></li><li><span class="kind derived">Derived</span>UI times</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3.1 p.137–139</span></div>
+        <h3>Partner picks the common maximum rate</h3>
+        <p class="rule">Each module sends its maximum supported data rate in {MBINIT.PARAM configuration req}; the partner answers with the highest rate both support. The value must account for everything needed at that rate (BER, CRC/Retry, clock phase support). All parameters except Module ID must match across modules.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A die must not advertise a rate it can only reach electrically but not reliably, for example a rate whose BER needs Retry when its Adapter has none. Matching parameters across modules is required because one RDI cannot run modules at different speeds.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 supports 32 GT/s, Die 1 supports 16 GT/s. Die 1 answers 16 GT/s. <code>pl_max_speedmode</code> = 0 (≤ 32 GT/s), so the Adapter may later advertise 68B Flit Mode.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Two modules of one link answering different rates: the recommended action is an Internal Error, TRAINERROR, LinkError and <code>pl_trainerror</code>.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Parameters, max-rate rule, multi-module rule <span class="ref">§4.5.3.3.1, p.137–139</span></li><li><span class="kind spec">Spec</span>Retry requirement by BER <span class="ref">§3.8, p.93</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3.3–4.5.3.3.5</span></div>
+        <h3>Clock and valid before data</h3>
+        <p class="rule">REPAIRCLK checks clock and track lanes, REPAIRVAL checks valid, and only then does REVERSALMB test data lanes. REVERSALMB is entered only if clock and valid are functional.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Data is sampled with the forwarded clock and framed by valid. If the clock is broken, every data lane would appear to fail and the PHY would wrongly try to repair all of them. Fixing dependencies first gives clean per-lane results.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>RCKP has an open. REPAIRCLK sees no pattern on it, repairs the clock onto the redundant clock lane; then REVERSALMB sees 68 lanes of correct Per Lane ID patterns.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Testing data first with a broken clock: 68 out of 68 lanes fail and the module goes to TRAINERROR, though only one bump was bad.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Order and entry condition <span class="ref">§4.5.3.3.5, p.151</span></li><li><span class="kind spec">Spec</span>Clock repair result interpretation <span class="ref">§4.5.3.3.3, p.147</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3.5 p.151–153</span></div>
+        <h3>Lane reversal is detected by majority</h3>
+        <p class="rule">The Tx sends 128 iterations of the unscrambled Per Lane ID pattern on all N lanes. A lane passes with ≥ 16 consecutive good iterations. If most lanes pass, no reversal. Otherwise the Tx applies reversal and tests again; if most now pass, reversal stays for the life of the link; if not, TRAINERROR.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Package routing sometimes has to cross lanes over (die rotation). Per Lane ID patterns make each lane self-identifying. Majority voting tolerates a few lanes that are simply broken and will be repaired next.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 Advanced with the lanes crossed over: almost every receiver lane k sees the ID of transmitter lane 63−k, so most lanes fail. The Tx applies reversal and retests: 67 of 68 pass. Reversal is kept; the one failing lane goes to REPAIRMB.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Scrambling the Per Lane ID pattern destroys its lane identity; reversal detection becomes random.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Sequence, majority, 16 of 128, not scrambled <span class="ref">§4.5.3.3.5, p.151–153</span></li><li><span class="kind illus">Illustrative</span>The lane counts</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.3 p.158</span></div>
+        <h3>SPEEDIDLE picks the rate from where you came</h3>
+        <p class="rule">From DATAVREF: the highest common rate. From L1: the speed of the last ACTIVE. From LINKSPEED or PHYRETRAIN (degrade): the next lower rate, unless already at 4 GT/s, then TRAINERROR. Width is whatever MBINIT.REPAIRMB or MBTRAIN.REPAIR last set.</p>
+        <div class="part"><span class="l l-why">Why</span><p>One idle state handles every frequency change, so the calibration that follows (TXSELFCAL onward) is the same path for first training, L1 exit and degrade. L1 exit restores the old speed, so a short power-saving trip does not cost bandwidth.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32 GT/s link fails LINKSPEED and has no repair resources: exit to speed degrade → SPEEDIDLE picks 24 GT/s → TXSELFCAL … LINKSPEED again.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Restoring the maximum rate on L1 exit after an earlier degrade re-enters a speed already known to fail.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Rate rules and width rule <span class="ref">§4.5.3.4.3, p.158</span></li><li><span class="kind spec">Spec</span>Speed encodings 4–64 GT/s <span class="ref">Table 10-1 (pl_speedmode), p.525</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.5–4.5.3.4.11</span></div>
+        <h3>Valid before data, deskew before final centering</h3>
+        <p class="rule">At speed the order is: Rx clock calibration, Valid centering (and optional Vref), data centering (and optional Vref), optional per-lane deskew, then DATATRAINCENTER2 to recenter on the aggregate data.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Valid frames data, so it must be right first. Deskew moves each lane's sampling point, which shifts the aggregate eye, so the clock has to be recentered afterwards; that is the only purpose of DATATRAINCENTER2.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 1 deskews lanes 40–47 by +3/64 UI. Die 0's recentering in DATATRAINCENTER2 then moves its Tx clock phase by about +1/64 UI to sit in the middle of the new combined eye.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Skipping recentering after deskew leaves the link at the edge of the eye; it passes LINKSPEED but fails after a few degrees of temperature drift.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Sub-state purposes <span class="ref">§4.5.3.4.5–4.5.3.4.11, p.158–164</span></li><li><span class="kind illus">Illustrative</span>The deskew amounts</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.12–13 p.164–168</span></div>
+        <h3>LINKSPEED: repair, narrow, or slow down</h3>
+        <p class="rule">LINKSPEED runs a 4K UI LFSR point test at the final phase. On errors: repair if Advanced and redundant lanes suffice; width-degrade if Standard and the failures fit in one half; otherwise degrade speed. A speed-degrade request overrides an outstanding repair request.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The order keeps as much bandwidth as possible: a repair loses nothing, a width degrade halves bandwidth, a speed step loses less on Advanced (32 → 24 GT/s is 25%) but affects every lane. Letting speed degrade win avoids two dies taking different paths.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x16 Standard at 32 GT/s: lanes 10 and 13 fail. Both are in lanes 8–15, so the link degrades to x8 on lanes 0–7 (lane map 001b) and goes back through TXSELFCAL.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Lanes 3 and 12 fail on x16 Standard: they are in different halves, so width degrade is impossible; the link must drop speed instead.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>LINKSPEED steps 3–5 <span class="ref">§4.5.3.4.12, p.164–167</span></li><li><span class="kind spec">Spec</span>REPAIR rules and lane map codes <span class="ref">§4.5.3.4.13, p.167 · Table 4-9, p.155</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.12 p.165–167</span></div>
+        <h3>Multi-module: MMPL decides for everyone</h3>
+        <p class="rule">In a multi-module link each module reports done, error or degrade to the Multi-module PHY Logic, which resolves one outcome and tells every module which response to send. A mismatch between expected and received response sends all modules to TRAINERROR.</p>
+        <div class="part"><span class="l l-why">Why</span><p>All modules must run at the same speed and width under one RDI. Letting each module decide alone could leave one at 32 GT/s and another at 24 GT/s.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Four modules at 32 GT/s; module 2 has unrepairable errors. MMPL may resolve to speed degrade for all four, or (per the Section 4.7 flowchart) disable module 2 and run the other three.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A module that exits to LINKINIT on its own "done" while the others go to SPEEDIDLE: the Adapter sees an RDI that never reaches Active.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>MMPL resolution, mismatch rule, Retimer stall 4 ms <span class="ref">§4.5.3.4.12 step 5, p.165–167</span></li><li><span class="kind spec">Spec</span>Resolution flowchart <span class="ref">§4.7</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>Tables 4-10 to 4-12 p.169</span></div>
+        <h3>The worse problem wins</h3>
+        <p class="rule">In PHYRETRAIN both modules send a retrain encoding: 001b no lane errors (→ TXSELFCAL), 100b repairable (→ REPAIR), 010b unrepairable (→ SPEEDIDLE). If they differ, both resolve to the more severe: speed degrade over repair over none.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Each die only sees its own receive errors. Taking the more severe request fixes whichever direction is worse, and because the rule is symmetric, both dies compute the same result.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0's receivers are clean (001b); Die 1 sees errors it can repair (100b). Both resolve to 100b and go to MBTRAIN.REPAIR. Die 0's transmitter applies the repair Die 1 asked for.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Resolving to the less severe (001b) would retrain without repair, and Die 1 would see the same errors again.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Encodings and resolution <span class="ref">Tables 4-11 and 4-12, p.169</span></li><li><span class="kind spec">Spec</span>Runtime Link Test Status mapping <span class="ref">Table 4-10, p.169</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.5.3.7.2 p.170</span></div>
+        <h3>PHY retrain starts with pl_error</h3>
+        <p class="rule">On a Valid framing error the PHY asserts <code>pl_error</code> with the bad flit or chunk on RDI, completes the stall handshake, then sends {LinkMgmt.RDI.Req.Retrain}. RDI goes to Retrain when the response arrives.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The Adapter must discard the damaged bytes before they reach CRC checks or the Protocol Layer, and the transmitter must be quiet at a flit boundary before training patterns replace data.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>See the RDI guide's "Retrain (framing error)" scenario for the cycle-level waveform.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Retraining without the stall handshake cuts a flit in half on the wire; with 68B flits the remote shifter loses alignment.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Steps 1–6 <span class="ref">§4.5.3.7.2, p.170</span></li><li><span class="kind spec">Spec</span>pl_error rules <span class="ref">Table 10-1, p.524</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.5.3.8 p.171–172</span></div>
+        <h3>TRAINERROR holds while RDI is in LinkError</h3>
+        <p class="rule">TRAINERROR tri-states the transmitters. Entry uses a sideband handshake when the sideband works. Exit to RESET is quick if there is no error escalation, but the PHY must stay in TRAINERROR as long as RDI is in LinkError. In-progress sideband packets finish before RESET.</p>
+        <div class="part"><span class="l l-why">Why</span><p>LinkError means software has to look at the error first. Retraining underneath it would bring the link back up before software is ready. Finishing sideband packets avoids sending half a packet into a partner that is about to reset.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An unrepairable REPAIRMB failure goes to TRAINERROR; RDI is not in LinkError, so the LTSM returns to RESET and may retry. A viral error from CXL holds RDI in LinkError; the LTSM sits in TRAINERROR until software releases it.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Leaving TRAINERROR while RDI is in LinkError: the PHY retrains and the remote die sees training patterns from a link that is officially down.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Entry handshake, exit rules <span class="ref">§4.5.3.8, p.171–172</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.4.1 p.120 · §4.5.3.5 p.168</span></div>
+        <h3>Scramble with a known LFSR, reset in LINKINIT</h3>
+        <p class="rule">Data in ACTIVE is scrambled with the PCIe LFSR polynomial (X<sup>23</sup>+X<sup>21</sup>+X<sup>16</sup>+X<sup>8</sup>+X<sup>5</sup>+X<sup>2</sup>+1), with a lane-dependent seed. The LFSR is reset on entry to LINKINIT.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Scrambling spreads the spectrum and avoids long runs of identical bits, which helps clock recovery margins and EMI. Different seeds per lane avoid identical patterns on neighbouring lanes (crosstalk). Resetting in LINKINIT gives both dies a common starting point before the first scrambled flit.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After a Retrain, both dies pass through LINKINIT again, reset their LFSRs, and the first post-retrain flit descrambles correctly without any sync pattern.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Resetting the scrambler on RDI Active instead of LINKINIT entry: if the two dies see Active a few cycles apart, the first flits descramble to garbage.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>LFSR and seeds <span class="ref">§4.4.1, p.120 · Table 4-4</span></li><li><span class="kind spec">Spec</span>Reset in LINKINIT; scrambled in ACTIVE <span class="ref">§4.5.3.5–4.5.3.6, p.168</span></li><li><span class="kind bg">Background</span>Spectrum and crosstalk reasons</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.6 p.173–175</span></div>
+        <h3>Recalibrate without stopping traffic</h3>
+        <p class="rule">Runtime Recalibration uses the Track lane while ACTIVE; mainband data with correct valid framing must still be processed. With TARR, the receiver can ask the partner's transmitter to shift by n/64 UI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A full retrain stops traffic for microseconds or more. Drift is slow and small, so a side-channel measurement plus a small Tx adjustment keeps the eye centered with no interruption. TARR moves the work to the transmitter, which already did most adjustments in training, so receivers need less built-in margin.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die temperature rises 30 °C under load. Every few milliseconds Die 0 requests a Track pattern, measures a 2/64 UI drift, and sends {RECAL.track tx adjust req}; Die 1 shifts its Tx clock. No flit is delayed.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Pausing data during Track recalibration violates the spec and adds latency spikes every recalibration period.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Track sequence, TARR, data continues <span class="ref">§4.6, p.173–175</span></li><li><span class="kind illus">Illustrative</span>Temperature, period, drift amount</li></ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>

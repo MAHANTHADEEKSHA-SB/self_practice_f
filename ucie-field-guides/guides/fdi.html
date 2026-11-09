@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe FDI Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+/* series navigation (shared with the template pages) */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="../index.html"><strong>All guides</strong></a><span class="here">FDI</span><a href="rdi.html">RDI</a><a href="d2d-adapter.html">D2D Adapter</a><a href="link-training.html">Link Training</a><a href="logical-phy.html">Logical PHY</a><a href="sideband.html">Sideband</a><a href="protocol-mappings.html">Protocol Mappings</a><a href="manageability-uda.html">Manageability &amp; UDA</a><a href="registers-discovery.html">Registers &amp; Discovery</a><a href="retimers-compliance.html">Retimers &amp; Compliance</a><a href="electrical-ucie-3d.html">Electrical &amp; UCIe-3D</a></div>
+    <div class="eyebrow">UCIe 3.0 · Chapter 10.2 and 10.3 · Protocol Layer ↔ D2D Adapter</div>
+    <h1>UCIe FDI Field Guide</h1>
+    <p class="lede">The Flit-aware Die-to-Die Interface is the contract between a protocol controller and the UCIe Adapter. This guide covers why it exists, where it sits, how one wire-level Valid frame becomes one FDI beat, the rules it obeys and the reason behind each one, and what its wires actually do cycle by cycle during bring-up, traffic, CRC replay, power management, retrain and errors.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw" style="background:var(--lp)"></i><code>lp_*</code> driven by the Protocol Layer</span>
+      <span><i class="sw" style="background:var(--pl)"></i><code>pl_*</code> driven by the Adapter</span>
+      <span><i class="sw" style="background:var(--sb)"></i>sideband messages between dies</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025); in that PDF the printed page number equals the PDF page number. Rule cards tag each fact as <span class="kind spec">Spec</span>stated in the spec, <span class="kind derived">Derived</span>arithmetic on spec values, <span class="kind illus">Illustrative</span>example values, or <span class="kind bg">Background</span>from outside UCIe. Section 11 indexes every cited section, table and figure.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why it exists</a>
+    <a href="#where">2 · Where it sits</a>
+    <a href="#clocks">3 · UI to lclk</a>
+    <a href="#signals">4 · Signals</a>
+    <a href="#states">5 · State machine</a>
+    <a href="#handshakes">6 · Handshakes</a>
+    <a href="#rationale">7 · Why each rule</a>
+    <a href="#live">8 · Live scenarios</a>
+    <a href="#silicon">9 · Real silicon</a>
+    <a href="#verify">10 · Verification</a>
+    <a href="#refs">11 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- 1. WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why FDI exists</h2>
+    <p class="sub">Every FDI rule traces back to one of four pressures. Once you know which one a rule serves, the rule is easy to remember.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Interoperability</div>
+        <h3>Mix IP from different vendors</h3>
+        <p>A PCIe or CXL controller from one vendor must drop onto an Adapter and PHY from another. The spec fixes the handshakes at the boundary so integration is wiring, not redesign. It also says outright that a common interface makes Bus Functional Models consistent, because post-silicon interop testing is expensive.</p>
+        <p class="src"><span class="sl">Spec</span>§1.1.4 Interfaces, p.44</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Flit awareness</div>
+        <h3>The Adapter owns reliability, the protocol owns meaning</h3>
+        <p>CRC, retry, NOP insertion and DLLP packing live in the Adapter. The Protocol Layer hands over flits and never sees a replay. FDI adds the wires that make this split work: stream IDs, <code>pl_flit_cancel</code>, <code>lp_corrupt_crc</code> and a DLLP side channel that bypasses the retry buffer.</p>
+        <p class="src"><span class="sl">Spec</span>§1.1.2, p.43 · Table 10-3, p.540–542 · §10.2.4.1, p.550</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Latency</div>
+        <h3>Nothing extra in the critical path</h3>
+        <p>Received flits are forwarded before CRC finishes, with a one-cycle cancel if it fails. The receive path has no backpressure, so there is no ready signal to close timing on. The receiver is opened before the slow sideband handshake completes, so the first flit is never dropped.</p>
+        <p class="src"><span class="sl">Spec</span>§10.2.5, p.551 · §10.2.2, p.547 · §10.2.7, p.552–553 · Table 1-4, p.49</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Power</div>
+        <h3>Either side may gate its clocks</h3>
+        <p>Two four-phase wake handshakes let each side sleep in Reset, LinkReset, Disabled and PM, and guarantee that no state change, register packet or error pulse is lost while the other side is asleep. This is why so many FDI rules mention <code>pl_clk_req</code>.</p>
+        <p class="src"><span class="sl">Spec</span>§10.2.3, p.547–549</p>
+      </div>
+    </div>
+    <p style="margin-top:18px;color:var(--muted);font-size:15px">Background outside the spec: FDI and RDI descend from Intel's LPIF (Logical PHY Interface), used between CXL/PCIe link layers and the logical PHY, which is why the names <code>lp_irdy</code>, <code>pl_trdy</code>, <code>pl_state_sts</code> and stallreq/stallack look familiar to CXL controller engineers. The Streaming protocol path is how vendor fabrics ride UCIe; Arm's CHI C2C is one published example.</p>
+  </div>
+</section>
+
+<!-- 2. WHERE -->
+<section id="where">
+  <div class="wrap">
+    <h2>2 · Where it sits</h2>
+    <p class="sub">One FDI instance per Protocol Layer. Everything below FDI is invisible to the protocol controller except through the status and info wires.</p>
+    <div class="twocol">
+      <figure>
+        <svg viewBox="0 0 560 330" role="img" aria-label="Layer stack: Protocol Layer connects to the D2D Adapter through FDI; the Adapter connects to the Physical Layer through RDI, a subset of FDI.">
+          <defs>
+            <marker id="ah-lp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--lp)"/></marker>
+            <marker id="ah-pl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--pl)"/></marker>
+            <marker id="ah-c" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          </defs>
+          <g style="color:var(--ink)">
+            <rect x="20" y="14" width="360" height="62" rx="7" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="36" y="40" font-family="var(--font-display)" font-size="16" font-weight="600" fill="currentColor">Protocol Layer</text>
+            <text x="36" y="62" font-size="12" fill="var(--muted)">PCIe · CXL.io · CXL.cachemem · Streaming · Mgmt</text>
+
+            <rect x="20" y="86" width="360" height="58" rx="5" fill="none" stroke="var(--pl)" stroke-dasharray="5 4"/>
+            <line x1="90" y1="80" x2="90" y2="150" stroke="var(--lp)" stroke-width="2" marker-end="url(#ah-lp)"/>
+            <text x="100" y="112" font-family="var(--font-mono)" font-size="11.5" fill="var(--lp)">lp_*  data · state_req · wake</text>
+            <line x1="330" y1="150" x2="330" y2="80" stroke="var(--pl)" stroke-width="2" marker-end="url(#ah-pl)"/>
+            <text x="320" y="130" text-anchor="end" font-family="var(--font-mono)" font-size="11.5" fill="var(--pl)">pl_*  data · state_sts · clk_req</text>
+            <text x="392" y="112" font-family="var(--font-display)" font-size="18" font-weight="600" fill="var(--pl)">FDI</text>
+            <text x="392" y="130" font-size="11.5" fill="var(--muted)">one per Protocol Layer</text>
+
+            <rect x="20" y="156" width="360" height="62" rx="7" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="36" y="182" font-family="var(--font-display)" font-size="16" font-weight="600" fill="currentColor">D2D Adapter</text>
+            <text x="36" y="204" font-size="12" fill="var(--muted)">ARB/MUX · Stack Mux · CRC/Retry · Adapter LSM</text>
+
+            <rect x="20" y="228" width="360" height="30" rx="5" fill="none" stroke="var(--muted)" stroke-dasharray="5 4"/>
+            <text x="200" y="248" text-anchor="middle" font-family="var(--font-mono)" font-size="11.5" fill="var(--muted)">RDI · signal list is a subset of FDI</text>
+            <text x="392" y="248" font-family="var(--font-display)" font-size="18" font-weight="600" fill="var(--muted)">RDI</text>
+
+            <rect x="20" y="268" width="360" height="52" rx="7" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="36" y="292" font-family="var(--font-display)" font-size="16" font-weight="600" fill="currentColor">Physical Layer</text>
+            <text x="36" y="311" font-size="12" fill="var(--muted)">LTSM · MMPL · AFE</text>
+
+            <line x1="380" y1="294" x2="540" y2="294" stroke="currentColor" stroke-width="1.3" marker-end="url(#ah-c)"/>
+            <text x="392" y="286" font-size="11.5" fill="var(--muted)">mainband flits</text>
+            <text x="392" y="312" font-size="11.5" fill="var(--sb)">sideband 800 MHz</text>
+            <text x="540" y="278" text-anchor="end" font-size="11.5" fill="currentColor">remote die</text>
+          </g>
+        </svg>
+        <figcaption>FDI and RDI use the same naming: <code>lp_*</code> flows away from the protocol side, <code>pl_*</code> flows toward it. Both sides of FDI share one clock (<code>lclk</code>) and one reset source.<span class="ref">Spec: §10.2, p.539 (one FDI per Protocol Layer, naming, RDI a subset of FDI) · §10.2.1–10.2.2, p.547 (one reset source, one clock) · Figure 1-8, p.42</span></figcaption>
+      </figure>
+      <div class="grid" style="gap:12px">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Configuration</th><th class="num">FDIs</th><th><code>pl_state_sts</code> shows</th><th>Spec</th></tr></thead>
+            <tbody>
+              <tr><td>Single protocol (PCIe or Streaming)</td><td class="num">1</td><td>Adapter LSM</td><td class="ref">Figure 10-12 (a), p.539 · Table 10-3, p.542</td></tr>
+              <tr><td>Single CXL stack</td><td class="num">2</td><td>vLSM of CXL.io and of CXL.cachemem, through ARB/MUX</td><td class="ref">Figure 10-12 (b), p.539 · Figure 3-27, p.89</td></tr>
+              <tr><td>Two protocol stacks (Stack Mux)</td><td class="num">2</td><td>Adapter LSM per stack, retry buffer shared</td><td class="ref">Figure 10-12 (c), p.539 · §3.1, p.59 · §3.8, p.93</td></tr>
+              <tr><td>Two CXL stacks</td><td class="num">4</td><td>vLSMs under two ARB/MUXes under a Stack Mux</td><td class="ref">Figure 10-12 (d), p.539</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p><strong>What the Protocol Layer can and cannot see.</strong> It sees state, speed, width, protocol, flit format and errors. It never sees the LTSM, retry sequence numbers, replays or the sideband messages themselves. For CXL it does not even see a retrain: the vLSM stays Active while the link below retrains.</p>
+          <p class="src"><span class="sl">Spec</span>Table 10-3, p.540–546 · §10.3.3.4, p.566 · §10.2.7 rule 6, p.553</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. UI TO LCLK -->
+<section id="clocks">
+  <div class="wrap">
+    <h2>3 · From UI to lclk: why FDI is wide and slow</h2>
+    <p class="sub">The mainband already trades frequency for parallelism with its forwarded clock. FDI makes the same trade one level up. Follow one Valid frame from the wire to one FDI beat.</p>
+    <figure>
+      <svg viewBox="0 0 760 326" role="img" aria-label="Eight unit intervals on lane 0. Valid is high for four UI and low for four. The half-rate two-phase clock samples alternate UIs with the rising edges of its two phases. The quarter-rate quadrature clock samples every UI with the rising and falling edges of both phases. Eight UI on 64 lanes make one 64-byte FDI beat.">
+        <g style="color:var(--ink)" font-family="var(--font-body)">
+          <g stroke="var(--line)" stroke-width="1">
+            <line x1="160" y1="24" x2="160" y2="258"/><line x1="230" y1="24" x2="230" y2="258"/><line x1="300" y1="24" x2="300" y2="258"/>
+            <line x1="370" y1="24" x2="370" y2="258"/><line x1="440" y1="24" x2="440" y2="258"/><line x1="510" y1="24" x2="510" y2="258"/>
+            <line x1="580" y1="24" x2="580" y2="258"/><line x1="650" y1="24" x2="650" y2="258"/><line x1="720" y1="24" x2="720" y2="258"/>
+          </g>
+          <g font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)" text-anchor="middle">
+            <text x="195" y="17">UI 0</text><text x="265" y="17">UI 1</text><text x="335" y="17">UI 2</text><text x="405" y="17">UI 3</text>
+            <text x="475" y="17">UI 4</text><text x="545" y="17">UI 5</text><text x="615" y="17">UI 6</text><text x="685" y="17">UI 7</text>
+          </g>
+
+          <text x="12" y="45" font-size="12" fill="currentColor">Valid</text>
+          <path d="M160,32 L440,32 L440,48 L720,48" fill="none" stroke="currentColor" stroke-width="1.8"/>
+
+          <text x="12" y="77" font-size="12" fill="currentColor">Lane 0 · byte 0</text>
+          <g fill="var(--surface)" stroke="currentColor" stroke-opacity="0.45">
+            <rect x="163" y="60" width="64" height="24" rx="4"/><rect x="233" y="60" width="64" height="24" rx="4"/><rect x="303" y="60" width="64" height="24" rx="4"/><rect x="373" y="60" width="64" height="24" rx="4"/>
+            <rect x="443" y="60" width="64" height="24" rx="4"/><rect x="513" y="60" width="64" height="24" rx="4"/><rect x="583" y="60" width="64" height="24" rx="4"/><rect x="653" y="60" width="64" height="24" rx="4"/>
+          </g>
+          <g font-family="var(--font-mono)" font-size="11" fill="currentColor" text-anchor="middle">
+            <text x="195" y="76">bit 0</text><text x="265" y="76">bit 1</text><text x="335" y="76">bit 2</text><text x="405" y="76">bit 3</text>
+            <text x="475" y="76">bit 4</text><text x="545" y="76">bit 5</text><text x="615" y="76">bit 6</text><text x="685" y="76">bit 7</text>
+          </g>
+          <text x="12" y="101" font-size="11" fill="var(--muted)">Lanes 1–63 carry bytes</text>
+          <text x="12" y="114" font-size="11" fill="var(--muted)">1–63 in the same 8 UI</text>
+
+          <g stroke="var(--sb)" stroke-dasharray="3 3" stroke-opacity="0.7">
+            <line x1="195" y1="86" x2="195" y2="136"/><line x1="335" y1="86" x2="335" y2="136"/><line x1="475" y1="86" x2="475" y2="136"/><line x1="615" y1="86" x2="615" y2="136"/>
+            <line x1="265" y1="86" x2="265" y2="162"/><line x1="405" y1="86" x2="405" y2="162"/><line x1="545" y1="86" x2="545" y2="162"/><line x1="685" y1="86" x2="685" y2="162"/>
+          </g>
+
+          <text x="12" y="130" font-size="12" font-weight="600" fill="currentColor">Half-rate clock</text>
+          <text x="12" y="148" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">Phase-1 · 90°</text>
+          <path d="M160,152 L195,152 L195,136 L265,136 L265,152 L335,152 L335,136 L405,136 L405,152 L475,152 L475,136 L545,136 L545,152 L615,152 L615,136 L685,136 L685,152 L720,152" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <text x="12" y="174" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">Phase-2 · 270°</text>
+          <path d="M160,162 L195,162 L195,178 L265,178 L265,162 L335,162 L335,178 L405,178 L405,162 L475,162 L475,178 L545,178 L545,162 L615,162 L615,178 L685,178 L685,162 L720,162" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <g fill="var(--sb)">
+            <circle cx="195" cy="144" r="4"/><circle cx="335" cy="144" r="4"/><circle cx="475" cy="144" r="4"/><circle cx="615" cy="144" r="4"/>
+            <circle cx="265" cy="170" r="4"/><circle cx="405" cy="170" r="4"/><circle cx="545" cy="170" r="4"/><circle cx="685" cy="170" r="4"/>
+          </g>
+
+          <text x="12" y="206" font-size="12" font-weight="600" fill="currentColor">Quarter-rate clock</text>
+          <text x="12" y="224" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">Phase-1 · 45°</text>
+          <path d="M160,228 L195,228 L195,212 L335,212 L335,228 L475,228 L475,212 L615,212 L615,228 L720,228" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <text x="12" y="250" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">Phase-2 · 135°</text>
+          <path d="M160,254 L265,254 L265,238 L405,238 L405,254 L545,254 L545,238 L685,238 L685,254 L720,254" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <g fill="var(--sb)">
+            <circle cx="195" cy="220" r="4"/><circle cx="475" cy="220" r="4"/>
+            <circle cx="265" cy="246" r="4"/><circle cx="545" cy="246" r="4"/>
+          </g>
+          <g fill="var(--surface)" stroke="var(--sb)" stroke-width="1.6">
+            <circle cx="335" cy="220" r="4"/><circle cx="615" cy="220" r="4"/>
+            <circle cx="405" cy="246" r="4"/><circle cx="685" cy="246" r="4"/>
+          </g>
+
+          <path d="M160,266 L160,274 L720,274 L720,266" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <text x="440" y="293" text-anchor="middle" font-size="12.5" fill="currentColor">8 UI on one lane = 1 byte = one Valid frame</text>
+          <text x="440" y="312" text-anchor="middle" font-size="12.5" fill="var(--pl)">× 64 lanes = 64 bytes = one FDI beat · 0.5 ns at 16 GT/s = one 2 GHz lclk cycle</text>
+        </g>
+      </svg>
+      <figcaption>One 8-UI Valid frame on lane 0 with both forwarded-clock modes drawn against it. Half-rate (16 GT/s and below): Phase-2 is Phase-1 inverted and each phase's rising edge samples alternate UIs, so the clock runs at half the bit rate. Quarter-rate (an option at 24 and 32 GT/s, always used at 48 and 64 GT/s): the phases are 90° apart and every rising and falling edge samples one UI, so the clock runs at a quarter of the bit rate. Dots mark sampling edges, filled for rising and hollow for falling. The quarter-rate rows are drawn per UI; at those rates each UI is shorter.<span class="ref">Spec: §4.1.1 and Figure 4-1, p.98 · Figure 4-2, p.99 · §4.1.2, p.100 and Figure 4-6, p.101 · §5.5, p.201–202 · Table 5-12, p.203</span></figcaption>
+    </figure>
+
+    <div class="twocol" style="margin-top:16px">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Level</th><th class="num">16 GT/s</th><th class="num">32 GT/s, quadrature</th><th>Why this step exists</th><th>Spec</th></tr></thead>
+          <tbody>
+            <tr><td>Bit time (UI)</td><td class="num">62.5 ps</td><td class="num">31.25 ps</td><td>Set by the link rate.</td><td class="ref">Derived: 1 ÷ data rate</td></tr>
+            <tr><td>Forwarded clock</td><td class="num">8 GHz · ½ rate</td><td class="num">8 GHz · ¼ rate</td><td>The clock toggles at a fraction of the bit rate; its two phases still put a sampling edge on every UI.</td><td class="ref">Table 5-12, p.203</td></tr>
+            <tr><td>One lane, one Valid frame</td><td class="num">1 byte / 0.5 ns</td><td class="num">1 byte / 0.25 ns</td><td>Data moves in 8-UI blocks, Valid high for 4 UI and low for 4. One byte per lane per block, bit 0 first.</td><td class="ref">§4.1.1, p.98 · §4.1.2, p.100</td></tr>
+            <tr><td>x64 module</td><td class="num">128 GB/s</td><td class="num">256 GB/s</td><td>Byte k of a block rides lane k, so 64 lanes carry 64 bytes per block.</td><td class="ref">Figure 4-2, p.99 · rates derived</td></tr>
+            <tr><td>FDI</td><td class="num">64B @ 2 GHz</td><td class="num">128B @ 2 GHz</td><td>Protocol logic runs near 2 GHz; width carries the bandwidth.</td><td class="ref">§10.3.1, p.561</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <p><strong>The mainband clock, checked against §5.5 and Table 5-12</strong></p>
+        <ul class="tight">
+          <li>Every module forwards one clock with two phases. <span class="ref">§5.5, p.201</span></li>
+          <li><strong>16 GT/s and below:</strong> half-rate and differential. Phase-2 (270°) is Phase-1 (90°) inverted, and each rising edge lands in the centre of alternate UIs. At 16 GT/s the clock is 8 GHz. <span class="ref">§5.5, p.202 · Table 5-12, p.203</span></li>
+          <li><strong>24 and 32 GT/s:</strong> the receiver may choose quarter-rate quadrature instead, with phases at 45° and 135°. Rising and falling edges of both give four samples per period: 8 GHz at 32 GT/s instead of 16. <span class="ref">§5.5, p.202 · Table 5-12, p.203</span></li>
+          <li><strong>48 and 64 GT/s:</strong> always quarter-rate (12 and 16 GHz) and free-running, with I/Q timing trained in MBTRAIN.RXCLKCAL. <span class="ref">§5.5, p.202 · Table 5-13, p.203 · §4.5.3.4.5, p.158</span></li>
+          <li><strong>Why a lower clock:</strong> the clock lane toggles every cycle and fans out to every data receiver, so its power grows with frequency. A half-rate clock already has the same fundamental frequency as the fastest data pattern (1010); a quarter-rate clock needs half of that channel bandwidth, which keeps its edges clean at 32 GT/s and above. <span class="ref">Background: circuit and signal-integrity reasoning, not spec text</span></li>
+          <li><strong>Why forwarded:</strong> the clock travels beside the data through matched paths, so supply-noise jitter moves both together and no clock recovery is needed. <span class="ref">§5.5, p.201 for the matched delays; the jitter reasoning is background</span></li>
+        </ul>
+        <p class="note-s" style="margin-top:8px">Below 24 GT/s the "two clocks" are one differential pair. Two clocks 90° apart exist only in quadrature mode.</p>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 6px">One flit, end to end</h3>
+    <p class="note-s" style="margin-top:0">x64 Advanced Package at 16 GT/s with a 64-byte FDI at 2 GHz. Wire and FDI times are exact; pipeline stages depend on the implementation.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Stage</th><th>What happens</th><th class="num">Time</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>FDI, transmit</td><td>The Protocol Layer presents 4 beats; each moves when <code>lp_irdy</code>, <code>lp_valid</code> and <code>pl_trdy</code> are all high.</td><td class="num">4 × 0.5 ns</td><td class="ref">§10.2.4, p.549</td></tr>
+          <tr><td>Adapter, transmit</td><td>Fills the flit header, DLP bytes 2–5 (Ack/Nak or a waiting DLLP) and CRC into the bytes the Protocol Layer left at 0, and keeps a copy in the Tx retry buffer.</td><td class="num">pipeline</td><td class="ref">§3.3.3, p.76 · §10.2.4.1, p.550 · §3.8, p.93</td></tr>
+          <tr><td>PHY, transmit</td><td>Scrambles, then turns each RDI beat into one Valid frame: byte k on lane k, bit 0 first, Valid high for 4 UI and low for 4.</td><td class="num">0.5 ns per beat</td><td class="ref">§4.5.3.6, p.168 · §4.1.1, p.98 · §4.1.2, p.100</td></tr>
+          <tr><td>Wire</td><td>Four frames, 32 UI, with the 8 GHz forwarded clock on its own pins beside them.</td><td class="num">2.0 ns + flight</td><td class="ref">Figure 4-2, p.99 · Table 5-12, p.203</td></tr>
+          <tr><td>PHY, receive</td><td>Phase-1 and Phase-2 sample alternate UIs; 8 UI per lane are collected into one 64-byte beat; Valid framing is checked.</td><td class="num">pipeline</td><td class="ref">§5.5, p.201 · §4.1.2, p.100</td></tr>
+          <tr><td>Adapter, receive</td><td>Forwards each beat on <code>pl_data</code> at once and runs CRC on a side path; pulls out Ack/Nak and DLLPs.</td><td class="num">pipeline</td><td class="ref">§10.2.5, p.551 · §10.2.4.1, p.550</td></tr>
+          <tr><td>FDI, receive</td><td>Four beats, then the cancel slot one cycle after the last; the Protocol Layer commits if nothing pulses.</td><td class="num">+0.5 ns</td><td class="ref">Table 10-3, p.542 · §10.2.5, p.551</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>The budget all of this has to fit.</strong> Table 1-4 targets ≤ 2 ns for Adapter plus PHY, transmit plus receive (FDI to bump to FDI), at 16 GT/s, not counting the time to accumulate the flit. That is the length of four 2 GHz cycles for both dies together. It is why FDI refuses to spend even one cycle: no clock crossing at the boundary, no store-and-forward on transmit, no CRC wait on receive. Flight time over a channel of 2 mm or less is a few tens of picoseconds at most.</p>
+      <p class="src"><span class="sl">Spec</span>Table 1-4 and note d, p.49 · the flight-time estimate is background physics</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4. SIGNALS -->
+<section id="signals">
+  <div class="wrap">
+    <h2>4 · Signals</h2>
+    <p class="sub">Table 10-3, grouped by job. The last column is what you will actually see the wire do on a waveform.</p>
+    <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card">
+        <div class="k">lp_state_req[3:0]</div>
+        <p class="mono" style="font-size:13px">0000 NOP · 0001 Active · 0100 L1 · 1000 L2 · 1001 LinkReset · 1011 Retrain · 1100 Disabled</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-3, p.542</p>
+      </div>
+      <div class="card">
+        <div class="k">pl_state_sts[3:0]</div>
+        <p class="mono" style="font-size:13px">0000 Reset · 0001 Active · 0011 Active.PMNAK · 0100 L1 · 1000 L2 · 1001 LinkReset · 1010 LinkError · 1011 Retrain · 1100 Disabled</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-3, p.542</p>
+      </div>
+      <div class="card">
+        <div class="k">pl_protocol_flitfmt[3:0]</div>
+        <p class="mono" style="font-size:13px">1 Raw · 2 68B · 3 Std 256B End Hdr · 4 Std 256B Start Hdr · 5 LatOpt 256B · 6 LatOpt 256B + optional bytes</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-3, p.544</p>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:15px">Link Up, from the Protocol Layer's point of view, means status is Active, Active.PMNAK, Retrain, L1 or L2. Retrain and PM count as up; Reset, LinkReset, Disabled and LinkError are down. <span class="ref">Table 10-3 (pl_state_sts), p.542</span></p>
+  </div>
+</section>
+
+<!-- 4. STATES -->
+<section id="states">
+  <div class="wrap">
+    <h2>5 · State machine and the request/status contract</h2>
+    <p class="sub">The Protocol Layer asks on <code>lp_state_req</code>; the Adapter answers on <code>pl_state_sts</code> only after the matching handshake with the remote die has finished. The status can also move on its own, for example into Retrain.</p>
+    <figure>
+      <svg viewBox="0 0 800 370" role="img" aria-label="FDI state machine: Reset to Active on a NOP to Active edge; Active to Retrain, L1 and L2; L1 exits through Retrain; L2 exits through Reset; LinkReset, Disabled and LinkError can be entered from most states and exit to Reset.">
+        <defs>
+          <marker id="sm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <g style="color:var(--ink)" font-family="var(--font-body)">
+          <!-- Retrain -->
+          <rect x="270" y="24" width="130" height="44" rx="22" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="335" y="51" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Retrain</text>
+          <!-- Reset -->
+          <rect x="30" y="150" width="120" height="48" rx="24" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="90" y="179" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Reset</text>
+          <!-- Active -->
+          <rect x="250" y="136" width="170" height="76" rx="12" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.8"/>
+          <text x="335" y="162" text-anchor="middle" font-size="15" font-weight="600" fill="currentColor">Active</text>
+          <rect x="278" y="174" width="114" height="26" rx="13" fill="var(--surface)" stroke="var(--muted)" stroke-dasharray="3 3"/>
+          <text x="335" y="191" text-anchor="middle" font-size="11.5" fill="var(--muted)">Active.PMNAK</text>
+          <!-- L2 -->
+          <rect x="170" y="292" width="100" height="44" rx="22" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="220" y="319" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">L2</text>
+          <!-- L1 -->
+          <rect x="420" y="292" width="100" height="44" rx="22" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="470" y="319" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">L1</text>
+
+          <!-- arrows -->
+          <line x1="150" y1="174" x2="246" y2="174" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="198" y="166" text-anchor="middle" font-size="11.5" fill="var(--lp)">NOP→Active</text>
+          <line x1="315" y1="134" x2="315" y2="72" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="308" y="108" text-anchor="end" font-size="11.5" fill="var(--muted)">retrain</text>
+          <line x1="355" y1="70" x2="355" y2="132" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="362" y="104" font-size="11.5" fill="var(--lp)">NOP→Active*</text>
+          <line x1="285" y1="214" x2="235" y2="288" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="232" y="250" text-anchor="end" font-size="11.5" fill="var(--muted)">L2 req + PM rsp</text>
+          <line x1="385" y1="214" x2="455" y2="288" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="432" y="246" font-size="11.5" fill="var(--muted)">L1 req + PM rsp</text>
+          <path d="M520,306 C600,280 560,46 404,46" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="560" y="150" font-size="11.5" fill="var(--muted)">L1 exit</text>
+          <path d="M170,314 C100,310 84,250 88,202" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="70" y="270" text-anchor="middle" font-size="11.5" fill="var(--muted)">L2 exit</text>
+
+          <!-- link-down column -->
+          <text x="650" y="40" text-anchor="middle" font-size="12" fill="var(--muted)">Link-down states</text>
+          <rect x="590" y="56" width="120" height="40" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="650" y="81" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">LinkReset</text>
+          <rect x="590" y="110" width="120" height="40" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="650" y="135" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">Disabled</text>
+          <rect x="590" y="164" width="120" height="40" rx="8" fill="var(--surface)" stroke="#c0392b" stroke-width="1.6"/>
+          <text x="650" y="189" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">LinkError</text>
+          <text x="650" y="228" text-anchor="middle" font-size="11.5" fill="var(--muted)">priority: LinkError</text>
+          <text x="650" y="243" text-anchor="middle" font-size="11.5" fill="var(--muted)">› Disabled › LinkReset</text>
+          <text x="650" y="266" text-anchor="middle" font-size="11.5" fill="var(--muted)">exit → Reset on</text>
+          <text x="650" y="281" text-anchor="middle" font-size="11.5" fill="var(--lp)">lp_state_req = Active</text>
+          <line x1="424" y1="160" x2="584" y2="100" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#sm)"/>
+          <line x1="424" y1="174" x2="584" y2="134" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#sm)"/>
+          <line x1="424" y1="188" x2="584" y2="184" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#sm)"/>
+          <text x="500" y="122" font-size="11" fill="var(--muted)">from Active, Retrain, L1, L2</text>
+        </g>
+      </svg>
+      <figcaption>Active.PMNAK is a sub-state of Active: flits keep flowing, and it can never go straight to L1 or L2. * Retrain → Active needs a NOP→Active edge only when Retrain was entered from Active; from L1 an Active level is enough.<span class="ref">Spec: Figure 10-19, p.552 · §10.3, p.559 · §10.2.9, p.555 (L1 exit through Retrain, L2 exit through Reset) · §10.3.3.4, p.567 · §10.3.3.5–10.3.3.8, p.567–569</span></figcaption>
+    </figure>
+
+    <div class="twocol" style="margin-top:16px">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table 10-4, p.565. Its separate L1 and L2 columns hold the same values and are merged here.</caption><thead><tr><th>Request ↓ · Status →</th><th>Reset</th><th>Active</th><th>L1/L2</th><th>Retrain</th><th>LinkReset</th><th>Disabled</th><th>LinkError</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px">
+            <tr><td>NOP</td><td>yes</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>Active</td><td>edge¹</td><td>·²</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+            <tr><td>L1 / L2</td><td>·</td><td>yes</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>Retrain</td><td>·</td><td>yes³</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>LinkReset</td><td>edge¹</td><td>yes</td><td>yes</td><td>yes</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>Disabled</td><td>edge¹</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>·</td><td>·</td></tr>
+            <tr><td>lp_linkerror</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Reading the table</h3>
+        <ul class="tight">
+          <li>¹ <strong>edge</strong>: the request must be NOP for at least one clock while status is Reset, then change. Holding Active straight out of reset is ignored. <span class="ref">§10.3.3.1 and Table 10-4 note a, p.565</span></li>
+          <li>² From Active.PMNAK an Active request moves status back to Active. <span class="ref">Table 10-4 note b, p.565</span></li>
+          <li>³ The Protocol Layer may request Retrain only in Raw format. In Flit mode retrain is the Adapter's and PHY's decision. <span class="ref">§10.3.3.4, p.566</span></li>
+          <li><code>lp_linkerror</code> is a separate level wire so containment does not wait for a state-request encoding. <span class="ref">Table 10-3, p.542</span></li>
+          <li>The Adapter can also leave a state on its own: remote requests, CRC thresholds, PHY framing errors. <span class="ref">Table 10-3 (pl_state_sts), p.542 · §10.3.3.4, p.566</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. HANDSHAKES -->
+<section id="handshakes">
+  <div class="wrap">
+    <h2>6 · The four handshakes</h2>
+    <p class="sub">All four follow the same four-phase pattern: request rises, acknowledge rises, request falls, acknowledge falls. Each needs at least one flop between request and acknowledge, so there is never a combinational loop across the interface.</p>
+    <div class="mini" id="minis"></div>
+  </div>
+</section>
+
+<!-- 7. RATIONALE -->
+<section id="rationale">
+  <div class="wrap">
+    <h2>7 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives an FDI rule, the reason behind it, a worked example with real numbers, and what breaks when a design ignores it. Numbers assume an x64 Advanced Package module at 16 GT/s and a 64-byte FDI at 2 GHz unless the card says otherwise.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.3.1 p.561 · §4.1.1 p.98</span></div>
+        <h3>Wide and slow: 64 bytes at 2 GHz, not 1 bit at 16 GHz</h3>
+        <p class="rule">FDI moves NBYTES per lclk cycle. Everything that runs at the bit rate stays inside the PHY.</p>
+        <div class="part"><span class="l l-why">Why</span><p>This is the mainband clock's trade taken one level further. Logic that decodes headers, computes CRC and arbitrates between streams cannot close timing at the bit rate, and dynamic power grows with frequency (P ≈ C·V²·f). A wide, slow path puts the bandwidth into on-die wires, which are cheap, instead of into frequency, which is not.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Each lane moves 16 bits per nanosecond, so in one 0.5 ns cycle of a 2 GHz lclk it delivers 8 bits: one byte, exactly one 8-UI Valid frame. Sixty-four lanes give 64 bytes, one FDI beat. A 256B flit is 4 beats, 2 ns, the same 2 ns it occupies on the wire as 32 UI.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A 32-byte FDI at 2 GHz on that link caps it at 50% utilisation, however much traffic the Protocol Layer has.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>A 64B datapath at 2 GHz sustains a single x64 Advanced module at 16 GT/s <span class="ref">§10.3.1, p.561</span></li>
+          <li><span class="kind spec">Spec</span>One byte per lane over 8 UI, bit 0 first <span class="ref">§4.1.1 and Figure 4-1, p.98</span></li>
+          <li><span class="kind spec">Spec</span>Data is framed in 8-UI Valid blocks <span class="ref">§4.1.2, p.100</span></li>
+          <li><span class="kind spec">Spec</span>A 256B flit occupies 32 UI on a x64 interface <span class="ref">Figure 4-2, p.99</span></li>
+          <li><span class="kind derived">Derived</span>16 Gb/s × 0.5 ns = 8 bits per lane per lclk cycle; a 32-byte FDI carries half of 128 GB/s</li>
+          <li><span class="kind bg">Background</span>P ≈ C·V²·f and timing-closure limits are general circuit background</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.2.2 p.547 · Table 1-4 p.49</span></div>
+        <h3>One clock domain across the interface</h3>
+        <p class="rule">Both sides of FDI run on <code>lclk</code> and share one reset source. Clock crossings go inside a block, never at the boundary.</p>
+        <div class="part"><span class="l l-why">Why</span><p>FDI's rules are counted in lclk cycles: the cancel lands exactly one cycle after a flit's last beat, every request waits at least one cycle for its acknowledge, a request sits at NOP for at least one clock. None of that can be exact across an asynchronous boundary. Latency is the other reason: the target is ≤ 2 ns for Adapter plus PHY, transmit plus receive, at 16 GT/s.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A dual-clock FIFO with two-flop synchronisers typically costs 2–3 cycles per crossing; at 2 GHz, 3 cycles is 1.5 ns, three quarters of the budget. So a controller whose core runs at 1.6 GHz crosses to lclk inside the Protocol Layer, where that latency is its own to spend. The one exception follows the same logic: with Management Transport over the sideband, the cfg signals may sit on a separate always-available Mgmt_clk, so management keeps working while lclk is off.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A crossing FIFO inside the Protocol Layer sized for average throughput overflows, because the receive path has no backpressure.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Same clock domain on both sides, clock-crossing FIFOs only inside a block, the Mgmt_clk exception, and the no-backpressure warning <span class="ref">§10.2.2, p.547</span></li>
+          <li><span class="kind spec">Spec</span>Both sides in one reset domain from the same source <span class="ref">§10.2.1, p.547</span></li>
+          <li><span class="kind spec">Spec</span>Cancel exactly one cycle after the last chunk <span class="ref">Table 10-3 (pl_flit_cancel), p.542</span></li>
+          <li><span class="kind spec">Spec</span>At least one cycle from request to acknowledge <span class="ref">§10.2.3.1, p.547</span></li>
+          <li><span class="kind spec">Spec</span>NOP for at least one clock before Active <span class="ref">§10.3.3.1, p.565</span></li>
+          <li><span class="kind spec">Spec</span>≤ 2 ns latency target for Adapter + PHY, Tx + Rx, at 16 GT/s <span class="ref">Table 1-4 note d, p.49</span></li>
+          <li><span class="kind illus">Illustrative</span>2–3 cycles per synchroniser crossing and the 1.6 GHz core clock</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.2.1 p.547</span></div>
+        <h3>Zero means idle</h3>
+        <p class="rule">FDI has no reset wire. Every output drives 0 coming out of reset; only tied-off stream IDs are exempt.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Reset release is routed across the SoC and can reach the two sides a few cycles apart. With all-zero outputs, a block that wakes first sees exactly what an idle partner looks like: <code>lp_state_req</code> 0000 is NOP, <code>pl_state_sts</code> 0000 is Reset, and every valid, stall, wake and clock request is low.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The Adapter leaves reset 3 cycles before the Protocol Layer. For those cycles it samples NOP with <code>lp_irdy</code> low and does nothing. When the Protocol Layer wakes it reads Reset with <code>pl_inband_pres</code> low and simply waits. No extra "both sides are out of reset" synchronisation is needed.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that drives Active (0001) straight out of reset never produces the NOP→Active edge the Adapter waits for, and the link stays in Reset.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Every output drives 0 out of reset; tied-off stream IDs excepted <span class="ref">§10.2.1, p.547</span></li>
+          <li><span class="kind spec">Spec</span>lp_state_req 0000 is NOP; pl_state_sts 0000 is Reset <span class="ref">Table 10-3, p.542</span></li>
+          <li><span class="kind spec">Spec</span>Reset to Active needs NOP, then Active <span class="ref">§10.3.3.1, p.565</span></li>
+          <li><span class="kind illus">Illustrative</span>The 3-cycle reset skew</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.3.1 p.559–562</span></div>
+        <h3>Recommended bus widths, fixed byte order</h3>
+        <p class="rule">In Flit mode NBYTES is strongly recommended, not required, to be 64, 128, 256 or 512. A width of 512 or more should be a multiple of 256 and is meant only for a four-module Advanced Package link at 16 GT/s or higher. In Raw format NBYTES is vendor-defined. Flit byte 0 always sits on FDI byte 0.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Every Flit-mode format moves in 256-byte units. A width that divides 256, or is a multiple of it, keeps every flit boundary on a cycle boundary, so per-cycle signals such as <code>pl_flit_cancel</code> and <code>lp_corrupt_crc</code> always point at one flit. The fixed byte order makes module count, lane reversal and lane repair invisible above RDI; MMPL and the PHY handle them.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>On a 96-byte bus a 256B flit takes 2⅔ beats, so the end of one flit and the start of the next share a beat: the Adapter needs a rotator, and a cancel in that cycle no longer names one flit. In the other direction, a design that ships first with one x64 module (64B FDI) and later with four (256B FDI) keeps the same Protocol Layer byte order; only NBYTES changes. At the top end, four x64 modules at 64 GT/s move 2048 GB/s, which needs 1024 bytes per cycle at 2 GHz: above 512 and still within the recommendation, because it is a multiple of 256 on a four-module Advanced Package link.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Odd widths add shifting logic and pipeline stages to the latency-critical path.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>64, 128, 256 or 512 strongly recommended in Flit mode; 512 or more only as a multiple of 256 on a four-module Advanced Package link at 16 GT/s or higher; vendor-defined in Raw format; Flit-mode data moves in 256B units <span class="ref">§10.3.1 implementation note, p.562</span></li>
+          <li><span class="kind spec">Spec</span>NBYTES itself is defined only as the data width of the FDI instance, with no fixed value <span class="ref">Table 10-3, p.540</span></li>
+          <li><span class="kind spec">Spec</span>Flit byte order on FDI and RDI <span class="ref">§10.3.1 and Figure 10-26, p.559–560</span></li>
+          <li><span class="kind spec">Spec</span>MMPL handles module byte order; FDI mapping does not change for multi-module <span class="ref">§10.3.1, p.561</span></li>
+          <li><span class="kind spec">Spec</span>On wide buses lp_corrupt_crc, pl_flit_cancel and pl_error apply to every flit in that cycle <span class="ref">§10.3.1 implementation note, p.562</span></li>
+          <li><span class="kind derived">Derived</span>256 ÷ 96 = 2⅔ beats per flit; 4 × 512 GB/s ÷ 2 GHz = 1024 bytes per cycle</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§2.4.2–2.4.3 p.56–57 · §3.3.2 p.71</span></div>
+        <h3>256B formats leave holes; 68B format needs shifting</h3>
+        <p class="rule">In 256B formats the Protocol Layer passes all 256 bytes, with 0 in the bytes reserved for the Adapter. In 68B format it passes only the 64-byte payload.</p>
+        <div class="part"><span class="l l-why">Why</span><p>In a 256B flit the Adapter fills the flit header, DLP and CRC bytes in place: nothing moves, and FDI and RDI carry the same number of bytes. In 68B format the Adapter adds a 2-byte header and a 2-byte CRC to every 64 bytes, so the RDI stream is longer than the FDI stream and shifts by 4 bytes per flit.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL 68B stream at full link rate with equal FDI and RDI widths: 16 beats of payload become 16 × 68 = 1088 bytes, 17 RDI beats, so <code>pl_trdy</code> drops about one cycle in seventeen (≈ 6%). When the stream pauses, the Adapter closes it with a PDS flit header and zero padding to a 256-byte boundary, including at least two all-zero 64-byte chunks, so the receiver can reset its byte shifter.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiving Protocol Layer that does not ignore the Adapter-reserved bytes of a 256B flit treats CRC and DLP bits as payload.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>256B formats: the Protocol Layer presents 256B with 0 in the Adapter's bytes, and the Adapter fills header and CRC <span class="ref">§2.4.3, p.57 · §3.3.3, p.76</span></li>
+          <li><span class="kind spec">Spec</span>68B format: the Protocol Layer sends 64B; the Adapter adds a 2B header and a 2B CRC <span class="ref">§3.3.2, p.71 · §2.4.2, p.56–57</span></li>
+          <li><span class="kind spec">Spec</span>4-byte shift per flit; PDS plus zero padding to 256B with at least two all-zero 64B chunks <span class="ref">§3.3.2.1, p.73</span></li>
+          <li><span class="kind spec">Spec</span>68B byte maps on FDI and RDI <span class="ref">Figures 10-28 and 10-29, p.560–561</span></li>
+          <li><span class="kind derived">Derived</span>16 × 68 B = 1088 B = 17 beats of 64 B</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>Table 10-3 p.540 · §10.1.4 p.533</span></div>
+        <h3>Two qualifiers: lp_irdy warns, lp_valid delivers</h3>
+        <p class="rule"><code>lp_irdy</code> means "I may have data"; <code>lp_valid</code> means "this beat is data". A beat moves only when <code>lp_irdy</code>, <code>lp_valid</code> and <code>pl_trdy</code> are all high.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The extra signal is an early warning. The lower layer may clock-gate its transmit path between bursts, and seeing <code>lp_irdy</code> first gives it time to ungate and raise <code>pl_trdy</code> before beat 0 arrives. The spec draws this on RDI (Figure 10-4, <code>lp_irdy</code> two cycles ahead of <code>lp_valid</code>); FDI's <code>lp_irdy</code> has the same meaning.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An Adapter whose transmit path needs 2 cycles to ungate. The Protocol Layer raises <code>lp_irdy</code> 2 cycles early, <code>pl_trdy</code> is already high when beat 0 arrives, and the first flit leaves without a bubble.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Raising both together into a gated Adapter costs 2 cycles at every burst start: 1 ns at 2 GHz, half the Adapter + PHY latency target.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>lp_irdy means the Protocol Layer potentially has data <span class="ref">Table 10-3, p.540</span></li>
+          <li><span class="kind spec">Spec</span>A beat transfers when lp_irdy, lp_valid and pl_trdy are all high <span class="ref">§10.2.4, p.549</span></li>
+          <li><span class="kind spec">Spec</span>lp_irdy as an early hint so the lower layer can ungate (RDI) <span class="ref">§10.1.4 implementation note and Figure 10-4, p.533</span></li>
+          <li><span class="kind illus">Illustrative</span>The 2-cycle ungate time</li>
+          <li><span class="kind derived">Derived</span>2 cycles × 0.5 ns = 1 ns, against the 2 ns target <span class="ref">Table 1-4, p.49</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.2.4 p.549</span></div>
+        <h3>No bubbles inside a transmitted flit</h3>
+        <p class="rule">From a flit's first beat to its last, <code>lp_valid</code> and <code>lp_irdy</code> stay high. Only <code>pl_trdy</code> may pause the transfer.</p>
+        <div class="part"><span class="l l-why">Why</span><p>It lets the Adapter cut through: beat 0 can head for RDI, with the CRC under way, while beat 1 is still arriving. The PHY makes the matching promise one layer down: while the Adapter streams without gaps, the PHY keeps Valid frames back to back on the wire.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Store-and-forward of one 256B flit on a 64-byte bus means waiting for 4 beats, 2 ns at 2 GHz. That is the entire Adapter + PHY latency target spent before the first bit leaves the die.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>The Adapter must either buffer, costing latency, or open a gap inside its own RDI stream. In 68B mode a mid-stream gap without a PDS breaks the receiver's byte alignment, so expect corrupted flits on the far side.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>No bubbles inside a flit; only pl_trdy may stall it <span class="ref">§10.2.4, p.549</span></li>
+          <li><span class="kind spec">Spec</span>The PHY must not insert bubbles in valid frames for a continuous stream <span class="ref">§10.1.4 implementation note, p.532</span></li>
+          <li><span class="kind spec">Spec</span>In 68B mode the Adapter keeps lp_irdy and lp_valid on RDI until a PDS completes <span class="ref">§3.3.2.1, p.73</span></li>
+          <li><span class="kind derived">Derived</span>4 beats × 0.5 ns = 2 ns of store-and-forward</li>
+          <li><span class="kind bg">Background</span>Cut-through as the motive is our explanation, not spec text</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.2.4 p.549</span></div>
+        <h3>pl_trdy may drop at any time</h3>
+        <p class="rule">The Protocol Layer may assume nothing about when <code>pl_trdy</code> falls or for how long.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The Protocol Layer is not the only source of traffic. The Adapter also sends replays, NOP flits, inserted parity bytes and 68B header bytes, and it has to respect Retimer credits and the link's current speed and width.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time examples</span>
+          <ul>
+            <li>Runtime parity with N = 4: 256 bytes inserted every 256 KB, so <code>pl_trdy</code> drops 4 cycles in every 4096 on a 64-byte FDI.</li>
+            <li>A replay of 10 flits: 40 beats in which the link carries old flits.</li>
+            <li>Speed degrade from 32 to 24 GT/s with an FDI sized for 32 GT/s: <code>pl_trdy</code> high about 75% of the time.</li>
+            <li>Standard x16 degraded to x8: about 50%.</li>
+            <li>Retimer credits used up: each credit covers 256 bytes, and <code>pl_trdy</code> waits until credits return.</li>
+          </ul>
+        </div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that schedules on an assumed <code>pl_trdy</code> pattern loses bandwidth or deadlocks on the first replay.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>No assumption about when or how long pl_trdy drops <span class="ref">§10.2.4, p.549</span></li>
+          <li><span class="kind spec">Spec</span>Parity insertion: 64·N bytes every 256·256·N bytes, N = 4 in Flit mode <span class="ref">§3.9, p.95</span></li>
+          <li><span class="kind spec">Spec</span>NOP insertion for stack multiplexing <span class="ref">§3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Retimer credits of 256 B; no data without a credit <span class="ref">§1.3, p.48</span></li>
+          <li><span class="kind derived">Derived</span>262144 B ÷ 64 B = 4096 beats; 24 ÷ 32 = 75%; x8 ÷ x16 = 50%; 10 flits × 4 beats = 40</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>Table 10-3 p.540</span></div>
+        <h3>lp_corrupt_crc: poison a flit that has already left</h3>
+        <p class="rule">For CXL.cachemem in UCIe Flit mode, the Protocol Layer can make the Adapter corrupt the CRC of the flit it is sending, by XOR with syndrome 138Eh.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Beats already sent cannot be recalled. A corrupted CRC makes the receiver drop the flit through its normal error path, with no new message type. The Adapter then overwrites that flit in its Tx retry buffer with the next flit from the Protocol Layer, which carries the viral indication, so a replay can never resend the bad data. The syndrome is chosen so no 1-bit or 2-bit error aliases to it.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL.mem read returns data whose uncorrectable ECC error is flagged only as the last beat goes out. The Protocol Layer asserts <code>lp_corrupt_crc</code> with that beat. The far Adapter sees a CRC error and asks for a replay, and the replay delivers the viral flit. Containment costs one flit time plus one replay round trip.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Without it, the only fast option is LinkError, which takes the whole link down for at least 16 ms.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Applicability, XOR with 138Eh, overwrite in the Tx retry buffer, and viral in the next flit <span class="ref">Table 10-3 (lp_corrupt_crc), p.540</span></li>
+          <li><span class="kind spec">Spec</span>LinkError minimum residency of 16 ms <span class="ref">§10.3.3.7, p.569</span></li>
+          <li><span class="kind illus">Illustrative</span>The late ECC error on a CXL.mem read</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.2.4.1 p.550</span></div>
+        <h3>DLLPs travel beside the flits, not in the retry buffer</h3>
+        <p class="rule">PCIe and CXL.io DLLPs use <code>lp_dllp</code> and <code>pl_dllp</code>, bypass the retry buffer and ignore <code>pl_trdy</code>. The Adapter keeps only the newest credit DLLP of each type per virtual channel.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A credit update states the current credit total, so a newer one makes an older one worthless, and replaying a stale one is pointless. Keeping DLLPs out of the retry buffer lets credits flow during a replay: the Adapter drops them into DLP bytes 2–5 of whichever flit leaves next, new or replayed.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>During a 10-flit replay the Protocol Layer issues a posted-credit UpdateFC twice. The Adapter discards the first, keeps the second and sends it in the next available flit. On receive, all-zero DLP bytes are a NOP DLLP and are not forwarded.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>DLLPs only leave inside flits. A PCIe controller with no TLPs that also stops sending NOP flits strands its credit updates on-die, and the far side stalls waiting for credits on an idle link.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>DLLPs are not backpressured by pl_trdy and stop for pl_stallreq <span class="ref">Table 10-3 (lp_dllp_valid), p.540</span></li>
+          <li><span class="kind spec">Spec</span>DLLPs bypass the retry buffer and go into DLP bytes 2–5; storage per type and VC; a newer credit DLLP may replace a pending one; no reordering <span class="ref">§10.2.4.1, p.550</span></li>
+          <li><span class="kind spec">Spec</span>The Protocol Layer must send NOP flits when it has no TLPs <span class="ref">§10.2.4.1, p.550</span></li>
+          <li><span class="kind spec">Spec</span>All-zero DLLP bytes are a NOP DLLP and are not forwarded <span class="ref">§10.2.4.1, p.551</span></li>
+          <li><span class="kind bg">Background</span>UpdateFC carrying current credit totals is PCIe flow-control background</li>
+          <li><span class="kind illus">Illustrative</span>The 10-flit replay</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path</span><span>§10.2.2 p.547 · §10.2.4 p.550</span></div>
+        <h3>No backpressure on the receive path</h3>
+        <p class="rule">Whenever <code>pl_valid</code> is high the beat is taken. There is no ready signal back to the Adapter.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The protocols above already do flow control: PCIe and CXL credits guarantee the receiver has room for everything the far side sends, so a second, link-level ready would be redundant. It would also have nothing to act on. Flits already on the wire keep arriving, and UCIe forbids an Rx retry buffer in the Adapter, so there is nowhere to park them. Leaving the ready path out also keeps it out of a timing-critical loop.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Protocol Layer whose internal pipeline can stall for 50 ns, fed at 128 GB/s, needs at least 6.4 KB of elastic buffer in front of the stall point: 25 flits of 256 bytes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An undersized buffer overflows, and because the Adapter has already delivered and forgotten those flits, retry cannot recover them.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>No backpressure from the Protocol Layer on the main data path <span class="ref">§10.2.2, p.547 · §10.2.4, p.550</span></li>
+          <li><span class="kind spec">Spec</span>Rx retry buffer rules must not be implemented <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind bg">Background</span>Protocol credits making a link-level ready redundant is PCIe and CXL flow-control reasoning</li>
+          <li><span class="kind derived">Derived</span>128 GB/s × 50 ns = 6.4 KB = 25 × 256 B</li>
+          <li><span class="kind illus">Illustrative</span>The 50 ns internal stall</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path</span><span>§10.2.4 p.550</span></div>
+        <h3>Bubbles are allowed on the receive path</h3>
+        <p class="rule">The Adapter may drop <code>pl_valid</code> in the middle of a flit.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receive stream is shaped by the link, not by the Adapter. NOP flits are removed, inserted parity bytes are stripped, flits received between an error and its replay are discarded, and in 68B mode the 68-byte link units do not line up with 64-byte FDI beats.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>In 68B mode the Adapter strips 4 bytes per flit. Seventeen RDI beats carry 16 beats of payload, so about one FDI cycle in seventeen has nothing to deliver.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that counts beats by clock cycles instead of by <code>pl_valid</code> mis-assembles flits.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>The Adapter may insert bubbles inside a flit <span class="ref">§10.2.4, p.550</span></li>
+          <li><span class="kind spec">Spec</span>NOP flits are not forwarded; PDS and its padding are not forwarded <span class="ref">§3.1, p.59 · §3.3.2.1, p.73</span></li>
+          <li><span class="kind spec">Spec</span>The Adapter strips the 68B header and CRC on receive <span class="ref">§2.4.2, p.57</span></li>
+          <li><span class="kind spec">Spec</span>Parity bytes inside the data stream <span class="ref">§3.9, p.95</span></li>
+          <li><span class="kind derived">Derived</span>17 RDI beats carry 16 beats of payload</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path</span><span>Table 10-3 p.542 · §10.2.5 p.551</span></div>
+        <h3>Forward first, cancel later</h3>
+        <p class="rule">The Adapter forwards received beats before the CRC check finishes, and pulses <code>pl_flit_cancel</code> exactly one cycle after the last beat if it failed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>CRC is computed over 128 bytes, a wide XOR tree. Putting it in front of the data would add at least a cycle to every flit inside a 2 ns budget. With a fixed cancel slot the Protocol Layer can start decoding at beat 0 and delay only the final commit.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL.cache header in beat 0 is decoded while beats 1–3 arrive. In the cycle after beat 3 the Protocol Layer checks the cancel slot and commits. The data path never waits for the CRC; only the commit point does.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that acts on a flit before its cancel slot, for example by writing memory, can act on corrupted data.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Fixed 1-cycle delay, single-cycle pulse, replay uncancelled and in order <span class="ref">Table 10-3 (pl_flit_cancel), p.542</span></li>
+          <li><span class="kind spec">Spec</span>CRC kept off the critical timing path; worked examples <span class="ref">§10.2.5 and Figures 10-15 to 10-18, p.551–552</span></li>
+          <li><span class="kind spec">Spec</span>CRC is computed over 128 bytes <span class="ref">§3.7, p.92</span></li>
+          <li><span class="kind illus">Illustrative</span>The CXL.cache header decode</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path</span><span>Table 10-3 p.542 · §10.2.5 p.551</span></div>
+        <h3>Latency-Optimized flits: one CRC per half</h3>
+        <p class="rule">In Latency-Optimized formats each 128-byte half has its own CRC and its own cancel slot.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The first half can be checked and used before the second half has even arrived.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>On a 64-byte FDI, half A ends at beat 1 and commits in cycle 2, while a Standard flit commits in cycle 4: whatever sits in the first half is usable 2 cycles, 1 ns, sooner. The price comes after a replay: the Adapter must stop half A from being consumed twice, either by cancelling the duplicate or by not asserting <code>pl_valid</code> for it.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that ignores the cancel on a replayed half A consumes it twice.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Cancel timing per 128B half <span class="ref">Table 10-3 (pl_flit_cancel), p.542</span></li>
+          <li><span class="kind spec">Spec</span>Duplicate first half after replay: cancel it, or withhold pl_valid <span class="ref">§10.2.5, Figures 10-16 and 10-17, p.551</span></li>
+          <li><span class="kind derived">Derived</span>Commit in cycle 2 instead of 4: 2 cycles = 1 ns at 2 GHz</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="share">
+        <div class="meta"><span>Sharing the link</span><span>Table 10-3 p.541 · §3.3.2 p.72</span></div>
+        <h3>An 8-bit stream ID on FDI, a few header bits on the wire</h3>
+        <p class="rule"><code>lp_stream</code> and <code>pl_stream</code> name the stack and protocol of each beat: 01h–05h for stack 0, 11h–15h for stack 1.</p>
+        <div class="part"><span class="l l-why">Why</span><p>One Adapter can serve several Protocol Layers, and the far Adapter has to steer each flit to the right one. On the link that information rides in the flit header as a protocol identifier and a stack bit; FDI spells it out as one code that each Protocol Layer can match directly.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL Type 2 accelerator interleaves CXL.io completions (stream 02h) and CXL.cachemem traffic (03h) flit by flit. ARB/MUX arbitrates per flit, and the receiving Adapter drives <code>pl_stream</code> from each flit header.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Single-protocol designs often tie the stream off at integration; a wrong tie-off sends every flit to a reserved stream.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>lp_stream and pl_stream encodings <span class="ref">Table 10-3, p.541</span></li>
+          <li><span class="kind spec">Spec</span>Protocol identifier and stack identifier in the flit header <span class="ref">Tables 3-2 and 3-3, p.72 · §3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Tie-off exception to the reset rule <span class="ref">§10.2.1, p.547</span></li>
+          <li><span class="kind spec">Spec</span>CXL.io and CXL.cachemem FDIs into ARB/MUX <span class="ref">Figure 10-12, p.539</span></li>
+          <li><span class="kind illus">Illustrative</span>The Type 2 interleaving</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="share">
+        <div class="meta"><span>Sharing the link</span><span>§3.1 p.59–60</span></div>
+        <h3>Two stacks: never two flits in a row from one stack</h3>
+        <p class="rule">With Multi_Protocol_Enable negotiated, the Adapter never sends consecutive flits from the same stack, and inserts NOP flits when it has to.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The feature lets two Protocol Layers that each need half the link share it without being redesigned for full rate. Guaranteed alternation means each receiver sees at most every other flit, so it can be built for half rate.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Two CXL 68B controllers, each sized for 32 GT/s SERDES-equivalent bandwidth, share one faster UCIe link. On stack 0's FDI, <code>pl_trdy</code> accepts 4 beats, then pauses 4 beats for stack 1's flit, or for a NOP if stack 1 is idle. With Enhanced Multi_Protocol_Enable and a 100% advertisement, the Adapter round-robins per flit instead and an idle stack's slot is reused. The "Two stacks" live scenario shows it cycle by cycle.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver built for half rate overflows if it is ever given two flits back to back.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>No consecutive flits from one stack, NOP insertion, NOPs bypass retry and are not forwarded, receivers never get consecutive flits <span class="ref">§3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Two CXL 68B Protocol Layers sharing one faster link <span class="ref">§3.1 implementation note, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Enhanced Multi_Protocol_Enable, 100% or 50% advertisement, round-robin per flit <span class="ref">§3.1, p.60</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="share">
+        <div class="meta"><span>Sharing the link</span><span>§3.8 p.93 · §10.2.8 p.554</span></div>
+        <h3>Two stacks, one retry buffer</h3>
+        <p class="rule">With two stacks on one Adapter the Tx retry buffer is shared. When both are coming back from Retrain, the Adapter starts the Sequence Number Handshake only after it has received Rsp.Active for both stacks.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Sequence numbers and replay belong to the shared buffer, not to a stack. A replay can contain flits of either stack, so both receivers must be open before it starts. PM entry for one stack waits only until that stack's own flits in the buffer have been acknowledged.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After a retrain, stack 0 finishes its Active Entry handshake first. The Sequence Number Handshake, and any replay, still waits until stack 1's Rsp.Active has arrived too.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Replayed flits for a stack whose receiver is still closed have nowhere to go, and the far side's retry state no longer matches.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>The Tx retry buffer is shared between stacks <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind spec">Spec</span>Rsp.Active for both Adapter0 and Adapter1 before the Sequence Number Handshake <span class="ref">§10.2.8, p.554</span></li>
+          <li><span class="kind spec">Spec</span>A PM request waits until that Protocol Layer's flits are acknowledged <span class="ref">§10.2.9, p.556</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3 p.564 · Table 10-3 p.542</span></div>
+        <h3>Request on one wire, status on another</h3>
+        <p class="rule">The Protocol Layer asks on <code>lp_state_req</code>. The Adapter reports on <code>pl_state_sts</code> only once the far die has agreed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Most state changes need the far die's consent over the sideband, which takes hundreds of nanoseconds to microseconds, and the status can also change without being asked: a remote retrain, an error. A single control wire could not express "asked for, not yet agreed".</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The Protocol Layer requests L1 at t = 0. Status reads L1 only after the stall handshake (a few cycles), the retry buffer draining (one Ack round trip), and Req.L1 and Rsp.L1 on the sideband (about 120 ns of serial time each, and the far side may take up to 2 µs to answer). All that time the Protocol Layer must keep receiving.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Logic that assumes the request took effect, for example gating clocks right after asking for L1, loses flits that are still arriving.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>pl_state_sts may change autonomously <span class="ref">Table 10-3, p.542</span></li>
+          <li><span class="kind spec">Spec</span>PM entry: stall, empty retry buffer, PM request, response within 2 µs <span class="ref">§10.2.9, p.555–556</span></li>
+          <li><span class="kind spec">Spec</span>Sideband packet of 64 bits plus at least 32 UI low; 800 MHz sideband clock <span class="ref">§4.1.5, p.102 · §1.1.3, p.43</span></li>
+          <li><span class="kind derived">Derived</span>96 UI × 1.25 ns = 120 ns per header-only message</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.1 p.565 · §10.3.3.4 p.567 · §10.3.3.8 p.569</span></div>
+        <h3>Active needs an edge, not a level</h3>
+        <p class="rule">From Reset, and from a Retrain entered from Active, the Adapter acts only on <code>lp_state_req</code> moving from NOP to Active. After a link-down the PHY will not train again until it sees that edge on RDI or a training trigger.</p>
+        <div class="part"><span class="l l-why">Why</span><p>It gives the upper layer a hold-off switch. Holding NOP keeps the link down, or in Retrain, while firmware reads logs, software reprograms registers, or a sideband handshake such as the parity-feature negotiation finishes. It also stops a faulty link from re-training in a loop on its own.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A viral error takes the link to LinkError. Firmware wants the error logs before the link returns, so the Protocol Layer holds NOP after the exit to Reset. When firmware sets its enable bit, the Protocol Layer drives NOP→Active and the full bring-up runs: milliseconds of PHY training, then the Adapter handshakes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that holds Active through a Retrain leaves the link stuck in Retrain.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Reset to Active needs NOP for a clock, then Active <span class="ref">§10.3.3.1, p.565</span></li>
+          <li><span class="kind spec">Spec</span>Retrain entered from Active needs NOP to Active; the stated reason is delaying for sideband handshakes such as the Parity Feature <span class="ref">§10.3.3.4, p.567</span></li>
+          <li><span class="kind spec">Spec</span>No training after a link-down without NOP to Active or a training trigger; the upper layer can hold the link back <span class="ref">§10.3.3.8, p.569</span></li>
+          <li><span class="kind illus">Illustrative</span>The firmware log-collection scenario</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>Table 10-3 p.542</span></div>
+        <h3>Link Up includes Retrain, L1 and L2</h3>
+        <p class="rule">For the Protocol Layer the link is Up in Active, Active.PMNAK, Retrain, L1 and L2, and Down in Reset, LinkReset, Disabled and LinkError.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Protocol state survives the first group. Sequence numbers, credits and outstanding requests stay valid through a retrain or a PM cycle; only the link-down states mean losing them. It mirrors PCIe's split between DL_Up and DL_Down.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CRC-threshold retrain lands in the middle of a 4 KB DMA. Because Retrain counts as Up, the DMA pauses, unacknowledged flits replay, and software never notices. If Retrain counted as Down, every outstanding request would be failed as if the device had vanished.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that flushes its state on Retrain turns a recoverable event into data loss.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Link Up and Link Down from the Protocol Layer's view <span class="ref">Table 10-3 (pl_state_sts), p.542</span></li>
+          <li><span class="kind bg">Background</span>The DL_Up and DL_Down comparison comes from PCIe</li>
+          <li><span class="kind illus">Illustrative</span>The 4 KB DMA</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.2 p.566 · §10.3.3.4 p.566</span></div>
+        <h3>CXL never sees a retrain</h3>
+        <p class="rule">Retrain is not propagated to CXL vLSMs. The CXL FDI status stays Active; only <code>pl_rx_active_req</code> drops.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The spec qualifies the rule with "CXL Flit Mode with Retry in the Adapter". The Adapter's retry makes the retrain lossless and in order, so the CXL link layer has nothing to recover and no reason to exchange ALMPs.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A snoop response is sitting in the Tx retry buffer when the PHY retrains, and it replays afterwards. On the CXL FDI the only sign is a window where <code>pl_rx_active_req</code> is low and no flits arrive.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A CXL Protocol Layer that waits for a Retrain status before pausing never sees one; it has to follow <code>pl_rx_active_req</code> and <code>pl_trdy</code> instead.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>The Active to Retrain arc does not apply to CXL vLSMs (CXL Flit Mode with Retry in the Adapter) <span class="ref">§10.3.3.2, p.566</span></li>
+          <li><span class="kind spec">Spec</span>Retrain is not propagated to CXL vLSMs <span class="ref">§10.3.3.4, p.566</span></li>
+          <li><span class="kind spec">Spec</span>pl_rx_active_req may drop while the status stays Active <span class="ref">§10.2.7 rule 6, p.553</span></li>
+          <li><span class="kind illus">Illustrative</span>The snoop response</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.4 p.566</span></div>
+        <h3>Only Raw format lets the Protocol Layer ask for Retrain</h3>
+        <p class="rule">In Flit mode only the Adapter and PHY start a retrain.</p>
+        <div class="part"><span class="l l-why">Why</span><p>In Flit mode the Adapter owns reliability, so it is the one that sees CRC and parity error counts. In Raw format the Protocol Layer owns reliability with its own CRC or FEC, so it needs a way to ask.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Streaming protocol in Raw format with its own ECC sees corrected errors climbing and requests Retrain so the PHY re-centres the eye. In Flit mode the same decision belongs to the Adapter's CRC-error threshold.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Retrain request on FDI in Flit mode is not a legal request.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>The Protocol Layer must not request Retrain except in Raw format; the Adapter's retrain triggers include CRC and parity thresholds <span class="ref">§10.3.3.4, p.566</span></li>
+          <li><span class="kind illus">Illustrative</span>The Streaming ECC example</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>Table 10-3 p.542, p.544</span></div>
+        <h3>pl_inband_pres, and sampling the protocol in Reset</h3>
+        <p class="rule"><code>pl_inband_pres</code> rises when parameter exchange is done. The Protocol Layer samples <code>pl_protocol</code> and <code>pl_protocol_flitfmt</code> while status is Reset, <code>pl_inband_pres</code> is 1 and <code>pl_protocol_vld</code> is 1, and keeps them until Reset with <code>pl_inband_pres</code> at 0.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The Protocol Layer cannot format a single flit until it knows the protocol and flit format, and those can change: a full retrain after L2 or after any link-down runs a fresh parameter exchange. Until <code>pl_inband_pres</code> rises, a clock-gated Protocol Layer has nothing to do.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>At power-on the PHY spends at least 4 ms in RESET, then works through SBINIT, MBINIT and MBTRAIN with every sub-state bounded by an 8 ms timeout. The Protocol Layer stays gated through all of it and wakes on the <code>pl_clk_req</code> handshake that comes with <code>pl_inband_pres</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A format sampled once at boot goes stale after a link-down or L2 exit that renegotiated parameters.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Meaning of pl_inband_pres <span class="ref">Table 10-3, p.542</span></li>
+          <li><span class="kind spec">Spec</span>When to sample pl_protocol and pl_protocol_flitfmt <span class="ref">Table 10-3 (pl_protocol_vld), p.544</span></li>
+          <li><span class="kind spec">Spec</span>pl_clk_req handshake for pl_inband_pres; wait for it before requesting Active <span class="ref">§10.2.3.2, p.548–549</span></li>
+          <li><span class="kind spec">Spec</span>Fresh parameter exchange after L2 through Reset; capabilities renegotiated when RDI moves to Reset <span class="ref">§10.3.3.8, p.570 · §3.8, p.93</span></li>
+          <li><span class="kind spec">Spec</span>RESET for at least 4 ms; 8 ms timeout per training sub-state <span class="ref">§4.5.3.1, p.132 · §4.5, p.124</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§10.2.7 p.552 · §10.2.8 p.554</span></div>
+        <h3>Open the receiver before saying Active</h3>
+        <p class="rule">The Adapter sends Rsp.Active to the far die only after <code>pl_rx_active_req</code> and <code>lp_rx_active_sts</code> are both high.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Active is agreed over the slow sideband, but data arrives over the fast mainband. As soon as the far die receives our Rsp.Active it may start sending flits, possibly before our own status reads Active.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A sideband packet is 64 bits serialised at 800 Mb/s, 80 ns, followed by at least 32 UI (40 ns) of idle. In those 120 ns an x64 link at 16 GT/s can deliver 60 flits. The first of them, the Sequence Number Handshake, has to land on a receiver that is already listening.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that raises <code>lp_rx_active_sts</code> before its receive path is really ready drops the first flits after every Active entry.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>rx_active handshake rules <span class="ref">§10.2.7, p.552–553</span></li>
+          <li><span class="kind spec">Spec</span>Rsp.Active only after pl_rx_active_req = lp_rx_active_sts = 1; incoming flits handled after sending it <span class="ref">§10.2.8 step 4, p.554</span></li>
+          <li><span class="kind spec">Spec</span>Sideband packet of 64 bits plus at least 32 UI low; 800 MHz sideband clock <span class="ref">§4.1.5, p.102 · §1.1.3, p.43</span></li>
+          <li><span class="kind derived">Derived</span>96 UI × 1.25 ns = 120 ns; 120 ns ÷ 2 ns per flit = 60 flits</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§10.3.2 p.563</span></div>
+        <h3>The stall handshake, only for PM in Flit mode</h3>
+        <p class="rule">On FDI in Flit mode, <code>pl_stallreq</code> is used only when leaving Active for PM. For Retrain, LinkReset and Disabled the Adapter simply drops <code>pl_trdy</code> at a flit boundary. In Raw format the stall is used for every exit.</p>
+        <div class="part"><span class="l l-why">Why</span><p>In Flit mode anything not yet acknowledged will be replayed from the Adapter's retry buffer, so the Adapter can stop safely without the Protocol Layer's help. PM is different: the Protocol Layer is about to be clock-gated and the retry buffer must be empty, so the Adapter needs positive confirmation that the Protocol Layer has stopped at a flit boundary, DLLPs included. Raw format has no Adapter retry, so every exit needs that confirmation.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>L1 entry after an idle period: <code>pl_stallreq</code>, <code>lp_stallack</code> a few cycles later, then one Ack round trip for the retry buffer to empty before Req.L1 goes out. <code>lp_stallack</code> should come from a free-running clock, because the Protocol Layer may already be mostly gated when the request arrives.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that keeps <code>lp_valid</code> high after <code>lp_stallack</code>, or answers from a gated clock, hangs PM entry.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Where stallreq/ack is required, and that Flit mode drops pl_trdy for other exits <span class="ref">§10.3.2, p.563</span></li>
+          <li><span class="kind spec">Spec</span>lp_stallack on a free-running clock (strongly recommended) <span class="ref">§10.3.2 rule 10, p.563</span></li>
+          <li><span class="kind spec">Spec</span>Retry buffer empty before the PM request <span class="ref">§10.2.9, p.556</span></li>
+          <li><span class="kind bg">Background</span>That replay makes a stall unnecessary for Retrain is our explanation</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§10.2.3.1 p.547 · §10.2.3.2 p.548</span></div>
+        <h3>Asynchronous request, synchronous acknowledge</h3>
+        <p class="rule"><code>lp_wake_req</code> and <code>pl_clk_req</code> are levels that may arrive while the other side's clock is off. The acknowledges come back synchronous to <code>lclk</code>. All are four-phase, with at least one cycle between request and acknowledge.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The requester cannot assume the other side's clock is running, so the request has to be a level that survives gating, and the acknowledge proves the clock is running now. Four phases mean nothing is lost if a request and a state change cross, and the one-cycle gap prevents a combinational loop across the interface.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Both FDI sides are gated in L1 when the far die sends Req.Active over the sideband. The Adapter's always-on sideband logic raises <code>pl_clk_req</code>; the Protocol Layer ungates and returns <code>lp_clk_ack</code>; the Adapter moves status to Retrain; the Protocol Layer requests Active; the Active handshake runs and traffic resumes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A pulse-style wake request sent while the other side is gated is simply missed.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Wake handshake: asynchronous request, acknowledge synchronous to lclk, at least one cycle, de-assertion order <span class="ref">§10.2.3.1, p.547–548</span></li>
+          <li><span class="kind spec">Spec</span>Clock handshake rules <span class="ref">§10.2.3.2, p.548</span></li>
+          <li><span class="kind spec">Spec</span>A remote Req.Active in PM triggers pl_clk_req and Retrain; the Protocol Layer then requests Active <span class="ref">§10.2.9, p.557</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§10.2.3.1 p.548</span></div>
+        <h3>lp_cfg waits for the acknowledge; lp_state_req does not</h3>
+        <p class="rule">Before a sideband packet on <code>lp_cfg</code>, the Protocol Layer must wait for <code>pl_wake_ack</code>. For a state request it may change <code>lp_state_req</code> at once.</p>
+        <div class="part"><span class="l l-why">Why</span><p><code>lp_state_req</code> is a level the Adapter reads whenever its clock returns, so changing it early loses nothing. A packet on <code>lp_cfg</code> is a sequence of beats, and any beat sent before the Adapter's clock runs is gone.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A register write to the far die is a 64-bit header plus 64 bits of data. On a 32-bit <code>lp_cfg</code> that is 4 beats, and the first one has to wait for <code>pl_wake_ack</code>. One sideband credit covers one header-plus-data packet.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>The first beats of the packet are dropped and the register write is silently lost.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Rules 5 and 6 of the wake handshake <span class="ref">§10.2.3.1, p.548</span></li>
+          <li><span class="kind spec">Spec</span>NC is 8, 16 or 32; one credit covers a 64-bit header and 64 bits of data <span class="ref">Table 10-3, p.546</span></li>
+          <li><span class="kind derived">Derived</span>128 bits ÷ 32 = 4 beats</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§3.8 p.94 · §3.3.2.1 p.73 · §4.1.3 p.101</span></div>
+        <h3>Idle without streaming NOPs</h3>
+        <p class="rule">An idle UCIe link does not have to send NOP flits continuously. The Adapter may end the data stream (with a PDS in 68B mode), and in strobe clock mode the PHY gates the forwarded clock once Valid stays low.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Power. Table 1-4 targets 0.3–0.6 pJ per bit for an Advanced link at 16 GT/s. A fully used x64 module moves 1.024 Tb/s each way, roughly 0.3–0.6 W per direction for Adapter and PHY. Streaming NOPs while idle would keep paying that for nothing.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After the last Valid frame the forwarded clock runs a 16 UI postamble (1 ns at 16 GT/s) and stops. The cost is restart time for the next flit, so the spec leaves the choice between NOPs and pausing to the Adapter. On FDI this shows up as <code>pl_valid</code> gaps on receive and as early <code>lp_irdy</code> on transmit.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Nothing fails functionally; a design that always streams NOPs just burns idle power.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>No requirement to stream NOP flits, so clocks can be gated <span class="ref">§3.8 implementation note, p.94</span></li>
+          <li><span class="kind spec">Spec</span>PDS exists to save power; NOPs versus PDS is the Adapter's choice <span class="ref">§3.3.2.1, p.73</span></li>
+          <li><span class="kind spec">Spec</span>Forwarded clock gated after a 16 UI postamble <span class="ref">§4.1.3, p.101</span></li>
+          <li><span class="kind spec">Spec</span>Energy targets of 0.3 and 0.6 pJ/bit <span class="ref">Table 1-4, p.49</span></li>
+          <li><span class="kind derived">Derived</span>64 × 16 Gb/s = 1.024 Tb/s; × 0.3–0.6 pJ/bit = 0.3–0.6 W; 16 UI × 62.5 ps = 1 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§10.2.9 p.556</span></div>
+        <h3>PM timers: 1 µs grace, 2 µs answer, 2 µs back-off</h3>
+        <p class="rule">An Adapter that receives a PM request answers within 2 µs. If its Protocol Layer stays at Active for 1 µs, the answer is PMNAK. After a PMNAK the requester waits at least 2 µs before asking again, unless the far side asks first.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Traffic usually stops in both directions at about the same time, so a short grace window lets both sides agree instead of refusing. The 2 µs bound keeps the requester from waiting forever, and the back-off stops request-and-NAK ping-pong on the sideband.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An accelerator die, the upstream port, finishes its last DMA write and requests L1. The host die is still returning the final completions for 300 ns. Its Protocol Layer meets its idle criterion inside the 1 µs window, so the answer is Rsp.L1 rather than PMNAK.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that NAKs immediately turns every idle period into a request, a NAK and a 2 µs wait.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>2 µs response, 1 µs PMNAK rule, retry at least 2 µs later <span class="ref">§10.2.9, p.556</span></li>
+          <li><span class="kind spec">Spec</span>Only the upstream port initiates for PCIe and CXL <span class="ref">§10.2.9, p.555</span></li>
+          <li><span class="kind bg">Background</span>The reasons behind each timer are our explanation</li>
+          <li><span class="kind illus">Illustrative</span>The 300 ns of trailing completions</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="power">
+        <div class="meta"><span>Handshakes &amp; power</span><span>§10.2.9 p.555</span></div>
+        <h3>Who starts PM depends on the protocol</h3>
+        <p class="rule">For PCIe and CXL only the upstream port's Adapter sends PM requests. For Streaming, Raw format, and mainband Management Transport without PCIe or CXL, both sides send them.</p>
+        <div class="part"><span class="l l-why">Why</span><p>PCIe and CXL already have a hierarchy in which the upstream port initiates link power management, and a single initiator means requests never cross. Streaming protocols have no such hierarchy, so PM completes only when both sides have sent a request and received a response.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>In a CPU-plus-accelerator package running CXL, the accelerator die is the upstream port and decides when the link sleeps; the CPU die can only agree or refuse. Between two peer dies running a streaming fabric, either can propose L1 and both must agree.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A downstream-port Adapter that sends PM requests for PCIe or CXL breaks the rule. A useful check follows from it: a downstream port's FDI never shows Active.PMNAK.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Upstream port only for PCIe and CXL; both sides for Streaming, Raw and Management-only <span class="ref">§10.2.9, p.555</span></li>
+          <li><span class="kind spec">Spec</span>A downstream port's FDI never shows Active.PMNAK <span class="ref">§10.2.9, p.556</span></li>
+          <li><span class="kind bg">Background</span>Upstream-port ownership of link power management follows PCIe convention</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="err">
+        <div class="meta"><span>Errors</span><span>Table 10-3 p.542 · §10.3.3.7 p.568</span></div>
+        <h3>lp_linkerror is its own wire</h3>
+        <p class="rule"><code>lp_state_req</code> has no LinkError encoding. The Protocol Layer requests it with the dedicated level <code>lp_linkerror</code>, and no stall handshake is needed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Containment should not wait for the normal request machinery, and a level lets the Protocol Layer hold the link in LinkError for as long as it needs. The Adapter takes RDI to LinkError first, then the Adapter LSMs and CXL vLSMs, and LinkError outranks LinkReset and Disabled.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A viral condition is detected in CXL.cachemem. The Protocol Layer raises <code>lp_linkerror</code> on the next cycle. The Adapter takes RDI to LinkError, coordinating with the far die over the sideband, then the Adapter LSM and the vLSMs follow. The Protocol Layer cleans its datapath after seeing LinkError for one cycle, with or without <code>pl_trdy</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you use LinkReset instead</span><p>It ranks below LinkError and Disabled, makes a best-effort drain first, and tells the far side "reset" rather than "error".</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Purpose and level behaviour of lp_linkerror; no LinkError encoding in lp_state_req <span class="ref">Table 10-3, p.542</span></li>
+          <li><span class="kind spec">Spec</span>No stall handshake required; the upper layer cleans up its datapath <span class="ref">§10.3.3.7, p.568</span></li>
+          <li><span class="kind spec">Spec</span>RDI first, then Adapter LSMs, then vLSMs; LinkError outranks Disabled and LinkReset <span class="ref">§10.3.3.8, p.569</span></li>
+          <li><span class="kind illus">Illustrative</span>The viral-detection timeline</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="err">
+        <div class="meta"><span>Errors</span><span>§10.3.3.7 p.569 · §10.2.3 p.547</span></div>
+        <h3>LinkError lasts at least 16 ms, with clocks running</h3>
+        <p class="rule">The lower layer stays in LinkError for at least 16 ms, and clock gating is not allowed there.</p>
+        <div class="part"><span class="l l-why">Why</span><p>16 ms is twice the 8 ms sideband handshake timeout. If the sideband itself failed, which may be why the link is in LinkError, the far die still reaches LinkError through its own timeout before this side tries again, so the link never comes back half up. Clocks stay on so error handlers keep working; LinkError is meant to be resolved, not slept in.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A fatal Adapter error with a dead sideband. This side enters LinkError at once. The far side's next handshake times out after 8 ms and it enters LinkError too. At 16 ms this side may exit to Reset knowing both sides are down.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Leaving early can start training against a partner that still believes the link is up.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>16 ms minimum residency and its stated reason <span class="ref">§10.3.3.7, p.569</span></li>
+          <li><span class="kind spec">Spec</span>No response for 8 ms: RDI goes to LinkError <span class="ref">§10.3.3.8, p.569</span></li>
+          <li><span class="kind spec">Spec</span>No clock gating in LinkError <span class="ref">§10.2.3, p.547</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="err">
+        <div class="meta"><span>Errors</span><span>§10.3.3.5 p.567 · §10.3.3.6 p.568</span></div>
+        <h3>LinkReset and Disabled never wait for a drain</h3>
+        <p class="rule">Entry makes a best effort to drain the retry buffer but must not time out waiting for it. Once entered, both sides flush.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A reset has to make progress even when the far side is hung, which is exactly when resets get issued. Quiescing traffic gracefully, when a protocol needs it, is software's job.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software issues a Secondary Bus Reset because the device stopped responding. Its retry buffer will never drain, since the far side will never Ack, so the Adapter enters LinkReset anyway and the upstream port then goes through a Conventional Reset.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that insists on draining hangs the very reset meant to recover the hang.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Best-effort drain with no timeout <span class="ref">§10.3.3.5, p.567 · §10.3.3.6, p.568</span></li>
+          <li><span class="kind spec">Spec</span>LinkReset carries Secondary Bus Reset <span class="ref">§10.3.3.5, p.567</span></li>
+          <li><span class="kind spec">Spec</span>Conventional Reset on the upstream port; no hardware quiescence guarantee <span class="ref">§10.3.3.8 implementation note, p.571</span></li>
+          <li><span class="kind illus">Illustrative</span>The hung-device scenario</li>
+        </ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- 8. LIVE -->
+<section id="live">
+  <div class="wrap">
+    <h2>8 · Live scenarios</h2>
+    <p class="sub">Cycle-level views of what the wires do in real operation. Step through each scenario; the shaded columns are the cycles the step describes. A zig-zag column is compressed time (sideband messages, timers, PHY training) that would span hundreds of nanoseconds to milliseconds.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead">
+        <h3 id="sc-title"></h3>
+        <p id="sc-desc"></p>
+        <p class="src" id="sc-src"></p>
+      </div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar">
+          <button class="btn" id="prev" type="button">← Previous</button>
+          <button class="btn primary" id="next" type="button">Next →</button>
+          <div class="dots" id="dots" aria-label="Steps"></div>
+          <span class="cycles" id="cyc"></span>
+        </div>
+        <div class="stepbody">
+          <h3 id="st-title"></h3>
+          <p id="st-text"></p>
+          <p class="why" id="st-why"></p>
+          <p class="src" id="st-src"></p>
+        </div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px">Waveforms are drawn from the rules in §10.2 and §10.3 and the flows in Figures 10-20 to 10-24. Cycle counts between events are illustrative; the spec fixes ordering and minimums, not exact cycle positions.</p>
+  </div>
+</section>
+
+<!-- 7. SILICON -->
+<section id="silicon">
+  <div class="wrap">
+    <h2>9 · Real silicon: what the theory turns into</h2>
+    <p class="sub">The spec gives rules. These are the numbers and design consequences that fall out of them when you build or verify an actual chip.</p>
+
+    <div class="twocol">
+      <div>
+        <h3 style="margin-bottom:8px">Sizing the bus: NBYTES × lclk must match the link</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Link (x64 Advanced modules)</th><th class="num">GB/s per direction</th><th class="num">256B flit time</th><th>Example FDI</th></tr></thead>
+            <tbody>
+              <tr><td>4 GT/s</td><td class="num">32</td><td class="num">8 ns</td><td class="mono">64B @ 0.5 GHz</td></tr>
+              <tr><td>8 GT/s</td><td class="num">64</td><td class="num">4 ns</td><td class="mono">64B @ 1 GHz</td></tr>
+              <tr><td>16 GT/s</td><td class="num">128</td><td class="num">2 ns</td><td class="mono">64B @ 2 GHz</td></tr>
+              <tr><td>32 GT/s</td><td class="num">256</td><td class="num">1 ns</td><td class="mono">128B @ 2 GHz</td></tr>
+              <tr><td>64 GT/s</td><td class="num">512</td><td class="num">0.5 ns</td><td class="mono">256B @ 2 GHz</td></tr>
+              <tr><td>64 GT/s, four modules</td><td class="num">2048</td><td class="num">0.125 ns</td><td class="mono">1024B @ 2 GHz</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:14px;color:var(--muted)">64 lanes × R Gb/s ÷ 8 = 8R GB/s. The 16 and 32 GT/s rows match the spec's own examples (§10.3.1, p.561); the other rows are derived. In Flit mode the spec strongly recommends, but does not require, NBYTES of 64, 128, 256 or 512. Widths of 512 or more should be multiples of 256 and only for a four-module Advanced Package link at 16 GT/s or higher, and in Raw format NBYTES is vendor-defined (§10.3.1 implementation note, p.562). Widths that do not line up with the 256B flit add shifting logic. A Standard x16 module carries a quarter of these rates.</p>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="callout">
+          <p><strong>Latency budget.</strong> Table 1-4 sets a target of ≤ 2 ns for Adapter plus PHY, transmit plus receive, at 16 GT/s, not counting the time to accumulate bits. At a 2 GHz lclk that is four cycles for both dies together. The Tx, Rx and clocking cards in section 7 show which FDI rules exist to protect it.</p>
+          <p class="src"><span class="sl">Spec</span>Table 1-4 and note d, p.49</p>
+        </div>
+        <div class="callout" style="border-left-color:var(--lp)">
+          <p><strong>Energy budget.</strong> The same table targets 0.3 pJ/bit (0.5 V) to 0.6 pJ/bit (0.7 V) for an Advanced Package link at 16 GT/s, measured from FDI to the bumps and back to FDI on the far die. A fully used x64 module moves 1.024 Tb/s each way, so Adapter plus PHY spend roughly 0.3–0.6 W per direction. Every idle-power rule in section 7 exists to stop paying that when there is nothing to send.</p>
+          <p class="src"><span class="sl">Spec</span>Table 1-4 and note c, p.49 · watt figures derived</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 8px">Timers you will meet</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Timer</th><th class="num">Value</th><th>What it guards</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>PMNAK decision</td><td class="num">1 µs</td><td>If the local Protocol Layer stays at Active for 1 µs after a remote PM request, answer PMNAK.</td><td class="ref">§10.2.9, p.556</td></tr>
+          <tr><td>PM response deadline</td><td class="num">2 µs</td><td>Any PM request must be answered within 2 µs, counted only while in Active.</td><td class="ref">§10.2.9, p.556</td></tr>
+          <tr><td>PM retry after PMNAK</td><td class="num">≥ 2 µs</td><td>Wait before asking again, unless the remote side sends its own PM request.</td><td class="ref">§10.2.9, p.556</td></tr>
+          <tr><td>Sequence Number Handshake</td><td class="num">128 flits</td><td>Retry handshake on every FDI Active entry; timeout exits to retrain.</td><td class="ref">§3.8, p.94</td></tr>
+          <tr><td>Sideband state handshake</td><td class="num">8 ms</td><td>No response to a LinkError, LinkReset or Disabled request: RDI goes to LinkError.</td><td class="ref">§10.3.3.8, p.569</td></tr>
+          <tr><td>LinkError residency</td><td class="num">≥ 16 ms</td><td>Twice the 8 ms timeout, so the remote die is forced into LinkError even if the sideband died.</td><td class="ref">§10.3.3.7, p.569</td></tr>
+          <tr><td>Retimer stall</td><td class="num">4 ms</td><td>A Retimer repeats a Stall response every 4 ms while it negotiates with its far partner.</td><td class="ref">§3.5, p.90 · §4.5.3.4.12, p.167</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+        <tbody>
+          <tr><td>Link never leaves Reset after power-on</td><td>Protocol Layer drives Active from reset with no NOP cycle, so no NOP→Active edge is seen.</td><td class="ref">§10.3.3.1 and Table 10-4, p.565</td></tr>
+          <tr><td>Link stuck in Retrain after a retrain</td><td>Protocol Layer held Active through Retrain; the exit needs a fresh NOP→Active edge when Retrain was entered from Active.</td><td class="ref">§10.3.3.4, p.567</td></tr>
+          <tr><td>Wrong flit format after L2 or a link-down</td><td>Protocol format sampled once at boot and never re-sampled when Reset with <code>pl_inband_pres</code> dropping occurred.</td><td class="ref">Table 10-3 (pl_protocol_vld), p.544</td></tr>
+          <tr><td>First flits after Active are lost</td><td>Protocol Layer acknowledged <code>pl_rx_active_req</code> before its receive path was actually ready.</td><td class="ref">§10.2.7, p.552–553 · §10.2.8, p.554</td></tr>
+          <tr><td>Duplicate half-flit after replay</td><td>Protocol Layer committed a Latency-Optimized first half and did not honour the cancel on the replayed duplicate.</td><td class="ref">§10.2.5, Figures 10-16 and 10-17, p.551</td></tr>
+          <tr><td>Hang entering PM</td><td><code>lp_stallack</code> driven from a gated clock, or <code>lp_valid</code> left high while <code>lp_stallack</code> is asserted.</td><td class="ref">§10.3.2 rules 6 and 10, p.563</td></tr>
+          <tr><td>Sideband register write lost</td><td><code>lp_cfg</code> changed before <code>pl_wake_ack</code>; the Adapter's clocks were still off.</td><td class="ref">§10.2.3.1 rule 6, p.548</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 8. VERIFY -->
+<section id="verify">
+  <div class="wrap">
+    <h2>10 · Verification</h2>
+    <p class="sub">An FDI agent should be able to act as either the Protocol Layer or the Adapter, so the same component serves a controller-only DUT, an Adapter-only DUT and a full stack.</p>
+    <div class="twocol">
+      <div class="card">
+        <h3>Assertions</h3>
+        <ul class="tight">
+          <li>No gap in <code>lp_valid</code>/<code>lp_irdy</code> between a flit's first and last chunk. <span class="ref">§10.2.4, p.549</span></li>
+          <li><code>pl_trdy</code> high only in Active, or during a LinkError stall drain. <span class="ref">Table 10-3 (pl_trdy), p.541</span></li>
+          <li><code>pl_flit_cancel</code> is one cycle wide and lands exactly one cycle after a last chunk. <span class="ref">Table 10-3 (pl_flit_cancel), p.542</span></li>
+          <li>Each four-phase handshake: order, ≥1 cycle request-to-acknowledge, request falls before acknowledge. <span class="ref">§10.2.3.1–10.2.3.2, p.547–548 · §10.2.7, p.552 · §10.3.2, p.563</span></li>
+          <li><code>lp_valid</code> and <code>lp_irdy</code> low while <code>lp_stallack</code> is high. <span class="ref">§10.3.2 rule 6, p.563</span></li>
+          <li>Both rx_active signals low before status leaves Active (LinkError excepted, but low before LinkError exits). <span class="ref">§10.2.7 rules 5 and 7, p.553</span></li>
+          <li>Sideband <code>Rsp.Active</code> sent only after <code>pl_rx_active_req = lp_rx_active_sts = 1</code> was sampled. <span class="ref">§10.2.8 step 4, p.554</span></li>
+          <li>Reset→Active and Retrain(from Active)→Active only after a NOP→Active edge. <span class="ref">§10.3.3.1, p.565 · §10.3.3.4, p.567</span></li>
+          <li>Status never moves Active.PMNAK → L1 or L2. <span class="ref">§10.3, p.559 · §10.3.3.2, p.566</span></li>
+          <li><code>pl_trainerror</code> holds until LinkError → Reset; LinkError lasts ≥ 16 ms. <span class="ref">Table 10-3 (pl_trainerror), p.543 · §10.3.3.7, p.569</span></li>
+          <li><code>lp_cfg</code> stable until <code>pl_wake_ack</code>; <code>pl_cfg</code> stable until <code>lp_clk_ack</code>. <span class="ref">§10.2.3.1 rule 6 and §10.2.3.2 rule 8, p.548</span></li>
+        </ul>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>SVA sketches</h3>
+<pre>// cancel lands exactly one cycle after a flit's last chunk
+a_cancel_slot: assert property (@(posedge lclk)
+  pl_flit_cancel |-> $past(pl_valid && last_chunk));
+
+// no Tx traffic while stalled
+a_stall_quiet: assert property (@(posedge lclk)
+  lp_stallack |-> !lp_valid && !lp_irdy);
+
+// stallreq may only fall once stallack is up
+a_stall_fall: assert property (@(posedge lclk)
+  $fell(pl_stallreq) |-> $past(lp_stallack));
+
+// no bubbles inside a Tx flit
+a_no_bubble: assert property (@(posedge lclk)
+  (lp_valid && !last_chunk_sent) |=> lp_valid && lp_irdy);</pre>
+          <p class="src"><span class="sl">Spec</span>Table 10-3 (pl_flit_cancel), p.542 · §10.3.2, p.563 · §10.2.4, p.549</p>
+        </div>
+        <div class="card">
+          <h3>Scenarios that find real bugs</h3>
+          <ul class="tight">
+            <li>CRC fail on the second Latency-Optimized half, then replay: no double consume. <span class="ref">§10.2.5, p.551</span></li>
+            <li><code>lp_corrupt_crc</code>, Nak, replay: the replay carries the viral flit. <span class="ref">Table 10-3 (lp_corrupt_crc), p.540</span></li>
+            <li>PM request crossing a remote-initiated retrain. <span class="ref">§10.2.9, p.556</span></li>
+            <li>DP flips L1 back to Active while UP commits to PM. <span class="ref">§10.2.9, p.556</span></li>
+            <li>CXL retrain: vLSM stays Active, no flits while rx_active is low. <span class="ref">§10.3.3.4, p.566 · §10.2.7 rule 6, p.553</span></li>
+            <li>Two stacks, one in LinkReset, the other running traffic. <span class="ref">§10.3.3.8, p.569</span></li>
+            <li>Full-rate Rx with Adapter bubbles and an internally stalled Protocol Layer. <span class="ref">§10.2.4, p.550 · §10.2.2, p.547</span></li>
+            <li><code>lp_linkerror</code> mid-flit, datapath cleanup without <code>pl_trdy</code>. <span class="ref">§10.3.3.7, p.568</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. SPEC INDEX -->
+<section id="refs">
+  <div class="wrap">
+    <h2>11 · Spec reference index</h2>
+    <p class="sub">Every section, table and figure this page cites, from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Page numbers are the printed footer numbers, which in this PDF are also the PDF page numbers. "Used in" lists the sections of this page that rely on it.</p>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>§1.1.2</td><td>Die-to-Die (D2D) Adapter</td><td class="num">43</td><td>1</td></tr>
+          <tr><td>§1.1.3</td><td>Physical Layer (800 MHz sideband clock)</td><td class="num">43</td><td>7</td></tr>
+          <tr><td>§1.1.4</td><td>Interfaces</td><td class="num">44</td><td>1</td></tr>
+          <tr><td>§1.3</td><td>UCIe Retimers (256B credits)</td><td class="num">47–48</td><td>4, 7</td></tr>
+          <tr><td>§1.4, Table 1-4</td><td>UCIe Key Performance Targets</td><td class="num">49</td><td>1, 3, 7, 9</td></tr>
+          <tr><td>§2.4.2</td><td>68B Flit Format (Streaming)</td><td class="num">56–57</td><td>7</td></tr>
+          <tr><td>§2.4.3</td><td>Standard 256B Flit Formats (Streaming)</td><td class="num">57</td><td>7</td></tr>
+          <tr><td>§3.1</td><td>Stack Multiplexing</td><td class="num">59–60</td><td>2, 7, 8</td></tr>
+          <tr><td>§3.2, Figure 3-3</td><td>Link Initialization; Stages of UCIe Link Initialization</td><td class="num">62</td><td>8</td></tr>
+          <tr><td>§3.2.1.2, Table 3-1</td><td>Parameter Exchange with Remote Link Partner</td><td class="num">63–65</td><td>8</td></tr>
+          <tr><td>§3.3.2, Tables 3-2 and 3-3</td><td>68B Flit Format; Flit Header for Format 2</td><td class="num">71–72</td><td>4, 7</td></tr>
+          <tr><td>§3.3.2.1</td><td>68B Flit Format Alignment and Padding Rules (PDS)</td><td class="num">73</td><td>7</td></tr>
+          <tr><td>§3.3.3</td><td>Standard 256B Flit Formats</td><td class="num">75–76</td><td>3, 7</td></tr>
+          <tr><td>§3.3.4</td><td>Latency-Optimized 256B Flit Formats</td><td class="num">80</td><td>7</td></tr>
+          <tr><td>§3.5, Figure 3-27</td><td>State Machine Hierarchy</td><td class="num">89–90</td><td>2, 8, 9</td></tr>
+          <tr><td>§3.7</td><td>CRC Computation</td><td class="num">92</td><td>7, 8</td></tr>
+          <tr><td>§3.8</td><td>Retry Rules</td><td class="num">93–95</td><td>2, 3, 7, 8, 9</td></tr>
+          <tr><td>§3.9</td><td>Runtime Link Testing using Parity</td><td class="num">95</td><td>7</td></tr>
+          <tr><td>§4.1.1, Figures 4-1 and 4-2</td><td>Byte to Lane Mapping</td><td class="num">98–99</td><td>3, 7, 8</td></tr>
+          <tr><td>§4.1.2, Figure 4-6</td><td>Valid Framing</td><td class="num">100–101</td><td>3, 7, 8</td></tr>
+          <tr><td>§4.1.3</td><td>Clock Gating (postamble)</td><td class="num">101</td><td>7</td></tr>
+          <tr><td>§4.1.5</td><td>Sideband transmission (64-bit serial packets)</td><td class="num">102</td><td>7, 8</td></tr>
+          <tr><td>§4.5</td><td>Link Initialization and Training (8 ms sub-state timeout)</td><td class="num">124</td><td>7</td></tr>
+          <tr><td>§4.5.3.1</td><td>RESET (4 ms minimum)</td><td class="num">132</td><td>7</td></tr>
+          <tr><td>§4.5.3.4.5</td><td>MBTRAIN.RXCLKCAL (I/Q correction)</td><td class="num">158</td><td>3</td></tr>
+          <tr><td>§4.5.3.4.12</td><td>MBTRAIN.LINKSPEED (Retimer stall every 4 ms)</td><td class="num">164–167</td><td>9</td></tr>
+          <tr><td>§4.5.3.6</td><td>ACTIVE (data scrambled)</td><td class="num">168</td><td>3</td></tr>
+          <tr><td>§4.5.3.7</td><td>PHYRETRAIN</td><td class="num">168–169</td><td>8</td></tr>
+          <tr><td>§5.5, Tables 5-12 and 5-13</td><td>Clocking; Forwarded Clock Frequency and Phase; I/Q Correction</td><td class="num">201–203</td><td>3</td></tr>
+          <tr><td>§10.1.4, Figure 10-4</td><td>RDI Data Transfer; lp_irdy asserting two cycles before lp_valid</td><td class="num">532–533</td><td>4, 7</td></tr>
+          <tr><td>§10.2, Figure 10-12</td><td>Flit-Aware Die-to-Die Interface; Example configurations using FDI</td><td class="num">539</td><td>2, 7</td></tr>
+          <tr><td>Table 10-3</td><td>FDI signal list (Sheets 1 to 7)</td><td class="num">540–546</td><td>2, 3, 4, 5, 7, 8, 10</td></tr>
+          <tr><td>§10.2.1</td><td>Interface reset requirements</td><td class="num">547</td><td>2, 4, 7</td></tr>
+          <tr><td>§10.2.2</td><td>Interface clocking requirements</td><td class="num">547</td><td>1, 2, 7, 8</td></tr>
+          <tr><td>§10.2.3, §10.2.3.1, §10.2.3.2</td><td>Dynamic clock gating; wake and clock handshakes</td><td class="num">547–549</td><td>1, 4, 6, 7, 8, 10</td></tr>
+          <tr><td>§10.2.4, Figure 10-14</td><td>Data Transfer</td><td class="num">549–550</td><td>3, 4, 7, 8, 10</td></tr>
+          <tr><td>§10.2.4.1</td><td>DLLP transfer rules for 256B Flit Mode</td><td class="num">550–551</td><td>1, 3, 4, 7</td></tr>
+          <tr><td>§10.2.5, Figures 10-15 to 10-18</td><td>Examples of pl_flit_cancel Timing Relationships</td><td class="num">551–552</td><td>1, 3, 4, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.2.6, Figure 10-19</td><td>FDI State Machine</td><td class="num">552</td><td>4, 5</td></tr>
+          <tr><td>§10.2.7</td><td>Rx_active_req/Sts Handshake</td><td class="num">552–553</td><td>1, 2, 4, 6, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.2.8, Figure 10-20</td><td>FDI Bring up flow</td><td class="num">553–555</td><td>4, 6, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.2.9, Figures 10-21 to 10-24</td><td>FDI PM Flow; PM Entry, Abort and Exit examples</td><td class="num">555–558</td><td>5, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.3</td><td>Common rules for FDI and RDI (Active.PMNAK sub-state)</td><td class="num">559</td><td>5, 8, 10</td></tr>
+          <tr><td>§10.3.1, Figures 10-25 to 10-29</td><td>Byte Mapping for FDI and RDI</td><td class="num">559–562</td><td>3, 4, 7, 9</td></tr>
+          <tr><td>§10.3.2</td><td>Stallreq/Ack Mechanism</td><td class="num">563–564</td><td>4, 6, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.3.3, Table 10-4</td><td>State Request and Status; Requests Considered in Each State</td><td class="num">564–565</td><td>4, 5, 9</td></tr>
+          <tr><td>§10.3.3.1</td><td>Reset State rules</td><td class="num">565</td><td>5, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.3.3.2</td><td>Active State rules</td><td class="num">566</td><td>5, 7, 8, 10</td></tr>
+          <tr><td>§10.3.3.4</td><td>Retrain State Rules</td><td class="num">566–567</td><td>2, 5, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.3.3.5</td><td>LinkReset State Rules</td><td class="num">567</td><td>5, 7</td></tr>
+          <tr><td>§10.3.3.6</td><td>Disabled State Rules</td><td class="num">568</td><td>5, 7</td></tr>
+          <tr><td>§10.3.3.7</td><td>LinkError State Rules</td><td class="num">568–569</td><td>4, 5, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.3.3.8</td><td>Common State Rules</td><td class="num">569–571</td><td>5, 7, 8, 9, 10</td></tr>
+          <tr><td>§10.3.4</td><td>Vendor-defined Signals</td><td class="num">572</td><td>4</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>What is not from the spec.</strong> Items tagged <span class="kind derived">Derived</span> are arithmetic on spec values, <span class="kind illus">Illustrative</span> items are example numbers chosen to make a point (2-cycle ungate, 50 ns stall, 300 ns completions, 1.6 GHz core, reset skew), and <span class="kind bg">Background</span> items come from PCIe, CXL or general circuit design. Cycle positions in the live waveforms are illustrative; the spec fixes order and minimums. The LPIF lineage in section 1 is background as well.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 10.2 Flit-Aware Die-to-Die Interface and Chapter 10.3 Common rules for FDI and RDI, with Chapters 1.4, 2.4, 3.1–3.9, 4.1, 4.5 and 5.5 for context. Section 11 lists every cited section, table and figure with its page. Example numbers in sections 3, 7 and 9 are derived calculations, not spec requirements; pipeline latencies and the 2-cycle ungate, 50 ns stall and 300 ns completion examples are illustrative.</div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- signal table ---------- */
+  var groups = [
+    ["all", "All"], ["tx", "Tx data"], ["rx", "Rx data"], ["dllp", "DLLP"], ["state", "State"],
+    ["info", "Link info"], ["err", "Errors"], ["hs", "Handshakes"], ["cfg", "Sideband"], ["misc", "Other"]
+  ];
+  var sigs = [
+    ["tx", "lp_irdy", "lp", "level", "Protocol Layer has, or will soon have, data", "May rise before lp_valid as an early wake hint. Ignored in Reset.", "Table 10-3, p.540 · §10.2.4, p.549 · §10.1.4, p.533"],
+    ["tx", "lp_valid", "lp", "level", "lp_data carries valid bytes", "Never drops inside a flit. A beat moves when lp_irdy, lp_valid and pl_trdy are all high.", "Table 10-3, p.540 · §10.2.4, p.549"],
+    ["tx", "lp_data[NBYTES-1:0][7:0]", "lp", "bus", "One flit chunk, lowest flit byte on byte 0", "A 256B flit is 4 beats on a 64B bus.", "Table 10-3, p.540 · §10.3.1, p.559"],
+    ["tx", "lp_stream[7:0]", "lp", "bus", "Stack and protocol of the data (01h PCIe … 15h Stack 1 Mgmt)", "Often tied off in single-protocol designs.", "Table 10-3, p.541 · §10.2.1, p.547"],
+    ["tx", "lp_corrupt_crc", "lp", "with last chunk", "Poison this flit's CRC (XOR 138Eh)", "CXL.cachemem viral containment. The next flit carries viral and overwrites it in the retry buffer.", "Table 10-3, p.540"],
+    ["tx", "pl_trdy", "pl", "level", "Adapter can accept a beat", "Only in Active, or a LinkError drain. May drop on any cycle; no pattern is promised.", "Table 10-3, p.541 · §10.2.4, p.549"],
+    ["rx", "pl_valid", "pl", "level", "pl_data carries valid bytes", "No backpressure. Bubbles allowed inside a flit.", "Table 10-3, p.541 · §10.2.4, p.550"],
+    ["rx", "pl_data", "pl", "bus", "One received flit chunk", "Forwarded before CRC completes, so it is speculative until the cancel slot passes.", "Table 10-3, p.541 · §10.2.5, p.551"],
+    ["rx", "pl_stream[7:0]", "pl", "bus", "Stack and protocol of received data", "Steers the beat to the right protocol stack.", "Table 10-3, p.541"],
+    ["rx", "pl_flit_cancel", "pl", "1-cycle pulse", "Discard the flit (or 128B half) just delivered", "Exactly one cycle after its last chunk. The replay arrives later, in order.", "Table 10-3, p.542 · §10.2.5, p.551"],
+    ["dllp", "lp_dllp / _valid / _ofc", "lp", "bus + valid", "DLLPs that bypass the retry buffer (PCIe, CXL.io 256B)", "Not throttled by pl_trdy. Must stop for pl_stallreq.", "Table 10-3, p.540 · §10.2.4.1, p.550"],
+    ["dllp", "pl_dllp / _valid / _ofc", "pl", "bus + valid", "DLLPs pulled from DLP bytes 2–5 of received flits", "Protocol Layer must always sink them.", "Table 10-3, p.541 · §10.2.4.1, p.550"],
+    ["state", "lp_state_req[3:0]", "lp", "level", "Requested next state", "Some exits need a NOP→Active edge, not a level.", "Table 10-3, p.542 · Table 10-4, p.565"],
+    ["state", "lp_linkerror", "lp", "level", "Take the link down now", "Fastest containment path. Status stays LinkError while it is high.", "Table 10-3, p.542 · §10.3.3.7, p.568"],
+    ["state", "pl_state_sts[3:0]", "pl", "level", "Current state: Adapter LSM, or CXL vLSM", "Can change on its own: retrain, remote requests, errors.", "Table 10-3, p.542 · §10.2.6, p.552"],
+    ["info", "pl_inband_pres", "pl", "level", "Parameter exchange done; ready to go Active", "The trigger for the Protocol Layer to request Active. Drops in link-down states.", "Table 10-3, p.542 · §10.2.8, p.553"],
+    ["info", "pl_protocol / _flitfmt / _vld", "pl", "level", "Negotiated protocol and flit format", "Sample in Reset when pl_inband_pres = 1 and pl_protocol_vld = 1.", "Table 10-3, p.544"],
+    ["info", "pl_speedmode / pl_lnk_cfg", "pl", "level", "Current speed and total width", "Meaningful in Active or Retrain; can change after a degrade.", "Table 10-3, p.545"],
+    ["info", "pl_max_speedmode", "pl", "level", "Negotiated maximum above 32 GT/s?", "Changes only in Reset. Above 32 GT/s, 68B mode is not allowed.", "Table 10-3, p.545 · §3.3.2, p.71"],
+    ["info", "pl_phyinrecenter / l1 / l2", "pl", "level", "PHY training, in L1, in L2", "Feeds the Link Training status bit and power decisions.", "Table 10-3, p.544"],
+    ["err", "pl_error", "pl", "pulse", "Framing error, pipeline-matched to the data", "Only while the receiver is active. Followed by a cancel and a retrain.", "Table 10-3, p.543"],
+    ["err", "pl_cerror / pl_nferror", "pl", "pulse", "Correctable or non-fatal error for logging", "Any state. The Adapter wakes the Protocol Layer's clocks first.", "Table 10-3, p.543"],
+    ["err", "pl_trainerror", "pl", "level", "Fatal error", "Holds until LinkError exits to Reset.", "Table 10-3, p.543"],
+    ["hs", "pl_rx_active_req / lp_rx_active_sts", "both", "4-phase", "Open the receiver before Active", "Rsp.Active is sent only after both are high.", "Table 10-3, p.543 · §10.2.7, p.552"],
+    ["hs", "pl_stallreq / lp_stallack", "both", "4-phase", "Stop Tx at a flit boundary", "In Flit mode FDI uses it only for PM entry.", "Table 10-3, p.544 · §10.3.2, p.563"],
+    ["hs", "lp_wake_req / pl_wake_ack", "both", "4-phase", "Protocol Layer wakes the Adapter's clocks", "Before state requests out of gated states, and before every lp_cfg packet.", "Table 10-3, p.545 · §10.2.3.1, p.547"],
+    ["hs", "pl_clk_req / lp_clk_ack", "both", "4-phase", "Adapter wakes the Protocol Layer's clocks", "Before level changes, pl_cfg packets, error pulses and PM exit.", "Table 10-3, p.545 · §10.2.3.2, p.548"],
+    ["cfg", "lp_cfg / _vld / _crd", "lp", "bus + credit", "Sideband packets to the Adapter (NC = 8, 16 or 32)", "1 credit = 64b header + 64b data. Register updates are atomic.", "Table 10-3, p.546 · §10.2.3.1, p.548"],
+    ["cfg", "pl_cfg / _vld / _crd", "pl", "bus + credit", "Sideband packets to the Protocol Layer", "Initial credits are design parameters, not returned at reset.", "Table 10-3, p.546"],
+    ["misc", "lp_retimer_crd / pl_retimer_crd", "both", "pulse", "256B Retimer buffer credit (optional, Raw only)", "Must never assert without a Retimer.", "Table 10-3, p.540–541 · §1.3, p.48"],
+    ["misc", "dm_param_exchange_done / _stack_count", "pl", "level", "Management Transport over mainband", "Drops whenever link status goes down.", "Table 10-3, p.546"],
+    ["misc", "lp_ / pl_vendor_defined", "both", "any", "Optional vendor signals", "Stay low in modes that do not use them.", "Table 10-3, p.546 · §10.3.4, p.572"]
+  ];
+  var chipsEl = document.getElementById("sigchips");
+  var bodyEl = document.getElementById("sigbody");
+  var active = "all";
+  function drawTable() {
+    var html = "";
+    sigs.forEach(function (r) {
+      if (active !== "all" && r[0] !== active) return;
+      var dirTxt = r[2] === "lp" ? "Protocol Layer" : r[2] === "pl" ? "Adapter" : "both";
+      var cls = r[2] === "both" ? "" : r[2];
+      html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+        "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+    });
+    bodyEl.innerHTML = html;
+  }
+  groups.forEach(function (g) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = g[1];
+    b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+    b.addEventListener("click", function () {
+      active = g[0];
+      Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true");
+      drawTable();
+    });
+    chipsEl.appendChild(b);
+  });
+  drawTable();
+
+  /* ---------- rationale filter ---------- */
+  var wgroups = [["all", "All"], ["width", "Clocking & width"], ["tx", "Tx path"], ["rx", "Rx path"], ["share", "Sharing the link"], ["state", "State control"], ["power", "Handshakes & power"], ["err", "Errors"]];
+  var wchips = document.getElementById("whychips");
+  var wcards = document.querySelectorAll(".wcard");
+  var wactive = "all";
+  wgroups.forEach(function (g) {
+    var count = 0;
+    Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+    b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+    b.addEventListener("click", function () {
+      wactive = g[0];
+      Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true");
+      Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+    });
+    wchips.appendChild(b);
+  });
+
+  /* ---------- waveform engine ---------- */
+  var CW = 34, LW = 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  var minis = [
+    { title: "rx_active: open the receiver first", tag: "pl_rx_active_req / lp_rx_active_sts",
+      text: "Active is negotiated on the slow sideband, but flits arrive on the fast mainband. The Adapter asks the Protocol Layer to open its receive path, and only after both signals are high does it send Rsp.Active to the remote die. To leave Active gracefully both must fall before the status changes.",
+      w: { n: 10, aria: "rx_active handshake", sig: [
+        { name: "pl_rx_active_req", d: "pl", t: "bit", v: "0011111100" },
+        { name: "lp_rx_active_sts", d: "lp", t: "bit", v: "0001111110" },
+        { name: "sideband", d: "sb", t: "note", v: seq([["", 4], ["Rsp.Active →", 3], ["", 3]]) } ] } },
+    { title: "stallreq: stop at a flit boundary", tag: "pl_stallreq / lp_stallack",
+      text: "The Adapter asks the Protocol Layer to stop at a clean flit boundary. Data offered before the acknowledge must still be accepted; while lp_stallack is high, lp_valid and lp_irdy are low. On FDI in Flit mode this is used only for PM entry; other exits just drop pl_trdy at a flit boundary.",
+      w: { n: 10, aria: "stallreq handshake", sig: [
+        { name: "pl_stallreq", d: "pl", t: "bit", v: "0111110000" },
+        { name: "lp_stallack", d: "lp", t: "bit", v: "0001111000" },
+        { name: "lp_valid", d: "lp", t: "bit", v: "1110000000" },
+        { name: "pl_trdy", d: "pl", t: "bit", v: "1110000000" } ] } },
+    { title: "wake: Protocol Layer wakes the Adapter", tag: "lp_wake_req / pl_wake_ack",
+      text: "Required before a state request out of a clock-gated state and before any lp_cfg packet. For a state request the Protocol Layer may change lp_state_req without waiting for the acknowledge; for lp_cfg it must wait, because a packet spans several cycles.",
+      w: { n: 10, aria: "wake handshake", sig: [
+        { name: "lp_wake_req", d: "lp", t: "bit", v: "0111110000" },
+        { name: "pl_wake_ack", d: "pl", t: "bit", v: "0001111000" },
+        { name: "lp_state_req", d: "lp", t: "bus", v: seq([["NOP", 2], ["Active", 8]]) } ] } },
+    { title: "clk: Adapter wakes the Protocol Layer", tag: "pl_clk_req / lp_clk_ack",
+      text: "Its main job is to make sure a sleeping Protocol Layer notices level changes such as pl_inband_pres, pl_phyinl1/l2, pl_phyinrecenter and pl_rx_active_req. Also required before pl_cfg packets, error pulses, LinkError from a gated state, and PM exit requested by the remote die.",
+      w: { n: 10, aria: "clk handshake", sig: [
+        { name: "pl_clk_req", d: "pl", t: "bit", v: "0111110000" },
+        { name: "lp_clk_ack", d: "lp", t: "bit", v: "0001111000" },
+        { name: "pl_inband_pres", d: "pl", t: "bit", v: "0011111111" } ] } }
+  ];
+  var miniRefs = ["§10.2.7, p.552–553 · §10.2.8 step 4, p.554", "§10.3.2, p.563–564", "§10.2.3.1, p.547–548", "§10.2.3.2, p.548"];
+  var minisEl = document.getElementById("minis");
+  minis.forEach(function (m, mi) {
+    var c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" + renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p><p class=\"src\"><span class=\"sl\">Spec</span>" + esc(miniRefs[mi]) + "</p>";
+    minisEl.appendChild(c);
+  });
+
+  /* ---------- live scenarios ---------- */
+  var scenarios = [
+    {
+      id: "bringup", tab: "Bring-up", title: "Bring-up: Stage 3, Reset to Active",
+      desc: "One die's view after the PHY has trained (RDI is Active). The Adapter has to negotiate parameters, wake the Protocol Layer, open its receiver and finish the Active handshake with the remote Adapter.",
+      n: 26, gaps: [14],
+      sig: [
+        { name: "pl_clk_req", d: "pl", t: "bit", v: "0000" + "111111111111111111" + "0000" },
+        { name: "lp_clk_ack", d: "lp", t: "bit", v: "000000" + "11111111111111111" + "000" },
+        { name: "pl_inband_pres", d: "pl", t: "bit", v: "0000" + "1111111111111111111111" },
+        { name: "pl_protocol_vld", d: "pl", t: "bit", v: "0000" + "1111111111111111111111" },
+        { name: "lp_wake_req", d: "lp", t: "bit", v: "0000000" + "11111111111111111" + "00" },
+        { name: "pl_wake_ack", d: "pl", t: "bit", v: "000000000" + "1111111111111111" + "0" },
+        { name: "lp_state_req", d: "lp", t: "bus", v: seq([["NOP", 8], ["Active", 18]]) },
+        { name: "pl_rx_active_req", d: "pl", t: "bit", v: "00000000000" + "111111111111111" },
+        { name: "lp_rx_active_sts", d: "lp", t: "bit", v: "0000000000000" + "1111111111111" },
+        { name: "sideband (Die 0 view)", d: "sb", t: "note", v: seq([["", 1], ["AdvCap ⇄", 3], ["", 6], ["Req.Active →", 3], ["", 2], ["Rsp.Active →", 3], ["← Rsp.Active", 3], ["", 5]]) },
+        { name: "pl_state_sts", d: "pl", t: "bus", v: seq([["Reset", 21], ["Active", 5]]) },
+        { name: "pl_trdy", d: "pl", t: "bit", v: "0000000000000000000000" + "1111" },
+        { name: "lp_valid / lp_irdy", d: "lp", t: "bit", v: "00000000000000000000000" + "111" }
+      ],
+      steps: [
+        { r: [0, 3], t: "Parameter exchange on the sideband", x: "RDI has reached Active, so Stage 2 is done. The two Adapters swap {AdvCap.Adapter} messages to agree on protocol, flit format, Retry and stacks. FDI still shows Reset and the Protocol Layer may be clock-gated, waiting.", w: "Why: the Adapter cannot tell the Protocol Layer what protocol or flit format to use until both dies agree." },
+        { r: [4, 6], t: "pl_inband_pres: the link is negotiated", x: "The Adapter raises pl_inband_pres and pl_protocol_vld, and starts the pl_clk_req handshake so a gated Protocol Layer is guaranteed to see the change. The Protocol Layer samples pl_protocol and pl_protocol_flitfmt now, while status is Reset.", w: "Why the clock handshake: these are level signals. A sleeping receiver would never notice them without being woken." },
+        { r: [7, 9], t: "Protocol Layer wakes the Adapter and asks for Active", x: "lp_wake_req rises, and lp_state_req goes from NOP to Active. The NOP held for at least one clock matters: the Adapter acts on the edge, not on a level. The Protocol Layer may change the request before pl_wake_ack arrives.", w: "Why an edge: it lets the upper layer delay link-up, for example while software sets things up, simply by holding NOP." },
+        { r: [10, 13], t: "Req.Active goes out and the receiver opens", x: "The Adapter sends {LinkMgmt.Adapter0.Req.Active} to the remote Adapter and raises pl_rx_active_req. One or more cycles later the Protocol Layer answers with lp_rx_active_sts once its receive path is ready.", w: "Why now: the Adapter must not answer the remote die's Active request until this receiver is open." },
+        { r: [14, 20], t: "Rsp.Active crosses the sideband", x: "Only after sampling pl_rx_active_req = lp_rx_active_sts = 1 does the Adapter send Rsp.Active. The remote die does the same. The compressed column stands for sideband time: roughly 80 ns per 64-bit word at 800 Mb/s.", w: "Why it matters: as soon as the remote die receives our Rsp.Active it may start sending flits on the mainband, possibly before our own status reaches Active." },
+        { r: [21, 25], t: "Status Active; flits flow", x: "Having sent and received Rsp.Active, the Adapter moves pl_state_sts to Active and raises pl_trdy. In UCIe Flit mode the first flits complete the Sequence Number Handshake, using NOP flits if there is no payload. The wake and clock requests are released.", w: "This whole Active Entry Handshake repeats on every entry to Active: after retrain, after L1 and after L2." }
+      ]
+    },
+    {
+      id: "traffic", tab: "Traffic", title: "Steady traffic: Tx with backpressure, Rx with bubbles",
+      desc: "A 64B FDI moving 256B flits (four beats each). Top half is the transmit path, bottom half the receive path.",
+      n: 16, gaps: [],
+      sig: [
+        { name: "lp_irdy", d: "lp", t: "bit", v: "0111111111111110" },
+        { name: "lp_valid", d: "lp", t: "bit", v: "0111111111111110" },
+        { name: "lp_data", d: "lp", t: "bus", v: seq([["", 1], ["F0·0", 1], ["F0·1", 1], ["F0·2", 3], ["F0·3", 1], ["F1·0", 1], ["F1·1", 1], ["F1·2", 1], ["F1·3", 1], ["F2·0", 1], ["F2·1", 1], ["F2·2", 1], ["F2·3", 1], ["", 1]]) },
+        { name: "pl_trdy", d: "pl", t: "bit", v: "1110011111111111" },
+        { name: "beat accepted", d: "note", t: "note", v: ["", "✓", "✓", "", "", "✓", "✓", "✓", "✓", "✓", "✓", "✓", "✓", "✓", "✓", ""] },
+        { name: "pl_valid", d: "pl", t: "bit", v: "0011011111100000" },
+        { name: "pl_data", d: "pl", t: "bus", v: seq([["", 2], ["G0·0", 1], ["G0·1", 1], ["", 1], ["G0·2", 1], ["G0·3", 1], ["G1·0", 1], ["G1·1", 1], ["G1·2", 1], ["G1·3", 1], ["", 5]]) }
+      ],
+      steps: [
+        { r: [0, 2], t: "A beat moves only when all three are high", x: "lp_irdy, lp_valid and pl_trdy high on the same rising edge transfers one beat. F0·0 and F0·1 go in cycles 1 and 2.", w: "Unlike AXI there are two signals on the sender side: lp_irdy can rise early to wake the Adapter before lp_valid." },
+        { r: [3, 5], t: "Adapter backpressure in the middle of a flit", x: "pl_trdy drops for two cycles. The Protocol Layer keeps F0·2 on the bus with lp_valid and lp_irdy held high; it is accepted in cycle 5. The sender may never insert its own bubble inside a flit.", w: "The Protocol Layer may assume nothing about when pl_trdy drops or for how long, unless the Adapter documents a guarantee." },
+        { r: [6, 14], t: "Back-to-back flits", x: "With pl_trdy high, one 256B flit leaves every four cycles: 2 ns per flit at 2 GHz. On the wire each beat becomes one 8-UI Valid frame across 64 lanes, so at 16 GT/s the FDI and the link run at exactly the same rate.", w: "If NBYTES × lclk is smaller than the link rate, the link idles between flits and never reaches its capability." },
+        { r: [2, 10], t: "Receive path: no backpressure", x: "The Adapter delivers G0 with a bubble at cycle 4, which is allowed. There is no ready signal back from the Protocol Layer: every pl_valid beat must be taken.", w: "Real consequence: any stall or clock crossing inside the Protocol Layer needs a buffer sized for line rate times its worst stall." }
+      ]
+    },
+    {
+      id: "stacks", tab: "Two stacks", title: "Two stacks sharing one link (Multi_Protocol_Enable)",
+      desc: "Two Protocol Layers on one Adapter, each on its own FDI. Stack 0 always has data; stack 1 has one flit. The link row is drawn without pipeline delay so it lines up with the FDI beats that feed it.",
+      n: 20, gaps: [],
+      sig: [
+        { name: "stack 0 lp_valid", d: "lp", t: "bit", v: "11111111111111111111" },
+        { name: "stack 0 lp_data", d: "lp", t: "bus", v: seq([["F0·0", 1], ["F0·1", 1], ["F0·2", 1], ["F0·3", 1], ["F1·0", 5], ["F1·1", 1], ["F1·2", 1], ["F1·3", 1], ["F2·0", 5], ["F2·1", 1], ["F2·2", 1], ["F2·3", 1]]) },
+        { name: "stack 0 pl_trdy", d: "pl", t: "bit", v: "11110000111100001111" },
+        { name: "stack 1 lp_valid", d: "lp", t: "bit", v: "00001111000000000000" },
+        { name: "stack 1 lp_data", d: "lp", t: "bus", v: seq([["", 4], ["G0·0", 1], ["G0·1", 1], ["G0·2", 1], ["G0·3", 1], ["", 12]]) },
+        { name: "stack 1 pl_trdy", d: "pl", t: "bit", v: "00001111000000000000" },
+        { name: "link (RDI)", d: "note", t: "note", v: seq([["stack 0 · F0", 4], ["stack 1 · G0", 4], ["stack 0 · F1", 4], ["NOP (Adapter)", 4], ["stack 0 · F2", 4]]) }
+      ],
+      steps: [
+        { r: [0, 7], t: "Flits alternate between the stacks", x: "With Multi_Protocol_Enable negotiated, the Adapter never sends two flits in a row from one stack. Stack 0 offers F1 in cycle 4, but pl_trdy on its FDI stays low while stack 1's G0 goes out. Holding lp_valid between flits is legal; the no-bubble rule applies only inside a flit.", w: "Each stack is designed for half the link's bandwidth. The alternation is what makes that safe." },
+        { r: [8, 15], t: "Stack 1 idle: the Adapter inserts a NOP", x: "Stack 1 has nothing to send, but the rule still holds, so the Adapter fills the slot with a NOP flit. NOP flits bypass the Tx retry buffer and are not forwarded to the receiving Protocol Layer.", w: "This is the static 50% mode: simple, at the cost of idle slots when one stack is quiet." },
+        { r: [16, 19], t: "Why accept the idle slot", x: "A receiving Protocol Layer in this mode never gets two flits in a row, although it must still take the beats of one flit at full speed. So it can be built for half rate: two CXL 68B controllers, each sized for 32 GT/s SERDES-equivalent bandwidth, can share one faster UCIe link unchanged.", w: "With Enhanced Multi_Protocol_Enable and a 100% advertisement the Adapter round-robins per flit instead, and stack 0 could have used cycles 12–15." }
+      ]
+    },
+    {
+      id: "crc", tab: "CRC replay", title: "CRC error on a Standard 256B flit: cancel and replay",
+      desc: "Receive side. The Adapter forwards flit F7 before its CRC check finishes; the check fails, so it cancels the flit and the retry mechanism brings it back.",
+      n: 18, gaps: [6],
+      sig: [
+        { name: "pl_valid", d: "pl", t: "bit", v: "111100001111111100" },
+        { name: "pl_data", d: "pl", t: "bus", v: seq([["F7·0", 1], ["F7·1", 1], ["F7·2", 1], ["F7·3", 1], ["", 4], ["F7·0", 1], ["F7·1", 1], ["F7·2", 1], ["F7·3", 1], ["F8·0", 1], ["F8·1", 1], ["F8·2", 1], ["F8·3", 1], ["", 2]]) },
+        { name: "pl_flit_cancel", d: "pl", t: "bit", v: "000010000000000000" },
+        { name: "Adapter", d: "note", t: "note", v: seq([["CRC runs in parallel", 4], ["Nak to remote", 2], ["", 2], ["replayed F7", 4], ["F8, in order", 4], ["", 2]]) },
+        { name: "Protocol Layer", d: "note", t: "note", v: seq([["hold F7 (speculative)", 4], ["drop F7", 2], ["", 2], ["hold F7", 4], ["F7 committed", 4], ["", 2]]) }
+      ],
+      steps: [
+        { r: [0, 3], t: "Forward first, check on the side", x: "The four chunks of F7 go up to the Protocol Layer as they arrive. The Adapter computes CRC in parallel instead of in the data path.", w: "Why: at 2 GHz a 256B CRC check does not fit in the delivery cycle. Taking it off the path is what allows high lclk." },
+        { r: [4, 5], t: "CRC fails: cancel exactly one cycle later", x: "pl_flit_cancel pulses for one cycle, one cycle after F7's last chunk. For a Standard 256B flit the CRC sits at the end, so the whole flit is cancelled. The Adapter schedules a Nak.", w: "The Protocol Layer must hold every received flit until its cancel slot passes before acting on it." },
+        { r: [6, 7], t: "Replay round trip", x: "The Nak reaches the remote Adapter, which replays from its Tx retry buffer. UCIe uses a simplified PCIe Flit-mode retry: 8-bit sequence numbers, no selective Nak.", w: "Flits that arrive between the error and the replay are discarded by the Adapter; the Protocol Layer never sees them out of order." },
+        { r: [8, 15], t: "Replay passes and F7 commits", x: "F7 arrives again. Cycle 12 is its cancel slot and nothing pulses, so the Protocol Layer commits it. F8 follows in order.", w: "The Adapter is responsible for replaying cancelled flits uncancelled and in order." }
+      ]
+    },
+    {
+      id: "latopt", tab: "Half-flit cancel", title: "Latency-Optimized flit: second half fails",
+      desc: "Latency-Optimized 256B flits carry a CRC per 128B half, so each half has its own cancel slot. Here half A passes and half B fails.",
+      n: 18, gaps: [6],
+      sig: [
+        { name: "pl_valid", d: "pl", t: "bit", v: "111100001111111100" },
+        { name: "pl_data", d: "pl", t: "bus", v: seq([["F3·A0", 1], ["F3·A1", 1], ["F3·B0", 1], ["F3·B1", 1], ["", 4], ["F3·A0", 1], ["F3·A1", 1], ["F3·B0", 1], ["F3·B1", 1], ["F4·A0", 1], ["F4·A1", 1], ["F4·B0", 1], ["F4·B1", 1], ["", 2]]) },
+        { name: "pl_flit_cancel", d: "pl", t: "bit", v: "000010000010000000" },
+        { name: "Protocol Layer", d: "note", t: "note", v: seq([["hold half A", 2], ["A used · hold B", 2], ["drop B", 2], ["", 2], ["hold A (dup)", 2], ["drop A · hold B", 2], ["B committed", 2], ["F4…", 2], ["", 2]]) }
+      ],
+      steps: [
+        { r: [0, 3], t: "Half A passes its check", x: "Half A's cancel slot is cycle 2. Nothing pulses, so the Protocol Layer may use half A immediately, which is the latency benefit of this format.", w: "Per-half CRC means the first 128B can be consumed while the second half is still arriving." },
+        { r: [4, 5], t: "Half B fails", x: "pl_flit_cancel pulses in cycle 4, one cycle after half B's last chunk. Only half B is dropped.", w: "Half A has already been consumed. That creates the duplicate problem in the next step." },
+        { r: [8, 11], t: "Replay sends the whole flit; the duplicate A is cancelled", x: "Retry replays all of F3. The Adapter pulses pl_flit_cancel in cycle 10, half A's slot, so the Protocol Layer does not consume A twice (Figure 10-16). An alternative is to not assert pl_valid for the duplicate half at all (Figure 10-17).", w: "Your scoreboard must accept both Adapter behaviours." },
+        { r: [12, 15], t: "Half B commits", x: "Cycle 12 is half B's slot and stays low, so B is committed. F4 follows.", w: "Bug to look for: a Protocol Layer that dedups by position and drops the good B, or that consumes the duplicate A." }
+      ]
+    },
+    {
+      id: "pm", tab: "PM entry", title: "L1 entry on the upstream port (PCIe or CXL)",
+      desc: "The Protocol Layer has been idle long enough and asks for L1. For PCIe and CXL only the upstream port sends the PM request.",
+      n: 20, gaps: [7, 12],
+      sig: [
+        { name: "lp_valid", d: "lp", t: "bit", v: "11000000000000000000" },
+        { name: "lp_state_req", d: "lp", t: "bus", v: seq([["Active", 2], ["L1", 18]]) },
+        { name: "pl_stallreq", d: "pl", t: "bit", v: "000" + "11111111111111" + "000" },
+        { name: "lp_stallack", d: "lp", t: "bit", v: "00000" + "1111111111111" + "00" },
+        { name: "pl_trdy", d: "pl", t: "bit", v: "11111000000000000000" },
+        { name: "pl_rx_active_req", d: "pl", t: "bit", v: "11111111110000000000" },
+        { name: "lp_rx_active_sts", d: "lp", t: "bit", v: "11111111111000000000" },
+        { name: "Adapter", d: "note", t: "note", v: seq([["", 3], ["stall", 2], ["wait for Acks", 3], ["", 8], ["all FDIs PM → RDI L1", 4]]) },
+        { name: "sideband", d: "sb", t: "note", v: seq([["", 8], ["Req.L1 →", 3], ["", 2], ["← Rsp.L1", 3], ["", 4]]) },
+        { name: "pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 16], ["L1", 4]]) },
+        { name: "pl_phyinl1", d: "pl", t: "bit", v: "00000000000000000001" }
+      ],
+      steps: [
+        { r: [0, 2], t: "Protocol Layer stops and requests L1", x: "Idle criteria are implementation-specific. The Protocol Layer blocks new flits, then moves lp_state_req to L1. It must hold that request until it sees L1, Active.PMNAK, Retrain or LinkError.", w: "PM DLLPs are not used in UCIe Flit mode; sideband messages replace them." },
+        { r: [3, 7], t: "Stall to a flit boundary and drain retry", x: "This is the one exit from Active where FDI in Flit mode uses pl_stallreq. After lp_stallack the Adapter also waits until its Tx retry buffer is empty, meaning every flit from this Protocol Layer has been acknowledged.", w: "Why drain: flits must not be stranded in a retry buffer while the link sleeps." },
+        { r: [8, 12], t: "Req.L1 to the remote Adapter", x: "The upstream port's Adapter sends the PM request. Before status can leave Active, the rx_active pair drops (cycles 10 and 11). The remote Adapter must answer within 2 µs, counted only while in Active.", w: "For Streaming or Raw format both sides send PM requests, and PM completes when both have a response." },
+        { r: [13, 17], t: "Rsp.L1 arrives: status L1", x: "On the PM response the Adapter moves pl_state_sts to L1, then releases the stall handshake. Clock gating is now allowed on both sides of FDI.", w: "The spec allows the lower layer to change status either before or after dropping pl_stallreq; checkers must accept both orders." },
+        { r: [18, 19], t: "Every FDI in PM: RDI goes to L1", x: "Only when all Protocol Layers on this Adapter are in PM does the Adapter request L1 on RDI. pl_phyinl1 then reports the PHY state up to the Protocol Layer.", w: "For CXL there is one more layer on top: both vLSMs reach PM through ALMPs first, then ARB/MUX asks the Adapter LSM." }
+      ]
+    },
+    {
+      id: "pmnak", tab: "PM NAK", title: "PM request refused: Active.PMNAK",
+      desc: "Two dies on one picture. The upstream port asks for L1, but the downstream port's Protocol Layer still has traffic.",
+      n: 18, gaps: [5],
+      sig: [
+        { name: "DP: sideband", d: "sb", t: "note", v: seq([["", 1], ["← Req.L1", 3], ["", 3], ["Rsp.PMNAK →", 3], ["", 8]]) },
+        { name: "DP: lp_state_req", d: "lp", t: "bus", v: seq([["Active", 18]]) },
+        { name: "DP: Adapter", d: "note", t: "note", v: seq([["", 4], ["1 µs timer", 3], ["", 11]]) },
+        { name: "DP: pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 18]]) },
+        { name: "UP: lp_state_req", d: "lp", t: "bus", v: seq([["L1", 11], ["Active", 7]]) },
+        { name: "UP: pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 10], ["Active.PMNAK", 3], ["Active", 5]]) },
+        { name: "UP: Adapter", d: "note", t: "note", v: seq([["", 13], ["retry PM ≥ 2 µs later", 5]]) }
+      ],
+      steps: [
+        { r: [0, 3], t: "Request arrives at the downstream port", x: "The upstream Protocol Layer asked for L1 and its Adapter sent Req.L1. It arrives at the downstream Adapter, whose Protocol Layer is still requesting Active.", w: "The downstream port never initiates PM for PCIe or CXL; it only answers." },
+        { r: [4, 6], t: "Downstream Adapter waits 1 µs", x: "If its own Protocol Layer starts requesting PM, it will stall, drain and respond with Rsp.L1. The 1 µs is counted only while all relevant state machines are Active.", w: "Why wait at all: both sides often go idle at nearly the same moment, and a short grace period avoids needless refusals." },
+        { r: [7, 9], t: "Still Active: respond PMNAK", x: "The Protocol Layer stayed at Active for the whole 1 µs, so the Adapter sends {LinkMgmt.Adapter0.Rsp.PMNAK}. Every PM request must get some response within 2 µs.", w: "" },
+        { r: [10, 12], t: "Upstream status: Active.PMNAK", x: "The upstream Adapter moves its FDI status to Active.PMNAK. This is a sub-state of Active: the Protocol Layer keeps receiving flits and must now request Active.", w: "Active.PMNAK can never move directly to L1 or L2. The Protocol Layer has to go back to Active first." },
+        { r: [13, 17], t: "Back to Active; retry later", x: "Status returns to Active. The upstream side may retry PM only 2 µs after the PMNAK, or immediately if the remote side sends its own PM request.", w: "Verification point: a retry earlier than 2 µs is a violation." }
+      ]
+    },
+    {
+      id: "retrain", tab: "Retrain", title: "Retrain during traffic: PCIe view and CXL view",
+      desc: "The Adapter decides to retrain (CRC error threshold, PHY framing error or the software Retrain bit). The upper rows show a PCIe Protocol Layer; the lower rows show what a CXL Protocol Layer sees for the same event.",
+      n: 22, gaps: [9],
+      sig: [
+        { name: "RDI pl_state_sts", d: "note", t: "bus", v: seq([["Active", 4], ["Retrain", 9], ["Active", 9]]) },
+        { name: "PHY", d: "note", t: "note", v: seq([["", 4], ["LTSM: TXSELFCAL … LINKSPEED", 9], ["", 9]]) },
+        { name: "PCIe lp_valid", d: "lp", t: "bit", v: "111" + "00000000000000000" + "11" },
+        { name: "PCIe pl_trdy", d: "pl", t: "bit", v: "111" + "0000000000000000" + "111" },
+        { name: "PCIe pl_rx_active_req", d: "pl", t: "bit", v: "1111" + "00000000000" + "1111111" },
+        { name: "PCIe lp_rx_active_sts", d: "lp", t: "bit", v: "11111" + "00000000000" + "111111" },
+        { name: "PCIe lp_state_req", d: "lp", t: "bus", v: seq([["Active", 7], ["NOP", 6], ["Active", 9]]) },
+        { name: "sideband", d: "sb", t: "note", v: seq([["", 15], ["Req/Rsp.Active ⇄", 3], ["", 4]]) },
+        { name: "PCIe pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 6], ["Retrain", 12], ["Active", 4]]) },
+        { name: "CXL pl_rx_active_req", d: "pl", t: "bit", v: "1111" + "00000000000" + "1111111" },
+        { name: "CXL lp_rx_active_sts", d: "lp", t: "bit", v: "11111" + "00000000000" + "111111" },
+        { name: "CXL pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 22]]) }
+      ],
+      steps: [
+        { r: [0, 3], t: "Adapter stops Tx at a flit boundary", x: "In Flit mode, leaving Active for Retrain does not use pl_stallreq on FDI. The Adapter simply drops pl_trdy at a flit boundary (cycle 3). In Raw format the stall handshake would be used instead.", w: "The Protocol Layer may not request Retrain in Flit mode; retrain belongs to the Adapter and PHY." },
+        { r: [4, 6], t: "Receiver closes; status changes (PCIe only)", x: "The rx_active pair drops, then the PCIe FDI status moves to Retrain. On the CXL FDI the status stays Active the whole time: only pl_rx_active_req drops, which tells the Protocol Layer no flits will arrive.", w: "Why: Retrain is never propagated to CXL vLSMs. The CXL link layer never knows the PHY retrained." },
+        { r: [7, 12], t: "PHY retrains", x: "The LTSM runs PHYRETRAIN and the MBTRAIN loop. The PCIe Protocol Layer moves its request to NOP. Any PM state is cleared, and Retimer credits reload to their advertised value.", w: "Repair, width degrade or speed degrade can happen here, so pl_speedmode and pl_lnk_cfg may differ afterwards." },
+        { r: [13, 17], t: "RDI Active, NOP→Active, Active Entry handshake", x: "RDI returns to Active. Because this Retrain was entered from Active, the Adapter waits for a NOP→Active edge (cycle 13) before starting the Active Entry handshake. rx_active reopens and Req/Rsp.Active is exchanged.", w: "The edge requirement lets the upper layer hold the link in Retrain while a sideband handshake such as the parity-feature negotiation finishes." },
+        { r: [18, 21], t: "Traffic resumes", x: "Status returns to Active and pl_trdy comes back. The Sequence Number Handshake runs again, and any un-acknowledged flits replay from the retry buffer.", w: "Scoreboard rule: flits sent before the retrain and not yet acknowledged must arrive exactly once afterwards." }
+      ]
+    },
+    {
+      id: "linkerror", tab: "LinkError", title: "LinkError from the Protocol Layer",
+      desc: "The Protocol Layer detects an error it must contain, for example a viral escalation, and takes the link down.",
+      n: 18, gaps: [9],
+      sig: [
+        { name: "lp_linkerror", d: "lp", t: "bit", v: "00" + "111111111" + "0000000" },
+        { name: "lp_valid", d: "lp", t: "bit", v: "1111" + "00000000000000" },
+        { name: "pl_trdy", d: "pl", t: "bit", v: "111" + "000000000000000" },
+        { name: "pl_rx_active_req", d: "pl", t: "bit", v: "111111" + "000000000000" },
+        { name: "lp_rx_active_sts", d: "lp", t: "bit", v: "1111111" + "00000000000" },
+        { name: "lp_state_req", d: "lp", t: "bus", v: seq([["Active", 4], ["NOP", 8], ["Active", 6]]) },
+        { name: "below FDI", d: "note", t: "note", v: seq([["", 2], ["RDI LinkError ⇄", 2], ["PL flushes datapath", 3], ["", 2], ["≥ 16 ms", 3], ["", 2], ["full retrain", 4]]) },
+        { name: "pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 4], ["LinkError", 10], ["Reset", 4]]) }
+      ],
+      steps: [
+        { r: [0, 3], t: "lp_linkerror rises", x: "A level wire, separate from lp_state_req, so containment is as fast as possible. The Adapter takes RDI to LinkError first (RDI coordinates with the remote die over the sideband), then propagates it up to the Adapter LSM and CXL vLSMs. No stall handshake is required.", w: "Order matters: RDI first, then Adapter LSM, then vLSMs." },
+        { r: [4, 8], t: "Status LinkError; clean up", x: "pl_trdy is gone. The Protocol Layer must clean its datapath after seeing LinkError for one cycle, whether or not it gets pl_trdy to drain. The rx_active pair may fall after the status change but must be low before LinkError exits.", w: "Clock gating is not allowed in LinkError." },
+        { r: [9, 11], t: "Minimum residency: 16 ms", x: "The lower layer stays in LinkError at least 16 ms, twice the 8 ms sideband timeout. Even if the sideband is dead, the remote die is forced into LinkError by its own timeouts.", w: "If an Adapter-detected fatal error caused this, pl_trainerror stays high for the whole period." },
+        { r: [12, 17], t: "Exit to Reset", x: "With lp_linkerror low, residency met and lp_state_req = Active, the status moves to Reset. From here the full bring-up repeats, including a fresh parameter exchange.", w: "A Protocol Layer that wants software to intervene first simply delays its next NOP→Active edge; the PHY will not train until it sees one." }
+      ]
+    }
+  ];
+
+  var scRefs = {
+    bringup: "§10.2.8 and Figure 10-20, p.553–554 · §3.2 and Figure 3-3, p.62",
+    traffic: "§10.2.4 and Figure 10-14, p.549–550",
+    stacks: "§3.1 Stack Multiplexing, p.59–60",
+    crc: "§10.2.5 and Figure 10-18, p.551–552 · §3.8, p.93",
+    latopt: "§10.2.5 and Figures 10-15 to 10-17, p.551",
+    pm: "§10.2.9 and Figure 10-21, p.555–557 · §10.3.2, p.563",
+    pmnak: "§10.2.9 and Figure 10-23, p.556–558",
+    retrain: "§10.3.3.4, p.566–567 · §10.2.7, p.553 · §4.5.3.7, p.168",
+    linkerror: "§10.3.3.7–10.3.3.8, p.568–569 · Table 10-3, p.542–543"
+  };
+  var stepRefs = {
+    bringup: [
+      "§3.2 and Figure 3-3, p.62 · §3.2.1.2 and Table 3-1, p.63",
+      "Table 10-3 (pl_inband_pres p.542, pl_protocol_vld p.544) · §10.2.3.2 rule 5, p.548 · §10.2.8 step 1, p.553",
+      "§10.2.8 step 2, p.553 · §10.2.3.1 rule 5, p.548 · §10.3.3.1, p.565",
+      "§10.2.8 step 3, p.553 · §10.2.7 rules 1–2, p.552",
+      "§10.2.8 step 4, p.554 · §4.1.5, p.102",
+      "§10.2.8 steps 5–6, p.554 · §3.8 (Sequence Number Handshake, NOP flits), p.94"],
+    traffic: [
+      "§10.2.4 and Figure 10-14, p.549–550",
+      "§10.2.4, p.549",
+      "§10.3.1, p.561 · §4.1.1, p.98 · §4.1.2, p.100",
+      "§10.2.4, p.550 · §10.2.2, p.547"],
+    stacks: [
+      "§3.1, p.59",
+      "§3.1, p.59",
+      "§3.1, p.59 (receivers, two-CXL-68B example) · p.60 (Enhanced mode, round-robin)"],
+    crc: [
+      "§10.2.5, p.551 · §3.7, p.92",
+      "Table 10-3 (pl_flit_cancel), p.542 · Figure 10-18, p.552 · §3.8, p.93",
+      "§3.8, p.93–94 (8-bit sequence numbers, no selective Nak; PCIe Flit-mode retry rules such as Flit Discard apply)",
+      "Table 10-3 (pl_flit_cancel: replay uncancelled and in order), p.542"],
+    latopt: [
+      "Table 10-3 (pl_flit_cancel per 128B half), p.542 · §10.2.5, p.551",
+      "§10.2.5 and Figure 10-16, p.551",
+      "§10.2.5, Figures 10-16 and 10-17, p.551",
+      "§10.2.5 and Figure 10-16, p.551"],
+    pm: [
+      "§10.2.9, p.555 (idle criteria, PM DLLPs not used, request held)",
+      "§10.3.2, p.563 · §10.2.9, p.556 (retry buffer empty)",
+      "§10.2.9, p.555–556 (upstream port only, 2 µs) · §10.2.7 rule 5, p.553",
+      "§10.2.9, p.556 · §10.3.2 implementation note, p.564",
+      "§10.2.9, p.555 · Table 10-3 (pl_phyinl1), p.544 · §3.5, p.90"],
+    pmnak: [
+      "§10.2.9, p.555",
+      "§10.2.9, p.556 (1 µs)",
+      "§10.2.9, p.556 (2 µs)",
+      "§10.2.9, p.556 · §10.3, p.559 (sub-state of Active)",
+      "§10.2.9, p.556 (retry at least 2 µs later)"],
+    retrain: [
+      "§10.3.2, p.563 · §10.3.3.4, p.566",
+      "§10.2.7 rules 5–6, p.553 · §10.3.3.2 and §10.3.3.4, p.566",
+      "§4.5.3.7, p.168–169 · §10.3.3.4, p.566",
+      "§10.3.3.4, p.567 · §10.2.8, p.553–554",
+      "§3.8, p.94"],
+    linkerror: [
+      "Table 10-3 (lp_linkerror), p.542 · §10.3.3.7, p.568 · §10.3.3.8, p.569",
+      "§10.3.3.7, p.568 · §10.2.7 rule 7, p.553 · §10.2.3, p.547",
+      "§10.3.3.7, p.569 · Table 10-3 (pl_trainerror), p.543",
+      "§10.3.3.7, p.569 · §10.3.3.8, p.569 · §3.8, p.93"]
+  };
+
+  var tabsEl = document.getElementById("tabs"), waveEl = document.getElementById("wave"), dotsEl = document.getElementById("dots");
+  var cur = 0, step = 0;
+  function pick(i) {
+    cur = i; step = 0;
+    Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+    var s = scenarios[i];
+    document.getElementById("sc-title").textContent = s.title;
+    document.getElementById("sc-desc").textContent = s.desc;
+    document.getElementById("sc-src").innerHTML = "<span class=\"sl\">Spec</span>" + esc(scRefs[s.id] || "");
+    dotsEl.innerHTML = "";
+    s.steps.forEach(function (st, k) {
+      var d = document.createElement("button");
+      d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+      d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+      d.addEventListener("click", function () { go(k); });
+      dotsEl.appendChild(d);
+    });
+    go(0);
+  }
+  function go(k) {
+    var s = scenarios[cur];
+    step = Math.max(0, Math.min(s.steps.length - 1, k));
+    var st = s.steps[step];
+    waveEl.innerHTML = renderWave(s, st.r, false);
+    document.getElementById("st-title").textContent = (step + 1) + ". " + st.t;
+    document.getElementById("st-text").textContent = st.x;
+    var w = document.getElementById("st-why");
+    w.textContent = st.w; w.style.display = st.w ? "" : "none";
+    var sr = (stepRefs[s.id] || [])[step], se = document.getElementById("st-src");
+    se.innerHTML = sr ? "<span class=\"sl\">Spec</span>" + esc(sr) : ""; se.style.display = sr ? "" : "none";
+    document.getElementById("cyc").textContent = "cycles " + st.r[0] + "–" + st.r[1];
+    Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+    document.getElementById("prev").disabled = step === 0;
+    document.getElementById("next").disabled = step === s.steps.length - 1;
+  }
+  scenarios.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+    b.addEventListener("click", function () { pick(i); });
+    b.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+    });
+    tabsEl.appendChild(b);
+  });
+  document.getElementById("prev").addEventListener("click", function () { go(step - 1); });
+  document.getElementById("next").addEventListener("click", function () { go(step + 1); });
+  pick(0);
+
+  /* sanity: every waveform row must match its scenario length */
+  scenarios.concat(minis.map(function (m) { return m.w; })).forEach(function (s) {
+    s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+  });
+})();
+</script>
+</body>
+</html>

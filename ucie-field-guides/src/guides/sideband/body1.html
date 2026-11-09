@@ -1,0 +1,149 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 7 · Sideband protocol</div>
+    <h1>UCIe Sideband Field Guide</h1>
+    <p class="lede">The sideband is UCIe's always-on control channel: link training messages, register access to the far die, link state handshakes, parameter exchange, error messages and management traffic. The same packet format is used on three hops: FDI config bus, RDI config bus and the sideband wires between dies. This guide covers the packet types, who may send what to whom, flow control on each hop, and why there is no retry.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw" style="background:var(--lp)"></i>Die 0 / requester</span>
+      <span><i class="sw" style="background:var(--pl)"></i>Die 1 / completer</span>
+      <span><i class="sw" style="background:var(--sb)"></i>sideband wire traffic</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#hops">2 · Three hops</a><a href="#types">3 · Packet types</a><a href="#fields">4 · Header fields</a><a href="#msgs">5 · Message families</a><a href="#fc">6 · Flow control</a><a href="#rationale">7 · Why each rule</a><a href="#live">8 · Live scenarios</a><a href="#silicon">9 · Real silicon</a><a href="#verify">10 · Verification</a><a href="#quiz">11 · Test yourself</a><a href="#refs">12 · Spec index</a>
+</div></nav>
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why a separate sideband</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Before the mainband works</div><h3>Train the link with something that already works</h3><p>Mainband training needs both dies to agree on every step. The sideband is a slow (800 MT/s), single-lane-pair link that comes up first in SBINIT and then carries every training handshake.</p><p class="src"><span class="sl">Spec</span>§7.0, p.268 · §4.5.3.2, p.133</p></div>
+    <div class="card"><div class="tagline">While the mainband sleeps</div><h3>Wake, manage, and debug</h3><p>PM exit starts on sideband; it stays on in L1. Register access to the far die, error messages and (optionally) management transport all use it, so software can see a chiplet whose mainband is down.</p><p class="src"><span class="sl">Spec</span>§7.0, p.268 · §10.1.7, p.535</p></div>
+    <div class="card"><div class="tagline">Simple and clean</div><h3>BER 1e-27: parity, no retry</h3><p>At low speed and short reach the sideband is clean enough that no retry is needed. Each packet carries control and data parity; a parity error is a fatal Uncorrectable Internal Error.</p><p class="src"><span class="sl">Spec</span>§7.1.3.2, p.298</p></div>
+    <div class="card"><div class="tagline">One format, three hops</div><h3>Same packets on FDI, RDI and the wire</h3><p>The Protocol Layer, Adapter and PHY exchange the same packet format on their config buses that the PHY sends over the bumps. Only srcid/dstid rules and flow control differ per hop.</p><p class="src"><span class="sl">Spec</span>§7.0, p.268 · Tables 7-2 to 7-4, p.270–271</p></div>
+  </div>
+</div></section>
+
+<section id="hops"><div class="wrap">
+  <h2>2 · Three hops and who may talk to whom</h2>
+  <div class="twocol">
+    <figure>
+      <svg viewBox="0 0 560 300" role="img" aria-label="Die 0 and Die 1 each have Protocol Layer, Adapter and PHY. FDI config bus between Protocol Layer and Adapter; RDI config bus between Adapter and PHY; sideband wires between the two PHYs. The Protocol Layer reaches the remote die only through the Adapter's mailbox.">
+        <defs><marker id="s1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g style="color:var(--ink)" font-family="var(--font-body)" font-size="12.5">
+          <g fill="var(--surface)" stroke="currentColor" stroke-width="1.3">
+            <rect x="20" y="20" width="170" height="44" rx="7"/><rect x="20" y="118" width="170" height="44" rx="7"/><rect x="20" y="216" width="170" height="44" rx="7"/>
+            <rect x="370" y="20" width="170" height="44" rx="7"/><rect x="370" y="118" width="170" height="44" rx="7"/><rect x="370" y="216" width="170" height="44" rx="7"/>
+          </g>
+          <g text-anchor="middle" font-weight="600"><text x="105" y="46">Die 0 Protocol Layer</text><text x="105" y="138">Die 0 Adapter</text><text x="105" y="242">Die 0 PHY</text><text x="455" y="46">Die 1 Protocol Layer</text><text x="455" y="138">Die 1 Adapter</text><text x="455" y="242">Die 1 PHY</text></g>
+          <text x="105" y="154" text-anchor="middle" fill="var(--muted)" font-size="11">mailbox registers</text>
+          <g stroke="var(--lp)" stroke-width="1.6"><line x1="105" y1="66" x2="105" y2="116" marker-end="url(#s1)" marker-start="url(#s1)"/><line x1="105" y1="164" x2="105" y2="214" marker-end="url(#s1)" marker-start="url(#s1)"/></g>
+          <g stroke="var(--pl)" stroke-width="1.6"><line x1="455" y1="66" x2="455" y2="116" marker-end="url(#s1)" marker-start="url(#s1)"/><line x1="455" y1="164" x2="455" y2="214" marker-end="url(#s1)" marker-start="url(#s1)"/></g>
+          <text x="114" y="96" fill="var(--lp)" font-size="11">FDI cfg (lp_cfg/pl_cfg)</text>
+          <text x="114" y="194" fill="var(--lp)" font-size="11">RDI cfg</text>
+          <text x="446" y="96" text-anchor="end" fill="var(--pl)" font-size="11">FDI cfg</text>
+          <text x="446" y="194" text-anchor="end" fill="var(--pl)" font-size="11">RDI cfg</text>
+          <line x1="192" y1="238" x2="368" y2="238" stroke="var(--sb)" stroke-width="2.2" marker-end="url(#s1)" marker-start="url(#s1)"/>
+          <text x="280" y="230" text-anchor="middle" fill="var(--sb)" font-size="11.5">UCIe Link sideband, 800 MT/s</text>
+          <text x="280" y="256" text-anchor="middle" fill="var(--sb)" font-size="11">64-UI serial packets</text>
+          <line x1="192" y1="42" x2="368" y2="42" stroke="var(--bad)" stroke-dasharray="5 4" stroke-width="1.2"/>
+          <text x="280" y="34" text-anchor="middle" fill="var(--bad)" font-size="11">no direct PL ↔ PL sideband</text>
+          <text x="280" y="290" text-anchor="middle" fill="var(--muted)" font-size="11">PHY frames and transports; Adapter or PHY originate remote traffic</text>
+        </g>
+      </svg>
+      <figcaption>The Protocol Layer may access local Adapter and PHY registers directly over FDI, but reaches the far die only indirectly through the Adapter's mailbox registers. Only register access requests and completions are allowed on FDI.<span class="ref">Spec: §7.0, p.268–269 · §7.1.1, p.269</span></figcaption>
+    </figure>
+    <div class="grid" style="gap:12px">
+      <div class="tbl-wrap"><table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Tables 7-2 and 7-3, p.270–271. Completions carry reserved srcid/dstid; match them by Tag.</caption>
+        <thead><tr><th>Hop</th><th>srcid</th><th>dstid</th></tr></thead>
+        <tbody>
+          <tr><td>FDI</td><td class="mono">000 stack 0 PL · 100 stack 1 PL</td><td class="mono">001 Adapter · 010 PHY</td></tr>
+          <tr><td>RDI</td><td class="mono">000 / 100 PL · 001 Adapter · 011 Mgmt Port Gateway</td><td class="mono">[2]=0 local: 10 PHY · [2]=1 remote: 01 Adapter msg, 10 PHY msg, 11 MPG msg</td></tr>
+        </tbody>
+      </table></div>
+      <div class="card"><h3>Fragmented registers</h3><p style="font-size:15px">A register may have bits in the Protocol Layer, the Adapter and the PHY. Each layer implements the bits it does not own as read-only 0, and on a read the upper layer ORs its own value with the response from below. Writes simply have no effect on bits a layer does not own.</p><p class="src"><span class="sl">Spec</span>§7.0, p.268</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="types"><div class="wrap">
+  <h2>3 · Packet types and opcodes</h2>
+  <p class="sub">Every packet carries a 5-bit opcode that says its type and how much data follows. Every type except priority packets also carries 3-bit srcid and dstid.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Opcode</th><th>Type</th><th>Opcode</th><th>Type</th></tr></thead>
+    <tbody class="mono" style="font-size:12.5px">
+      <tr><td>00000</td><td>32b Memory Read</td><td>01101</td><td>64b Configuration Write</td></tr>
+      <tr><td>00001</td><td>32b Memory Write</td><td>10000</td><td>Completion without Data</td></tr>
+      <tr><td>00010</td><td>32b DMS Register Read</td><td>10001</td><td>Completion with 32b Data</td></tr>
+      <tr><td>00011</td><td>32b DMS Register Write</td><td>10010</td><td>Message without Data</td></tr>
+      <tr><td>00100</td><td>32b Configuration Read</td><td>10111</td><td>Management Port Message without Data</td></tr>
+      <tr><td>00101</td><td>32b Configuration Write</td><td>11000</td><td>Management Port Message with Data</td></tr>
+      <tr><td>01000</td><td>64b Memory Read</td><td>11001</td><td>Completion with 64b Data</td></tr>
+      <tr><td>01001</td><td>64b Memory Write</td><td>11011</td><td>Message with 64b Data</td></tr>
+      <tr><td>01010</td><td>64b DMS Register Read</td><td>11110</td><td>Priority Packet (more follow)</td></tr>
+      <tr><td>01011</td><td>64b DMS Register Write</td><td>11111</td><td>Priority Packet (last)</td></tr>
+      <tr><td>01100</td><td>64b Configuration Read</td><td></td><td>other encodings reserved</td></tr>
+    </tbody>
+  </table></div>
+  <p class="src" style="margin-top:6px"><span class="sl">Spec</span>Table 7-1 and note a, p.269. Priority packets have a different header size and parity position; the encodings are chosen so a single bit error cannot turn one format into the other.</p>
+</div></section>
+
+<section id="fields"><div class="wrap">
+  <h2>4 · Header fields</h2>
+  <p class="sub">A header is 64 bits (two 32-bit phases on a 32-bit config bus). Data, when present, is a second 64-bit packet. On the wire, bit 0 of phase 0 goes first.</p>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Register access request</div><ul class="tight" style="font-size:15px">
+      <li><strong>Addr[23:0]</strong>: for memory and config, {RL[3:0], offset}; RL selects the register locator (Fh = protocol registers shadowed in the Adapter). DMS opcodes use Addr[21:0] as offset in the Spoke's space (up to 4 MB) and always target local registers.</li>
+      <li><strong>BE[7:0]</strong>: byte enables, need not be contiguous; BE[7:4] reserved for 32-bit requests.</li>
+      <li><strong>Tag[4:0]</strong>: unique per outstanding request; matches the completion.</li>
+      <li><strong>EP</strong>: data poison. A receiver must not write poisoned data and returns UR.</li>
+      <li><strong>CR</strong>: one end-to-end credit return (remote Adapter credits only).</li>
+      <li><strong>CP / DP</strong>: even parity over header (excluding DP) and over data.</li>
+    </ul><p class="src"><span class="sl">Spec</span>Table 7-5 and Table 7-6, p.272–273</p></div>
+    <div class="card"><div class="tagline">Completion</div><ul class="tight" style="font-size:15px">
+      <li><strong>Status</strong>: 000b Successful Completion; 001b Unsupported Request. A UR from an aborted request carries 64b data = the original request header, so the requester can log it. A timed-out request also completes with UR, without data.</li>
+      <li><strong>Tag</strong>, <strong>BE</strong> returned as in the request (so the requester need not save BE).</li>
+      <li>srcid/dstid reserved on local hops; match by Tag.</li>
+    </ul><p class="src"><span class="sl">Spec</span>Table 7-7, p.274–275</p></div>
+    <div class="card"><div class="tagline">Messages</div><ul class="tight" style="font-size:15px">
+      <li><strong>MsgCode[7:0]</strong> and <strong>MsgSubcode[7:0]</strong> identify the message.</li>
+      <li><strong>MsgInfo[15:0]</strong> carries extra information, for example 0000h regular / FFFFh Stall on responses, or a credit count.</li>
+      <li>Messages with data carry 64 bits of payload (capabilities, training parameters, results).</li>
+    </ul><p class="src"><span class="sl">Spec</span>§7.1.2.2–7.1.2.3, p.275–291</p></div>
+    <div class="card"><div class="tagline">Management Port Messages (MPMs)</div><p style="font-size:15px">With Management Transport over sideband, MPMs carry encapsulated Management Transport Packets or gateway messages (capabilities, credit return, init done, PM, vendor-defined). They use their own MPM header and RxQ-ID, and are sunk unconditionally into per-RxQ buffers.</p><p class="src"><span class="sl">Spec</span>§7.1.2.4–7.1.2.5, p.291–296 · §7.1.3.1, p.298</p></div>
+  </div>
+</div></section>
+
+<section id="msgs"><div class="wrap">
+  <h2>5 · Message families</h2>
+  <p class="sub">Which messages exist, who sends them, and on which hop. Filter by family.</p>
+  <div class="chips" role="group" aria-label="Filter messages" id="sigchips"></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Message</th><th>Between</th><th>Kind</th><th>Purpose</th><th>Notes</th><th>Spec</th></tr></thead>
+    <tbody id="sigbody"></tbody>
+  </table></div>
+</div></section>
+
+<section id="fc"><div class="wrap">
+  <h2>6 · Flow control, timeouts and errors</h2>
+  <div class="twocol">
+    <div class="card"><h3>Local loops: FDI and RDI</h3><ul class="tight" style="font-size:15px">
+      <li>Each transmitter/receiver pair has its own credit loop, at most 32 credits, a design-time parameter (no init credits are sent).</li>
+      <li>One credit = 64-bit header + 64-bit data, whatever the packet actually carries.</li>
+      <li>Requests and messages need a credit. Completions do not, and the receiver must always sink them.</li>
+      <li>Messages must make forward progress and never block behind register access requests.</li>
+      <li>Parity errors on FDI/RDI or in a priority packet: Uncorrectable Internal Error and RDI to LinkError.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§7.1.3.1, p.298 · Table 10-1, p.526</p></div>
+    <div class="card"><h3>End to end: across the link</h3><ul class="tight" style="font-size:15px">
+      <li>Remote Adapter/PHY registers are reachable only through the mailbox: one mailbox register, so one outstanding mailbox access at a time.</li>
+      <li>4 credits for remote register access requests (the extra three allow debug accesses after a timeout). Counter initialized to 4 at reset exit and when RDI goes Reset → Active. Credits come back via the CR bit or {Nop.Crd}; the counter saturates.</li>
+      <li>Link Management requests: one outstanding per MsgCode; each has a response.</li>
+      <li>All requests that expect a response time out after 8 ms. A Retimer that needs more time sends a Stall every 4 ms; a Stall resets the requester's timer.</li>
+      <li>No retry on the wire (BER 1e-27). Parity error = fatal UIE.</li>
+    </ul><p class="src"><span class="sl">Spec</span>§7.0, p.268 · §7.1.3.2–7.1.3.3, p.298–300</p></div>
+  </div>
+</div></section>

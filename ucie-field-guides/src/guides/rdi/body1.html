@@ -1,0 +1,357 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 10.1 and 10.3 · D2D Adapter ↔ Physical Layer</div>
+    <h1>UCIe RDI Field Guide</h1>
+    <p class="lede">The Raw Die-to-Die Interface is the contract between the Die-to-Die Adapter and the Physical Layer. It is the lower sibling of FDI: same naming, same handshakes, same state encodings, but one level down, where the far side of every state change is the remote PHY instead of the remote Adapter. This guide covers what RDI is for, how it ties into link training, every signal, the state rules and the reason behind each one, cycle-level scenarios, and how to verify it.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw" style="background:var(--lp)"></i><code>lp_*</code> driven by the D2D Adapter</span>
+      <span><i class="sw" style="background:var(--pl)"></i><code>pl_*</code> driven by the Physical Layer</span>
+      <span><i class="sw" style="background:var(--sb)"></i>sideband messages between the two PHYs</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025); the printed page number equals the PDF page number. Facts are tagged <span class="kind spec">Spec</span> (stated in the spec), <span class="kind derived">Derived</span> (arithmetic or a direct consequence of spec rules), <span class="kind illus">Illustrative</span> (example numbers chosen to make a point) or <span class="kind bg">Background</span> (general engineering knowledge, not from the spec).</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why it exists</a>
+    <a href="#where">2 · Where it sits</a>
+    <a href="#bringup">3 · Training ↔ RDI</a>
+    <a href="#signals">4 · Signals</a>
+    <a href="#states">5 · State machine</a>
+    <a href="#handshakes">6 · Handshakes</a>
+    <a href="#rationale">7 · Why each rule</a>
+    <a href="#live">8 · Live scenarios</a>
+    <a href="#silicon">9 · Real silicon</a>
+    <a href="#verify">10 · Verification</a>
+    <a href="#quiz">11 · Test yourself</a>
+    <a href="#refs">12 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- 1. WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why RDI exists</h2>
+    <p class="sub">Every RDI rule serves one of four goals. When you know which one a rule serves, it is easy to remember.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Separation</div>
+        <h3>Any Adapter on any PHY</h3>
+        <p>The Adapter handles flits, CRC and retry. The PHY handles lanes, training, repair and the analog front end. RDI is the fixed boundary between them, so an Adapter from one team or vendor can sit on a PHY from another. The spec names a common interface as the way to keep Bus Functional Models consistent and to make interop testing tractable.</p>
+        <p class="src"><span class="sl">Spec</span>§1.1.4 Interfaces, p.44 · §10.1, p.521</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Abstraction</div>
+        <h3>One interface, one to four modules</h3>
+        <p>A single RDI instance can front one module or a group of modules that form one logical link. The Multi-module PHY Logic (MMPL) hides the module count: the Adapter sees one byte stream, one state machine and one <code>pl_lnk_cfg</code> width. Byte order on RDI does not change with module count; reshuffling bytes across modules is the MMPL's job.</p>
+        <p class="src"><span class="sl">Spec</span>§10.1, Figure 10-1, p.521–522 · §3.5, p.89 · §10.3.1, p.561</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Latency</div>
+        <h3>Raw bytes, no extra handshakes in the data path</h3>
+        <p>RDI carries bytes, not protocol meaning: no stream IDs, no DLLP channel, no cancel. The receive path has no backpressure, so the PHY never waits on the Adapter. <code>lp_irdy</code> can rise a few cycles before data as an early wake hint, so a gated PHY transmit path is ready when the flit arrives.</p>
+        <p class="src"><span class="sl">Spec</span>§10.1.4, p.532–533 · §10.1.2, p.529</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Power</div>
+        <h3>The PHY can sleep without losing events</h3>
+        <p>Two four-phase handshakes, <code>lp_wake_req/pl_wake_ack</code> and <code>pl_clk_req/lp_clk_ack</code>, let each side gate clocks in Reset, LinkReset, Disabled and PM. In L1 or L2 the PHY can turn off its mainband PLL; the sideband logic and its PLL stay on in L1 so the link can be woken.</p>
+        <p class="src"><span class="sl">Spec</span>§10.1.3, p.530–531 · §10.1.7, p.535</p>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:18px">
+      <p><strong>One-line mental model.</strong> FDI asks the Adapter to agree a state with the remote <em>Adapter</em> using <code>{LinkMgmt.Adapter*}</code> messages. RDI asks the PHY to agree a state with the remote <em>PHY</em> using <code>{LinkMgmt.RDI.*}</code> messages. Same request/status wires, same table of allowed transitions, one layer lower.</p>
+      <p class="src" style="margin-top:6px"><span class="sl">Spec</span>§3.5, p.89 · §10.2 note, p.539 (RDI signal list is a proper subset of FDI's) · Table 7-8, p.275–276</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2. WHERE -->
+<section id="where">
+  <div class="wrap">
+    <h2>2 · Where it sits</h2>
+    <p class="sub">One RDI per Adapter. Above it, one FDI per protocol stack. Below it, the PHY: logical layer, multi-module logic, and the analog front end of each module.</p>
+    <div class="twocol">
+      <figure>
+        <svg viewBox="0 0 560 372" role="img" aria-label="Layer stack: Protocol Layers connect to the D2D Adapter through FDI; the Adapter connects to the Physical Layer through one RDI; the PHY contains the logical PHY, the multi-module logic and one AFE per module; the PHY talks to the remote PHY over sideband.">
+          <defs>
+            <marker id="ah-lp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--lp)"/></marker>
+            <marker id="ah-pl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--pl)"/></marker>
+            <marker id="ah-sb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--sb)"/></marker>
+          </defs>
+          <g style="color:var(--ink)" font-family="var(--font-body)">
+            <rect x="20" y="10" width="170" height="40" rx="7" fill="var(--surface)" stroke="var(--muted)" stroke-dasharray="4 3"/>
+            <text x="105" y="35" text-anchor="middle" font-size="13" fill="var(--muted)">Protocol Layer, stack 0</text>
+            <rect x="210" y="10" width="170" height="40" rx="7" fill="var(--surface)" stroke="var(--muted)" stroke-dasharray="4 3"/>
+            <text x="295" y="35" text-anchor="middle" font-size="13" fill="var(--muted)">Protocol Layer, stack 1</text>
+            <text x="105" y="68" text-anchor="middle" font-size="11.5" fill="var(--muted)">FDI</text>
+            <text x="295" y="68" text-anchor="middle" font-size="11.5" fill="var(--muted)">FDI</text>
+            <line x1="105" y1="52" x2="105" y2="78" stroke="var(--muted)"/>
+            <line x1="295" y1="52" x2="295" y2="78" stroke="var(--muted)"/>
+            <rect x="20" y="80" width="360" height="62" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="200" y="104" text-anchor="middle" font-size="15" font-weight="600" fill="currentColor">Die-to-Die Adapter</text>
+            <text x="200" y="124" text-anchor="middle" font-size="12" fill="var(--muted)">Adapter LSMs · CRC · retry · stack mux · parity</text>
+            <rect x="20" y="150" width="360" height="60" rx="6" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.4"/>
+            <text x="200" y="168" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">RDI (one instance, lclk)</text>
+            <line x1="32" y1="156" x2="32" y2="204" stroke="var(--lp)" stroke-width="2" marker-end="url(#ah-lp)"/>
+            <text x="46" y="186" font-size="10.5" fill="var(--lp)">lp_*: data, state_req, linkerror, stallack, wake_req, cfg</text>
+            <line x1="368" y1="204" x2="368" y2="156" stroke="var(--pl)" stroke-width="2" marker-end="url(#ah-pl)"/>
+            <text x="46" y="201" font-size="10.5" fill="var(--pl)">pl_*: data, state_sts, stallreq, clk_req, errors, cfg</text>
+            <rect x="20" y="216" width="360" height="112" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="200" y="236" text-anchor="middle" font-size="15" font-weight="600" fill="currentColor">Physical Layer</text>
+            <text x="200" y="254" text-anchor="middle" font-size="12" fill="var(--muted)">Logical PHY: LTSM · byte-to-lane · scrambler · Valid framing</text>
+            <rect x="40" y="262" width="320" height="22" rx="4" fill="none" stroke="var(--muted)" stroke-dasharray="3 3"/>
+            <text x="200" y="277" text-anchor="middle" font-size="11.5" fill="var(--muted)">Multi-module PHY Logic (if 2 or 4 modules)</text>
+            <rect x="40" y="292" width="72" height="26" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="76" y="309" text-anchor="middle" font-size="11" fill="currentColor">Module 0</text>
+            <rect x="122" y="292" width="72" height="26" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="158" y="309" text-anchor="middle" font-size="11" fill="currentColor">Module 1</text>
+            <rect x="204" y="292" width="72" height="26" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="240" y="309" text-anchor="middle" font-size="11" fill="currentColor">Module 2</text>
+            <rect x="286" y="292" width="72" height="26" rx="4" fill="var(--bg)" stroke="var(--line)"/><text x="322" y="309" text-anchor="middle" font-size="11" fill="currentColor">Module 3</text>
+            <line x1="200" y1="330" x2="200" y2="352" stroke="currentColor" stroke-width="1.2"/>
+            <text x="200" y="366" text-anchor="middle" font-size="12" fill="var(--muted)">bumps → channel → remote die</text>
+            <path d="M382,250 C440,250 450,300 520,300" fill="none" stroke="var(--sb)" stroke-width="1.6" marker-end="url(#ah-sb)" marker-start="url(#ah-sb)"/>
+            <text x="470" y="234" text-anchor="middle" font-size="11.5" fill="var(--sb)">sideband, 800 MHz</text>
+            <text x="470" y="250" text-anchor="middle" font-size="11" fill="var(--sb)">{LinkMgmt.RDI.*}</text>
+            <text x="470" y="322" text-anchor="middle" font-size="11" fill="var(--muted)">remote PHY</text>
+            <text x="470" y="100" text-anchor="middle" font-size="11" fill="var(--muted)">Adapter ↔ Adapter:</text>
+            <text x="470" y="115" text-anchor="middle" font-size="11" fill="var(--muted)">{LinkMgmt.Adapter*}</text>
+            <text x="470" y="130" text-anchor="middle" font-size="11" fill="var(--muted)">via lp_cfg, then the</text>
+            <text x="470" y="145" text-anchor="middle" font-size="11" fill="var(--muted)">PHY's sideband</text>
+          </g>
+        </svg>
+        <figcaption>Upward signals (<code class="pl">pl_*</code>): data, state status, stall request, clock request, errors, link info, sideband packets. The dashed module box is present only for multi-module links; RDI looks the same either way.<span class="ref">Spec: Figure 10-1, p.522 · §1.1.3, p.43 (800 MHz sideband clock) · §3.5, p.89 · Table 7-8, p.275</span></figcaption>
+      </figure>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <div class="tagline">Three state machines, three channels</div>
+          <h3>Who negotiates what</h3>
+          <div class="tbl-wrap" style="border:0">
+            <table>
+              <thead><tr><th>State machine</th><th>How many</th><th>Coordinated by</th></tr></thead>
+              <tbody>
+                <tr><td>CXL ARB/MUX vLSM</td><td>2 per CXL stack</td><td>ALMPs on mainband</td></tr>
+                <tr><td>Adapter LSM</td><td>1 per protocol stack</td><td><code>{LinkMgmt.Adapter0/1.*}</code>, Adapter to Adapter</td></tr>
+                <tr><td><strong>RDI SM</strong></td><td>1 per link, even with 4 modules</td><td><code>{LinkMgmt.RDI.*}</code>, PHY to PHY</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="src"><span class="sl">Spec</span>§3.5 and Figure 3-27, p.89</p>
+        </div>
+        <div class="card">
+          <div class="tagline">Ordering rules between them</div>
+          <ul class="tight" style="font-size:15px">
+            <li><strong>Up:</strong> RDI Active before an Adapter LSM may negotiate Active; Adapter LSM Active before vLSMs.</li>
+            <li><strong>Retrain:</strong> RDI goes first, then Retrain is pushed to every Adapter LSM that is Active.</li>
+            <li><strong>PM:</strong> bottom-up in reverse. vLSMs, then each Adapter LSM, and only when all are in PM does RDI go to PM.</li>
+            <li><strong>LinkError:</strong> RDI first, then all Adapter LSMs, then vLSMs.</li>
+            <li><strong>LinkReset / Disabled:</strong> reach RDI only if every Adapter LSM is there. Priority LinkError › Disabled › LinkReset.</li>
+          </ul>
+          <p class="src"><span class="sl">Spec</span>§3.5, p.89–90 · §10.3.3.8, p.569</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 8px">RDI vs FDI: what changes one layer down</h3>
+    <div class="tbl-wrap diff">
+      <table>
+        <thead><tr><th>Topic</th><th>FDI</th><th>RDI</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>Upper / lower layer</td><td>Protocol Layer / Adapter</td><td>Adapter / Physical Layer</td><td class="ref">§10.3, p.559</td></tr>
+          <tr><td>Instances</td><td>One per protocol stack</td><td>One per Adapter, for 1, 2 or 4 modules</td><td class="ref">§10.1, p.521 · §10.2, p.539</td></tr>
+          <tr><td>Stream ID, DLLP channel</td><td><code>lp_stream</code>, <code>lp_dllp</code> …</td><td>None; RDI carries one raw byte stream</td><td class="ref">Table 10-1, p.522–526</td></tr>
+          <tr><td>Receive-side discard</td><td><code>pl_flit_cancel</code> after CRC</td><td><code>pl_error</code> for framing errors only</td><td class="ref">Table 10-1, p.524</td></tr>
+          <tr><td>Open-receiver handshake</td><td><code>pl_rx_active_req/lp_rx_active_sts</code></td><td>None</td><td class="ref">Table 10-1</td></tr>
+          <tr><td><code>pl_inband_pres</code> means</td><td>Adapter parameter exchange done</td><td>PHY has finished link training</td><td class="ref">Table 10-1, p.523</td></tr>
+          <tr><td>Stallreq/Ack used on</td><td>Flit mode: PM entry only (else drop <code>pl_trdy</code>)</td><td>Every Active exit: Retrain, PM, LinkReset, Disabled</td><td class="ref">§10.3.2, p.563</td></tr>
+          <tr><td>Upper layer may request Retrain</td><td>Raw Format only</td><td>Yes: SW Retrain bit, CRC/parity thresholds, etc.</td><td class="ref">§10.3.3.4, p.566</td></tr>
+          <tr><td>State messages</td><td><code>{LinkMgmt.Adapter0/1.*}</code> sent by Adapter</td><td><code>{LinkMgmt.RDI.*}</code> sent by PHY</td><td class="ref">Table 7-8, p.275–276</td></tr>
+          <tr><td>Remote die can force LinkError</td><td>Via Adapter, after RDI</td><td>Yes, directly via sideband message</td><td class="ref">§10.3.3.1 rule 4, p.565 · §10.3.3.7, p.568</td></tr>
+          <tr><td>68B flit on the bus</td><td>64B payload only; Adapter adds header/CRC</td><td>Full flit with Flit Header, CRC and PDS</td><td class="ref">Figures 10-28 and 10-29, p.560–561</td></tr>
+          <tr><td>Management transport extras</td><td><code>dm_param_exchange_done</code> …</td><td>Table 10-2 <code>pm_*</code>/<code>mp_*</code> signals, optional Mgmt_clk</td><td class="ref">Table 10-2, p.527–529</td></tr>
+          <tr class="same"><td>Same on both</td><td colspan="2" class="same">Request/status encodings, Table 10-4, NOP→Active rule, wake/clk/stall handshakes, clock gating states, byte order, 16 ms LinkError residency</td><td class="ref">§10.3, p.559–571</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 3. BRING-UP -->
+<section id="bringup">
+  <div class="wrap">
+    <h2>3 · Link training and RDI: what each shows</h2>
+    <p class="sub">The PHY has its own Link Training State Machine (LTSM). RDI shows a simpler view of it to the Adapter. The end of Stage 2 is the exact moment RDI moves from Reset to Active.</p>
+    <div class="stage">
+      <div><b>Stage 0</b>Die reset, independent on each die. RDI held in reset, all outputs 0.</div>
+      <div><b>Stage 1</b>Sideband initialization (SBINIT). RDI status Reset.</div>
+      <div class="on"><b>Stage 2</b>Mainband init and training (MBINIT, MBTRAIN), then LINKINIT: RDI Reset → Active.</div>
+      <div><b>Stage 3</b>Adapter parameter exchange on sideband, then FDI Reset → Active.</div>
+    </div>
+    <p class="src" style="margin-top:8px"><span class="sl">Spec</span>§3.2 and Figure 3-3, p.62 · §3.2.1 (Stage 2 complete when RDI SM is Active), p.62 · §10.1.6, p.534</p>
+
+    <div class="tbl-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>LTSM state</th><th>RDI <code>pl_state_sts</code></th><th>What the Adapter sees and does</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">RESET</td><td class="mono">Reset</td><td>PHY stays here at least 4 ms on every entry. <code>pl_inband_pres</code> = 0. A gated Adapter can sleep and wait.</td><td class="ref">§4.5.3.1, p.132 · §10.1.3.2 rule 8, p.531</td></tr>
+          <tr><td class="mono">SBINIT · MBINIT · MBTRAIN</td><td class="mono">Reset</td><td><code>pl_phyinrecenter</code> = 1 (training). <code>pl_max_speedmode</code> is settled in MBINIT.PARAM and can change only while RDI is in Reset.</td><td class="ref">Table 10-1, p.525</td></tr>
+          <tr><td class="mono">LINKINIT</td><td class="mono">Reset → Active</td><td>PHY raises <code>pl_inband_pres</code> (with a <code>pl_clk_req</code> handshake). Adapter drives NOP → Active. PHYs exchange Req/Rsp.Active. Scrambler LFSR is reset on entry; once RDI is Active the PHY clears its copy of "Start UCIe Link training".</td><td class="ref">§4.5.3.5, p.168 · §10.1.6, p.534</td></tr>
+          <tr><td class="mono">ACTIVE</td><td class="mono">Active / Active.PMNAK</td><td>Flits flow; data on the wire is scrambled. <code>pl_speedmode</code> and <code>pl_lnk_cfg</code> are meaningful.</td><td class="ref">§4.5.3.6, p.168 · Table 10-1, p.525</td></tr>
+          <tr><td class="mono">PHYRETRAIN → MBTRAIN.* → LINKINIT</td><td class="mono">Retrain</td><td>Entered after stall handshake and Req/Rsp.Retrain. Exit to Active needs the Active Entry handshake again (and a NOP→Active edge if Retrain came from Active).</td><td class="ref">§4.5.3.7, p.168–171 · §10.3.3.4, p.566–567</td></tr>
+          <tr><td class="mono">L1 / L2</td><td class="mono">L1 / L2</td><td>L1 exit: LTSM to MBTRAIN.SPEEDIDLE, RDI through Retrain. L2 exit: LTSM to RESET, RDI through Reset, full training and a fresh parameter exchange.</td><td class="ref">§4.5.3.9, p.172 · §10.1.7, p.535–536 · §10.3.3.8, p.570</td></tr>
+          <tr><td class="mono">TRAINERROR</td><td class="mono">LinkError or Reset</td><td>If the error escalated (RDI in LinkError), the LTSM must stay in TRAINERROR as long as RDI stays in LinkError. Otherwise it exits to RESET quickly.</td><td class="ref">§4.5.3.8, p.171</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note-s" style="margin-top:10px"><span class="kind derived">Derived</span>The <code>pl_phyinrecenter</code> column follows from its definition ("training or retraining"); the spec gives no cycle-exact relationship to LTSM substates.</p>
+  </div>
+</section>
+
+<!-- 4. SIGNALS -->
+<section id="signals">
+  <div class="wrap">
+    <h2>4 · Signals</h2>
+    <p class="sub">Table 10-1, plus the optional Table 10-2 extensions for management transport over sideband. Grouped by job; the "Live behavior" column says what you will see on a waveform.</p>
+    <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <div class="k">lp_state_req[3:0]</div>
+        <p class="mono" style="font-size:13px">0000 NOP · 0001 Active · 0100 L1 · 1000 L2 · 1001 LinkReset · 1011 Retrain · 1100 Disabled</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-1, p.523</p>
+      </div>
+      <div class="card">
+        <div class="k">pl_state_sts[3:0]</div>
+        <p class="mono" style="font-size:13px">0000 Reset · 0001 Active · 0011 Active.PMNAK · 0100 L1 · 1000 L2 · 1001 LinkReset · 1010 LinkError · 1011 Retrain · 1100 Disabled</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-1, p.523</p>
+      </div>
+      <div class="card">
+        <div class="k">pl_speedmode[2:0]</div>
+        <p class="mono" style="font-size:13px">000 4 · 001 8 · 010 12 · 011 16 · 100 24 · 101 32 · 110 48 · 111 64 GT/s</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-1, p.525. All modules of a multi-module link run at the same speed.</p>
+      </div>
+      <div class="card">
+        <div class="k">pl_lnk_cfg[2:0]</div>
+        <p class="mono" style="font-size:13px">000 x4 · 001 x8 · 010 x16 · 011 x32 · 100 x64 · 101 x128 · 110 x256</p>
+        <p class="src"><span class="sl">Spec</span>Table 10-1, p.525. Total width over all active modules: UCIe-S tops out at x64; UCIe-A at x128 (x32 modules) or x256 (x64 modules).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. STATES -->
+<section id="states">
+  <div class="wrap">
+    <h2>5 · State machine and the request/status contract</h2>
+    <p class="sub">The Adapter asks on <code>lp_state_req</code>. The PHY answers on <code>pl_state_sts</code> only after the matching sideband handshake with the remote PHY. The PHY may also change status on its own: a framing error, a remote request, a fatal error.</p>
+    <figure>
+      <svg viewBox="0 0 800 370" role="img" aria-label="RDI state machine (Figure 10-6): domain reset exit enters Reset; Reset to Active; Active to Retrain, L1 and L2; L1 exits through Retrain; L2 exits through Reset; LinkError from any state; Disabled from any state except LinkError; LinkReset from any state except Disabled and LinkError.">
+        <defs>
+          <marker id="sm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+        </defs>
+        <g style="color:var(--ink)" font-family="var(--font-body)">
+          <text x="90" y="118" text-anchor="middle" font-size="11.5" fill="var(--muted)">domain reset exit</text>
+          <line x1="90" y1="124" x2="90" y2="146" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <rect x="270" y="24" width="130" height="44" rx="22" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="335" y="51" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Retrain</text>
+          <rect x="30" y="150" width="120" height="48" rx="24" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="90" y="179" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Reset</text>
+          <rect x="250" y="136" width="170" height="76" rx="12" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.8"/>
+          <text x="335" y="162" text-anchor="middle" font-size="15" font-weight="600" fill="currentColor">Active</text>
+          <rect x="278" y="174" width="114" height="26" rx="13" fill="var(--surface)" stroke="var(--muted)" stroke-dasharray="3 3"/>
+          <text x="335" y="191" text-anchor="middle" font-size="11.5" fill="var(--muted)">Active.PMNAK</text>
+          <rect x="170" y="292" width="100" height="44" rx="22" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="220" y="319" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">L2</text>
+          <rect x="420" y="292" width="100" height="44" rx="22" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="470" y="319" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">L1</text>
+          <line x1="150" y1="174" x2="246" y2="174" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="198" y="166" text-anchor="middle" font-size="11.5" fill="var(--lp)">NOP→Active</text>
+          <line x1="315" y1="134" x2="315" y2="72" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="308" y="100" text-anchor="end" font-size="11.5" fill="var(--muted)">Retrain req,</text>
+          <text x="308" y="114" text-anchor="end" font-size="11.5" fill="var(--muted)">framing error, remote</text>
+          <line x1="355" y1="70" x2="355" y2="132" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="362" y="104" font-size="11.5" fill="var(--lp)">NOP→Active*</text>
+          <line x1="285" y1="214" x2="235" y2="288" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="232" y="250" text-anchor="end" font-size="11.5" fill="var(--muted)">L2 req + Rsp.L2</text>
+          <line x1="385" y1="214" x2="455" y2="288" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="432" y="246" font-size="11.5" fill="var(--muted)">L1 req + Rsp.L1</text>
+          <path d="M520,306 C600,280 560,46 404,46" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="548" y="290" font-size="11.5" fill="var(--muted)">L1 exit</text>
+          <path d="M170,314 C100,310 84,250 88,202" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#sm)"/>
+          <text x="70" y="270" text-anchor="middle" font-size="11.5" fill="var(--muted)">L2 exit</text>
+          <text x="650" y="40" text-anchor="middle" font-size="12" fill="var(--muted)">Link-down states</text>
+          <rect x="590" y="56" width="120" height="40" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="650" y="81" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">LinkReset</text>
+          <rect x="590" y="110" width="120" height="40" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <text x="650" y="135" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">Disabled</text>
+          <rect x="590" y="164" width="120" height="40" rx="8" fill="var(--surface)" stroke="var(--bad)" stroke-width="1.6"/>
+          <text x="650" y="189" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">LinkError</text>
+          <text x="650" y="226" text-anchor="middle" font-size="11.5" fill="var(--muted)">LinkError: from any state</text>
+          <text x="650" y="241" text-anchor="middle" font-size="11.5" fill="var(--muted)">Disabled: any but LinkError</text>
+          <text x="650" y="256" text-anchor="middle" font-size="11.5" fill="var(--muted)">LinkReset: any but Disabled, LinkError</text>
+          <text x="650" y="280" text-anchor="middle" font-size="11.5" fill="var(--muted)">exit → Reset on</text>
+          <text x="650" y="295" text-anchor="middle" font-size="11.5" fill="var(--lp)">lp_state_req = Active</text>
+          <line x1="424" y1="160" x2="584" y2="80" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#sm)"/>
+          <line x1="424" y1="174" x2="584" y2="132" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#sm)"/>
+          <line x1="424" y1="188" x2="584" y2="184" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#sm)"/>
+        </g>
+      </svg>
+      <figcaption>Active.PMNAK is a sub-state of Active and can never go straight to L1 or L2. * Retrain → Active needs a NOP→Active edge only if Retrain was entered from Active; from L1 an Active level is enough. L2 exit goes through Reset, so the link retrains fully and the Adapter repeats parameter exchange.<span class="ref">Spec: Figure 10-6, p.533 · §10.3, p.559 · §10.3.3.4, p.567 · §10.1.7, p.535–536 · §10.3.3.8, p.569–570</span></figcaption>
+    </figure>
+
+    <div class="twocol" style="margin-top:16px">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table 10-4, p.565 (common to FDI and RDI). L1 and L2 columns hold the same values and are merged here.</caption>
+          <thead><tr><th>Request ↓ · Status →</th><th>Reset</th><th>Active</th><th>L1/L2</th><th>Retrain</th><th>LinkReset</th><th>Disabled</th><th>LinkError</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px">
+            <tr><td>NOP</td><td>yes</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>Active</td><td>edge¹</td><td>·²</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+            <tr><td>L1 / L2</td><td>·</td><td>yes</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>Retrain</td><td>·</td><td>yes</td><td>·</td><td>·</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>LinkReset</td><td>edge¹</td><td>yes</td><td>yes</td><td>yes</td><td>·</td><td>·</td><td>·</td></tr>
+            <tr><td>Disabled</td><td>edge¹</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>·</td><td>·</td></tr>
+            <tr><td>lp_linkerror</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Reading the table on RDI</h3>
+        <ul class="tight">
+          <li>¹ <strong>edge</strong>: request must be NOP for at least one clock while status is Reset, then change. An Adapter that drives Active straight out of reset is ignored. <span class="ref">§10.3.3.1, p.565</span></li>
+          <li>² From Active.PMNAK an Active request moves status back to Active. <span class="ref">Table 10-4 note b, p.565</span></li>
+          <li>Unlike FDI in Flit mode, the Adapter <em>may</em> request Retrain on RDI: software Retrain bit, CRC or parity error count over a threshold, a Raw Format Protocol Layer request, or another implementation reason. <span class="ref">§10.3.3.4, p.566</span></li>
+          <li>On RDI, the remote PHY can also force Reset→LinkError and Active→LinkError with a sideband request. <span class="ref">§10.3.3.1 rule 4, p.565 · §10.3.3.7, p.568</span></li>
+          <li>Retrain → LinkReset/Disabled may pass through Active first ("transitional state"). <span class="ref">§10.3.3.4 rule 2, p.567</span></li>
+          <li>After LinkError, LinkReset or Disabled → Reset, the PHY must not start training until it sees NOP→Active or a Chapter 4 training trigger. <span class="ref">§10.3.3.8, p.569</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. HANDSHAKES -->
+<section id="handshakes">
+  <div class="wrap">
+    <h2>6 · The handshakes</h2>
+    <p class="sub">Three four-phase handshakes on the wires: request rises, acknowledge rises, request falls, acknowledge falls. Each needs at least one cycle between request and acknowledge, so there is never a combinational loop. RDI has no rx_active handshake; the PHY's receiver is ready by the time LTSM reaches LINKINIT.</p>
+    <div class="mini" id="minis"></div>
+    <h3 style="margin:26px 0 8px">The Active Entry handshake (sideband, PHY to PHY)</h3>
+    <p class="note-s" style="margin:0 0 10px">Required on every entry to Active, from Reset, Retrain or L1. Active.PMNAK → Active does not count; it is a sub-state.</p>
+    <div class="flow">
+      <div><span class="n">1</span><p>PHY finishes training, does the <code>pl_clk_req</code> handshake and raises <code>pl_inband_pres</code>.</p></div>
+      <div><span class="n">2</span><p>Adapter sees <code>pl_inband_pres</code> = 1, does the <code>lp_wake_req</code> handshake, and drives <code>lp_state_req</code> NOP → Active.</p></div>
+      <div><span class="n">3</span><p>Only after sampling <code>lp_state_req</code> = Active does the PHY send <code class="sbc">{LinkMgmt.RDI.Req.Active}</code>. Either side may start first.</p></div>
+      <div><span class="n">4</span><p>Each PHY answers the remote request with <code class="sbc">{LinkMgmt.RDI.Rsp.Active}</code>, but only once it has also sampled Active on its own RDI.</p></div>
+      <div><span class="n">5</span><p>When a PHY has both <em>sent</em> and <em>received</em> Rsp.Active, it moves <code>pl_state_sts</code> to Active. Stage 3 (Adapter parameter exchange) can begin.</p></div>
+    </div>
+    <p class="src" style="margin-top:8px"><span class="sl">Spec</span>§10.1.6 and Figure 10-7, p.534 · Table 7-8 (Rsp.Active MsgInfo 0000h regular, FFFFh stall), p.276</p>
+  </div>
+</section>
