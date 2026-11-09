@@ -1,0 +1,474 @@
+
+<!-- 7. RATIONALE -->
+<section id="rationale">
+  <div class="wrap">
+    <h2>7 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives an RDI rule, the reason behind it, a worked example with real numbers, and what breaks when a design ignores it. Unless a card says otherwise, the numbers assume one x64 Advanced Package module at 16 GT/s and a 64-byte RDI at 2 GHz.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <!-- ===== width ===== -->
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.1.1–10.1.2 p.529</span></div>
+        <h3>One clock, one reset source, zeros out of reset</h3>
+        <p class="rule">Both sides of RDI run on <code>lclk</code>, share a reset derived from one source, and drive every output to 0 coming out of reset. RDI has no reset wire of its own.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Every RDI rule is counted in lclk cycles: one cycle of NOP before Active, at least one cycle from request to acknowledge, an error pulse pipelined with its data. Those counts only mean something if both sides see the same edges. Zeros out of reset make a block that wakes early see exactly what an idle partner looks like: <code>lp_state_req</code> 0000 is NOP, <code>pl_state_sts</code> 0000 is Reset.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>SoC reset routing releases the PHY 4 cycles before the Adapter. For those 4 cycles the PHY samples NOP with <code>lp_irdy</code> low and does nothing; the Adapter wakes, reads Reset with <code>pl_inband_pres</code> low, and waits. No extra synchroniser between the two is needed.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that powers up driving Active never makes a NOP→Active edge, and the PHY never leaves Reset.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Same reset domain from the same source; outputs driven to 0 <span class="ref">§10.1.1, p.529</span></li>
+          <li><span class="kind spec">Spec</span>Same clock domain; clock-crossing FIFOs only inside a block <span class="ref">§10.1.2, p.529</span></li>
+          <li><span class="kind spec">Spec</span>NOP for at least one clock before Active <span class="ref">§10.3.3.1, p.565</span></li>
+          <li><span class="kind illus">Illustrative</span>The 4-cycle reset skew</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.1.2 p.529 · §10.3.1 p.561</span></div>
+        <h3>NBYTES × lclk must match the link</h3>
+        <p class="rule">Pick RDI width and lclk so the interface carries at least what the PHY delivers. The spec's example: 64 bytes at 2 GHz for one x64 module at 16 GT/s.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receive path has no backpressure (next card). If the interface is slower than the link, the PHY has nowhere to put bytes and something overflows. If it is faster, it simply idles. So the sizing rule is a floor, not a target.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 at 16 GT/s: 64 lanes × 16 Gb/s ÷ 8 = 128 GB/s. A 64B RDI at 2 GHz also moves 128 GB/s. Two x64 modules at 32 GT/s move 512 GB/s, so the RDI needs 256B at 2 GHz. A single x16 Standard Package module at 32 GT/s moves 64 GB/s: 64B at 1 GHz is enough.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A 32B RDI at 2 GHz on the x64 16 GT/s link can carry only half the traffic; on receive, the PHY's elastic buffer overflows within microseconds.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>64B at 2 GHz matches a 64-lane module at 16 GT/s <span class="ref">§10.1.2, p.529</span></li>
+          <li><span class="kind spec">Spec</span>128B at 2 GHz for one Advanced module at 32 GT/s <span class="ref">§10.3.1, p.561</span></li>
+          <li><span class="kind derived">Derived</span>The 2-module and Standard Package rows</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.3.1 p.559–561</span></div>
+        <h3>Fixed byte order, and 68B flits travel whole on RDI</h3>
+        <p class="rule">Flit byte <em>k</em> goes on RDI byte <em>k</em> mod NBYTES in transfer ⌊<em>k</em>/NBYTES⌋, bit 0 to bit 0, in both directions. For 68B formats the Adapter has already inserted the Flit Header and CRC, so RDI carries all 68 bytes, and the next flit starts right after.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY must not need to know flit formats. A fixed mapping lets it stripe bytes to lanes blindly. It also explains a difference from FDI: on FDI a 68B flit shows only its 64B payload, because header and CRC are added below FDI. On RDI the bytes are final.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>128B RDI, 68B format: transfer 0 carries Flit 0 bytes 0–67 on RDI bytes 0–67, then Flit 1 bytes 0–59 on RDI bytes 68–127. Transfer 1 starts with Flit 1 byte 60. With 256B flits on a 64B RDI it is simpler: four transfers, bytes 0–63, 64–127, 128–191, 192–255.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that pads each 68B flit to a 64B boundary on RDI shifts every following byte; the remote Adapter sees CRC errors on every flit.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>LSB of the chunk to byte 0, bit 0 to bit 0, same in Tx and Rx <span class="ref">§10.3.1, p.559</span></li>
+          <li><span class="kind spec">Spec</span>RDI 128B mapping for 68B formats <span class="ref">Figure 10-29, p.561</span></li>
+          <li><span class="kind spec">Spec</span>FDI 128B mapping carries payload only <span class="ref">Figure 10-28, p.560</span></li>
+          <li><span class="kind spec">Spec</span>Byte mapping unchanged for multi-module; MMPL handles ordering <span class="ref">§10.3.1, p.561</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="width">
+        <div class="meta"><span>Clocking &amp; width</span><span>§10.3.1 Implementation Note p.562</span></div>
+        <h3>Wider than 256B: fill on Tx, accumulate on Rx</h3>
+        <p class="rule">On transmit, the Adapter sends valid data across the full width, inserting NOP flits (and for 68B, PDS bytes) as needed. On receive, the PHY accumulates in multiples of 256B; if it has less than the RDI width, it waits for a gap of at least 16 UI (differential clock) or 32 UI (quadrature clock) on the link, then sends what it has on the low bytes and zeros above.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Flit mode moves data over the link in 256B units. A 512B RDI cycle may have only one flit to carry. Zero-filled bytes need a defined meaning, and they have one: a 256B flit header of 0000h with CRC 0000h is silently dropped by the Adapter and is not counted for Runtime Link Testing.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Four x64 modules at 16 GT/s, 512B RDI. One 256B flit arrives followed by idle. The PHY holds it until the link shows 16 UI of no valid data (1 ns at 16 GT/s), then delivers it on bytes 0–255 with bytes 256–511 all zero.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that never flushes partial data waits forever on the last flit before idle; the remote Retry timer fires and replays a flit that was actually received.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Tx full-width rule, Rx accumulation, 16 UI and 32 UI gaps, zero-fill, silent discard of 0000h header with 0000h CRC <span class="ref">§10.3.1 Implementation Note, p.562</span></li>
+          <li><span class="kind spec">Spec</span>NBYTES ≥ 512 recommended only for a 4-module Advanced link at ≥ 16 GT/s, as a multiple of 256 <span class="ref">p.562</span></li>
+          <li><span class="kind derived">Derived</span>16 UI at 16 GT/s = 1 ns</li>
+        </ul></div>
+      </article>
+
+      <!-- ===== tx ===== -->
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.1.4 p.532</span></div>
+        <h3>Three-way transfer, no bubbles inside a flit</h3>
+        <p class="rule">A beat moves when <code>lp_irdy</code>, <code>lp_valid</code> and <code>pl_trdy</code> are all high at a rising edge. Once a flit starts, the Adapter keeps <code>lp_valid</code> and <code>lp_irdy</code> high until its last beat; only <code>pl_trdy</code> may pause it.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY turns each beat into Valid-framed bytes on the wire. If the Adapter left holes inside a flit, the PHY would have to put gaps inside a flit on the link, and the receiver would need to stitch it back together. The matching PHY rule: if the Adapter streams continuously, the PHY must not put bubbles in the valid frames on the link.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 256B flit on a 64B RDI is 4 beats. <code>pl_trdy</code> drops for 2 cycles after beat 1 (the PHY is inserting parity bytes for Runtime Link Testing). The Adapter holds beat 2 on the bus; the flit takes 6 cycles instead of 4.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that drops <code>lp_valid</code> mid-flit while waiting on its retry-buffer read port causes a Valid framing gap that the remote PHY can flag as an error, followed by a retrain.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Transfer condition, no bubbles from Adapter, no assumption on <code>pl_trdy</code> timing <span class="ref">§10.1.4, p.532</span></li>
+          <li><span class="kind spec">Spec</span>PHY must not insert bubbles in valid frames for a continuous stream <span class="ref">§10.1.4 Implementation Note, p.532</span></li>
+          <li><span class="kind illus">Illustrative</span>The parity-insert cause of the 2-cycle stall</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.1.5 Impl. Note p.533 · Table 10-1 p.522</span></div>
+        <h3><code>lp_irdy</code> is an early wake-up hint</h3>
+        <p class="rule"><code>lp_irdy</code> may rise before <code>lp_valid</code> to say "data is coming"; the PHY ungates its clocks and raises <code>pl_trdy</code> when ready. <code>lp_irdy</code> must not be presented while status is Reset, except briefly on a LinkError → Reset transition, and the PHY ignores it in Reset.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A PHY in Active may gate parts of its transmit path between bursts. Waking it on <code>lp_valid</code> would cost the ungate time on every first flit. A separate "I'm about to send" signal hides that cost. This is why RDI, like FDI, has two sender-side signals where AXI has one.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The Adapter knows two cycles ahead that a flit is leaving its retry buffer. It raises <code>lp_irdy</code> at cycle 0, <code>lp_valid</code> at cycle 2. The PHY takes 2 cycles to ungate, so <code>pl_trdy</code> is already high when the first beat appears, and nothing is lost.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that treats <code>lp_irdy</code> without <code>lp_valid</code> as a transfer captures garbage. A checker that requires <code>lp_irdy</code> and <code>lp_valid</code> to rise together flags a legal design.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Early indication; Figures 10-4 and 10-5 <span class="ref">§10.1.5 Implementation Note, p.533</span></li>
+          <li><span class="kind spec">Spec</span>Not in Reset except LinkError→Reset; PHY ignores in Reset <span class="ref">Table 10-1 (lp_irdy), p.522</span></li>
+          <li><span class="kind illus">Illustrative</span>2-cycle ungate time</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>Table 10-1 p.522</span></div>
+        <h3><code>pl_trdy</code> only in Active, or to drain in LinkError</h3>
+        <p class="rule">The PHY asserts <code>pl_trdy</code> only when status is Active, or while running a stallreq/stallack handshake in LinkError so the Adapter can drain.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Outside Active the link is not carrying data: it is training, retraining, in PM or down. Accepting bytes would mean dropping them silently. The LinkError exception lets the Adapter empty its pipeline cleanly when software intends to recover the link rather than reset the SoC.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The PHY moves status to Retrain after the stall handshake. <code>pl_trdy</code> is already low, so even if the Adapter's lp_valid logic glitches high for a cycle, no beat is transferred.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that holds <code>pl_trdy</code> high in Retrain accepts a flit it can never send; the Adapter's retry buffer believes it went out and waits for an Ack that never comes.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span><code>pl_trdy</code> restriction <span class="ref">Table 10-1 (pl_trdy), p.522</span></li>
+          <li><span class="kind spec">Spec</span>LinkError drain rules <span class="ref">§10.3.3.7, p.568</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.1.4 Impl. Note p.532</span></div>
+        <h3>Parity inserts should match the RDI width</h3>
+        <p class="rule">For Runtime Link Testing with parity, the receiving Adapter may answer <code>{ParityFeature.Nak}</code> if software asks for a number of 64-byte parity inserts that is not 256B or a multiple of the RDI width.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Parity bytes are inserted into the byte stream. If they do not fill whole RDI beats, every following flit is shifted inside the beat, and the Adapter needs a barrel shifter across the full width just for a test feature. The spec lets it refuse instead.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>64B RDI: 64B, 128B or 256B of parity are all fine. 256B RDI: only 256B lines up. Software asking for 3 × 64B on a 256B RDI gets a Nak.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A test that sweeps every insert count against a 256B RDI DUT and expects Ack every time reports a false failure.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Nak permitted; width examples <span class="ref">§10.1.4 Implementation Note, p.532</span></li>
+          <li><span class="kind spec">Spec</span>Runtime Link Testing using Parity <span class="ref">§3.9, p.95</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="tx">
+        <div class="meta"><span>Tx path</span><span>§10.3.4 p.572 · Table 10-5</span></div>
+        <h3>Vendor bits ride on the Valid lane (Raw Format)</h3>
+        <p class="rule">In Raw Format, <code>lp_/pl_vendor_defined</code> can carry one extra bit per 8 UI per module by reusing the Retimer-credit encodings on TXVLD/RXVLD: 0000_0000b = not valid; 0000_1111b = valid, bit 0; 1111_1111b = valid, bit 1. They are pipeline-matched to data and meaningful only when valid is high.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Some streamed protocols (the spec names JESD204E as an example) need a sideband bit per frame for sync markers or ECC. The Valid lane already carries an 8-UI pattern per frame, and without a Retimer its credit encodings are unused, so it costs no extra bumps.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Four x16 modules, 64B RDI: VS = 4, one bit per module. On a 128B RDI, VS = 8: bits 0–3 cover the first of every two valid frames per module, bits 4–7 the second.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Asserting <code>lp_retimer_crd</code> in this mode corrupts the vendor bit; the spec says Retimer credits never assert here.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Encodings <span class="ref">Table 10-5, p.572</span></li>
+          <li><span class="kind spec">Spec</span>VS examples <span class="ref">Table 10-6, p.573</span></li>
+          <li><span class="kind spec">Spec</span>Single-bit error correction permitted on RXVLD; Retimer credits never assert <span class="ref">§10.3.4, p.572</span></li>
+        </ul></div>
+      </article>
+
+      <!-- ===== rx ===== -->
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path &amp; errors</span><span>§10.1.4 p.532 · §10.1.2 p.529</span></div>
+        <h3>No backpressure on receive</h3>
+        <p class="rule">Data moves whenever <code>pl_valid</code> is high. There is no ready signal from the Adapter. The PHY may put bubbles inside a flit; the Adapter must cope.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Bits arrive from the far die at a fixed rate. The PHY cannot ask the remote transmitter to wait without a round trip across the link, so a ready signal would just move the overflow problem into the PHY. Bubbles are allowed because lane deskew, multi-module merging and clock crossings do not produce data on every cycle.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A four-module PHY merges bytes from modules whose deskew FIFOs fill at slightly different times. Beat 2 of a flit arrives one cycle late; <code>pl_valid</code> drops for that cycle and the Adapter's CRC engine simply pauses.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that puts a clock-crossing FIFO on its receive path sized for average traffic overflows on the first long burst. The spec warns about exactly this.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>No backpressure, bubbles permitted <span class="ref">§10.1.4, p.532</span></li>
+          <li><span class="kind spec">Spec</span>Internal clock-crossing must account for no backpressure <span class="ref">§10.1.2, p.529</span></li>
+          <li><span class="kind illus">Illustrative</span>The deskew cause of the bubble</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path &amp; errors</span><span>Table 10-1 (pl_error) p.524</span></div>
+        <h3><code>pl_error</code> arrives with or before the bad data</h3>
+        <p class="rule"><code>pl_error</code> is a pulse, only in Active, pipeline-matched so it reaches the Adapter no later than the corrupted bytes. If <code>pl_error</code> and <code>pl_valid</code> are high together, the Adapter discards that flit, even a partial one. After it, the PHY sends no valid data (without <code>pl_error</code>) until a retrain completes.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A Valid framing error means the PHY lost track of where frames start, so the bytes around it cannot be trusted. Signalling with or before the data lets the Adapter drop them before they reach CRC checking or the Protocol Layer. The retrain that follows re-establishes framing.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>256B Latency-Optimized flit, store-and-forward off. The Adapter has forwarded the first 128B half to FDI. <code>pl_error</code> hits during the second half after only 64 of its 128 bytes. The Adapter sends 64 dummy bytes to finish the half and cancels it with <code>pl_flit_cancel</code>. After the retrain, Retry replays the flit.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that raises <code>pl_error</code> one cycle after the bad beat lets that beat reach CRC. With 68B flits that is usually caught; with Retry disabled it can reach the Protocol Layer.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Pipeline matching, discard rule, no valid data until retrain, both examples <span class="ref">Table 10-1 (pl_error), p.524</span></li>
+          <li><span class="kind spec">Spec</span>Retry disabled: map to Uncorrectable Internal Error. Raw Format: forward to Protocol Layer pipeline-matched <span class="ref">p.524</span></li>
+          <li><span class="kind spec">Spec</span>PHY asserts <code>pl_error</code> with the flit, then stall handshake, then Req.Retrain <span class="ref">§4.5.3.7.2, p.170</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="rx">
+        <div class="meta"><span>Rx path &amp; errors</span><span>Table 10-1 p.524 · §10.0 p.521</span></div>
+        <h3>Error pulses are events, and severity depends on Retry</h3>
+        <p class="rule">Error signals are pulses of one or more cycles; the receiver treats each rising edge as one event and ignores pulse length. With Retry enabled, the Adapter ORs <code>pl_error</code> and <code>pl_cerror</code> into Correctable Internal Error logging. With Retry disabled or in Raw Format, only <code>pl_cerror</code> is correctable.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Pulse length varies with clock ratios and pipeline depth, so counting cycles would make the error count depend on implementation. Severity follows recoverability: if Retry will replay what <code>pl_error</code> destroyed, nothing was lost, so it is correctable. Without Retry, data may be gone, so it escalates.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A PHY drives <code>pl_cerror</code> for 3 cycles after an eye-margin alarm. The Adapter's error counter increments once. If the PHY was clock-gated in L1 at the time, it first completes <code>pl_clk_req/lp_clk_ack</code>, then pulses.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that counts cycles logs 3 errors instead of 1 and trips a retrain threshold too early.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Pulse definition; rising edge is a new event <span class="ref">§10.0, p.521</span></li>
+          <li><span class="kind spec">Spec</span>OR rule and Retry dependence; clock-gating exit before pulsing <span class="ref">Table 10-1 (pl_cerror, pl_nferror), p.524</span></li>
+          <li><span class="kind spec">Spec</span><code>pl_nferror</code> has no architected PHY source; treat like a remote Non-Fatal ErrMsg <span class="ref">p.524</span></li>
+        </ul></div>
+      </article>
+
+      <!-- ===== state ===== -->
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.1 p.565 · §10.3.3.8 p.569–570</span></div>
+        <h3>Leaving Reset needs an edge, not a level</h3>
+        <p class="rule">Reset → Active (or LinkReset, Disabled) happens only after <code>lp_state_req</code> is NOP for at least one clock in Reset and then changes. After LinkError, LinkReset or Disabled → Reset, the PHY must not even start training until it sees NOP→Active or a Chapter 4 training trigger.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The edge is the Adapter saying "now". A level could be stale: left over from before a link-down, or driven by logic that has not finished resetting. It also gives software a way to hold the link down: the Protocol Layer delays its NOP→Active on FDI, and the Adapter forwards that edge to RDI. The Adapter must forward it even if <code>pl_inband_pres</code> is 0, and may go back to NOP and clock-gate while it waits.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After a Downstream Port Containment event the link sits in LinkError. Software clears DPC status. Status goes to Reset, but nothing trains until the Protocol Layer, under software control, toggles NOP→Active. The Adapter mirrors it on RDI and the LTSM starts.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that retrains on its own after LinkError → Reset brings the link up under software that is still cleaning up error state.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Reset exit rules <span class="ref">§10.3.3.1 and Table 10-4 note a, p.565</span></li>
+          <li><span class="kind spec">Spec</span>No training before NOP→Active or a Chapter 4 trigger; forward even with <code>pl_inband_pres</code> = 0 <span class="ref">§10.3.3.8, p.569–570</span></li>
+          <li><span class="kind spec">Spec</span>DPC hold example <span class="ref">Figure 10-32, p.576</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.1.6 p.534</span></div>
+        <h3>Active means both PHYs agreed</h3>
+        <p class="rule">The PHY sends <code>{LinkMgmt.RDI.Req.Active}</code> only after sampling <code>lp_state_req</code> = Active, answers with Rsp.Active only after sampling Active locally, and shows Active only after it has both sent and received Rsp.Active. This happens on every Active entry.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Each PHY reports "my Adapter is ready to receive" by responding. Only when both responses have crossed does either side know the other's Adapter is listening. That is why the Adapter must raise Active only when it is ready to receive and send parameter exchanges.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 1's Adapter is still loading firmware-provided capabilities. Die 0 sends Req.Active; Die 1's PHY holds its Rsp.Active until its own Adapter drives Active, about 50 µs later. Die 0 stays in Reset all that time and does not start Stage 3 too early.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that answers Rsp.Active before sampling local Active lets the remote Adapter send <code>{AdvCap.Adapter}</code> to an Adapter that is not listening; parameter exchange times out.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Steps 1–6 and "every entry to Active" <span class="ref">§10.1.6, p.534</span></li>
+          <li><span class="kind spec">Spec</span>Message codes: Req 01h/01h, Rsp 02h/01h <span class="ref">Table 7-8, p.275–276</span></li>
+          <li><span class="kind illus">Illustrative</span>The 50 µs firmware delay</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.4 p.566–567</span></div>
+        <h3>Who can start a Retrain, and how it ends</h3>
+        <p class="rule">The Adapter requests Retrain for: the software Retrain bit, CRC or parity errors over a threshold, a Raw Format Protocol Layer request, or another implementation reason. The PHY enters Retrain on a Valid framing error, a remote request, or an Adapter request. Exit from a Retrain entered from Active needs a fresh NOP→Active; from L1 an Active level is enough.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY sees signal problems (framing); the Adapter sees data problems (CRC). Both need a way to ask for a retrain. The NOP→Active requirement on exit gives the Adapter a pause point: it can finish side handshakes, such as the Parity Feature exchange, before the link goes Active again.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The Adapter counts 8 CRC errors in 1 ms (its own threshold) and requests Retrain. The PHY stalls the Adapter, exchanges Req/Rsp.Retrain, retrains, and reaches LINKINIT. The Adapter drives NOP for one cycle, then Active, after its parity-feature handshake finishes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that holds Active through Retrain (no NOP cycle) leaves the link stuck in Retrain forever.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Triggers for both sides; exit rules; the reason for the NOP→Active rule <span class="ref">§10.3.3.4, p.566–567</span></li>
+          <li><span class="kind spec">Spec</span>Threshold algorithm is implementation-specific <span class="ref">p.566</span></li>
+          <li><span class="kind illus">Illustrative</span>8 errors in 1 ms</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.4 p.566 · §3.5 p.89</span></div>
+        <h3>Retrain is pushed up and resets PM and Retimer credits</h3>
+        <p class="rule">A Retrain on RDI is propagated to every Adapter LSM that is Active (not to CXL vLSMs). On entry, any PM handshake is cancelled, and the Retimer credit counter resets to the value advertised at bring-up. A Retimer drains its buffers and retrains its far link too.</p>
+        <div class="part"><span class="l l-why">Why</span><p>During Retrain no bytes cross the link, so anything in flight is lost and anything negotiated mid-flight is suspect. Resetting to known values on both dies is simpler than reconciling partial state. CXL vLSMs are exempt because CXL defines its own Retrain behaviour above the Adapter.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The Adapter had sent Req.L1 when the PHY detected a framing error. Retrain entry wipes the PM attempt. After the link is Active again, the Adapter starts PM entry from scratch if the idle conditions still hold.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that keeps counting Retimer credits across a retrain under-counts after the Retimer flushed its buffers, and throttles the link permanently.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Propagation, Retimer credit reset, Retimer drain, PM reset <span class="ref">§10.3.3.4, p.566–567</span></li>
+          <li><span class="kind spec">Spec</span>RDI Retrain before Adapter LSMs; no Retrain exit request before all relevant LSMs are in Retrain <span class="ref">§3.5, p.89–90</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="state">
+        <div class="meta"><span>State control</span><span>§10.3.3.8 p.569 · §10.3.5.1 p.575</span></div>
+        <h3>LinkReset and Disabled reach RDI only when every stack agrees</h3>
+        <p class="rule">Each Adapter LSM may go to LinkReset or Disabled on its own. RDI follows only if all Adapter LSMs are in a link-down state, and then takes the highest priority among them: LinkError › Disabled › LinkReset. The PHY then runs the matching sideband handshake; with no answer in 8 ms, RDI goes to LinkError.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Two protocol stacks share one physical link. A PCIe hot reset on stack 0 must not drop the CXL traffic on stack 1. Priority picks the stronger action when stacks disagree, and the timeout guarantees a dead partner cannot leave the link half-down.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Stack 0 (PCIe) enters LinkReset because software set SBR. Stack 1 stays Active, RDI stays Active. Later stack 1 enters Disabled. Now both are down, so the Adapter requests Disabled on RDI (Disabled outranks LinkReset), and the PHY sends <code>{LinkMgmt.RDI.Req.Disable}</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that forwards stack 0's LinkReset straight to RDI takes stack 1 down in the middle of its traffic.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Common-state propagation, priority, 8 ms timeout <span class="ref">§10.3.3.8, p.569</span></li>
+          <li><span class="kind spec">Spec</span>RDI to LinkReset only if all Adapter LSMs are there <span class="ref">§10.3.5.1, p.575 · §10.3.3.5, p.567</span></li>
+          <li><span class="kind spec">Spec</span>If already link-down and not training, no remote notification needed <span class="ref">Implementation Note, p.571</span></li>
+        </ul></div>
+      </article>
+
+      <!-- ===== pm ===== -->
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>Power management</span><span>§10.1.7 p.535</span></div>
+        <h3>Ask for PM only when the mainband is silent</h3>
+        <p class="rule">The Adapter requests L1 or L2 on RDI only after every Adapter LSM is already in that PM state: retry buffer empty, no flits and no Ack/Nak waiting. The PHY sends the PM Request only after sampling the request and finishing the stallreq/stallack handshake.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Once in PM the mainband PLL may be off. Any flit still in flight, or an Ack the far side is waiting for, would be lost and trigger a replay into a link that is asleep. Making the upper state machines go first means the whole stack is idle before the wires go quiet.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A PCIe stack's L1 vote arrives while the Adapter still has 3 unacknowledged flits. It waits until the remote Acks drain the retry buffer (a few hundred ns), moves the Adapter LSM to L1 with the remote Adapter, and only then drives <code>lp_state_req</code> = L1.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Requesting L1 with a non-empty retry buffer: the remote Nak arrives after the PHY has powered down, and the replay has to wait for a full L1 exit.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Adapter LSMs first; empty retry buffer; no traffic; stall before PM Request <span class="ref">§10.1.7, p.535</span></li>
+          <li><span class="kind spec">Spec</span>All Adapter LSMs in PM before RDI SM <span class="ref">§3.5, p.90</span></li>
+          <li><span class="kind illus">Illustrative</span>3 flits, a few hundred ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>Power management</span><span>§10.1.7 p.535</span></div>
+        <h3>A PM request is held until it resolves</h3>
+        <p class="rule">Once the Adapter drives L1 or L2, it cannot change <code>lp_state_req</code> until status shows PM, Active.PMNAK, Retrain or LinkError. Requests that arrive meanwhile (Active from the Protocol Layer, a remote PM-exit for an Adapter LSM) are accepted but processed only after the status resolves, and the Adapter brings RDI back to Active first.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY is in the middle of a two-die negotiation. Pulling the request back would leave the remote PHY with a half-finished handshake. Holding the request until a definite answer keeps both dies' views consistent.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>200 ns after requesting L1, the Protocol Layer asks for Active. The Adapter stores it. RDI resolves to L1 at 900 ns. The Adapter then drives Active on RDI, the link exits L1, and only after RDI is Active does the Adapter wake its stack.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Switching <code>lp_state_req</code> back to Active mid-handshake: the remote PHY reaches L1 while the local one is still Active, and the next Req.Active looks like a PM exit to one side and a protocol error to the other.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Hold, sink-and-delay, resolution cases <span class="ref">§10.1.7, p.535</span></li>
+          <li><span class="kind illus">Illustrative</span>200 ns and 900 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>Power management</span><span>§10.1.7 p.535–536</span></div>
+        <h3>2 µs to answer, 1 µs to say no, 2 µs before asking again</h3>
+        <p class="rule">A PHY that receives a PM Request answers within 2 µs. If its own Adapter also wants PM, or status is already PM, it sends the PM Response. If both request and status stay Active for 1 µs, it sends <code>{LinkMgmt.RDI.Rsp.PMNAK}</code>. A PHY that receives PMNAK moves to Active.PMNAK and may retry no sooner than 2 µs, unless the remote side sends its own PM Request.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The 1 µs window lets two dies whose idle timers expire at slightly different times both reach PM without a NAK. The 2 µs bound stops a requester waiting forever. The 2 µs back-off stops two PHYs from flooding the sideband with PM Requests while one side stays busy.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 asks for L1 at t = 0. Die 1's Adapter decides to idle at t = 0.6 µs and requests L1: Die 1's PHY replies Rsp.L1 and both enter L1. If Die 1 had stayed busy until 1 µs, it would have replied PMNAK, and Die 0 could not ask again before about 3 µs.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that NAKs at once wastes most PM opportunities on links with bursty traffic; one that never NAKs leaves the requester stuck when the other side has work.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>2 µs response, 1 µs PMNAK rule, ≥ 2 µs retry <span class="ref">§10.1.7, p.535–536</span></li>
+          <li><span class="kind spec">Spec</span>Rsp.PMNAK is Msgcode 02h, MsgSubcode 02h <span class="ref">Table 7-8, p.276</span></li>
+          <li><span class="kind derived">Derived</span>Retry time ≈ 1 µs + transit + 2 µs</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>Power management</span><span>§10.1.7 p.536 · §4.5.3.9 p.172</span></div>
+        <h3>L1 exits through Retrain, L2 through Reset</h3>
+        <p class="rule">Exit starts when the Adapter requests Active. From L1, the LTSM goes to MBTRAIN.SPEEDIDLE and RDI shows Retrain. From L2, the LTSM goes to RESET and RDI shows Reset, followed by full training and a fresh Adapter parameter exchange. If a remote Req.Active arrives while in PM, the PHY does <code>pl_clk_req</code> and moves to Retrain to prompt its Adapter.</p>
+        <div class="part"><span class="l l-why">Why</span><p>L1 keeps the trained settings, so a short retrain is enough. L2 allows deeper power-down, which may lose them, so it costs a full bring-up. The Active Request timeout counters start only when the LTSM reaches LINKINIT, so retraining time is not counted against the handshake.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 1 wants to send a TLP and requests Active. Its PHY sends Req.Active and starts L1 exit training. Die 0's PHY gets the message in L1, raises <code>pl_clk_req</code>, shows Retrain; Die 0's Adapter requests Active. Both reach LINKINIT, swap Rsp.Active, and show Active.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that starts the Active Request timer at the PM exit request times out during a slow MBTRAIN and sends the link to TRAINERROR for no reason.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Exit flow, Retrain on remote request, timers start at LINKINIT, L2 exit via Reset <span class="ref">§10.1.7, p.536 · Figure 10-11, p.538</span></li>
+          <li><span class="kind spec">Spec</span>LTSM exits: L1 → MBTRAIN.SPEEDIDLE, L2 → RESET <span class="ref">§4.5.3.9, p.172</span></li>
+          <li><span class="kind spec">Spec</span>L2 exit causes a fresh Parameter Exchange <span class="ref">§10.3.3.8, p.570</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>Power management</span><span>§10.1.7 p.535 · §4.5.3.9.1 p.172</span></div>
+        <h3>The sideband stays awake</h3>
+        <p class="rule">In PM the PHY may power down its mainband (for example, turn off the PLL), but the sideband logic and its PLL stay on in L1. The Adapter may clock-gate its own sideband logic once RDI is in PM and nothing is outstanding. In L2, sideband power-down is allowed only if L2SPD was negotiated.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Every PM exit and every link-down request is a sideband message. If the sideband slept, nothing could wake the link except a full reset. L2SPD is the opt-in for systems that accept re-running SBINIT on wake in exchange for lower L2 power.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>In L1 the PHY's mainband PLL is off, but its 800 MHz sideband clock still runs. The remote Req.Active arrives as a 64-bit serial packet; the PHY wakes the Adapter with <code>pl_clk_req</code> and starts L1 exit.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Gating the sideband receiver in L1 without L2SPD makes the link unable to leave L1 when the remote die wants to.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Sideband and its PLL stay on in L1; Adapter may gate its sideband logic <span class="ref">§10.1.7, p.535</span></li>
+          <li><span class="kind spec">Spec</span>L2 Sideband Power Down, negotiated <span class="ref">§4.5.3.9.1, p.172</span></li>
+          <li><span class="kind spec">Spec</span>800 MHz sideband clock <span class="ref">§1.1.3, p.43</span></li>
+        </ul></div>
+      </article>
+
+      <!-- ===== hs ===== -->
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshakes &amp; clock gating</span><span>§10.1.3 p.530</span></div>
+        <h3>Gate clocks only in quiet states</h3>
+        <p class="rule">Coarse clock gating is allowed when status is Reset, LinkReset, Disabled or PM. It is not allowed in Active, Retrain or LinkError.</p>
+        <div class="part"><span class="l l-why">Why</span><p>In Active data can arrive any cycle with no backpressure. In Retrain the PHY needs the Adapter to see status changes immediately. LinkError is excluded on purpose: a link that is down because of an error should not also be asleep, and the spec expects error handlers to get it out of LinkError if saving power matters.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An idle link in L1 lets both the Adapter and most of the PHY gate their lclk trees. A link stuck in LinkError waiting for software keeps both clocked until software resets it.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that gates in LinkError misses the PHY's Reset status after the 16 ms residency and never sends NOP→Active.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Permitted states and the LinkError exclusion <span class="ref">§10.1.3, p.530</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshakes &amp; clock gating</span><span>§10.1.3.1 p.530</span></div>
+        <h3>Adapter wakes the PHY before it speaks</h3>
+        <p class="rule">The Adapter must complete <code>lp_wake_req/pl_wake_ack</code> before changing <code>lp_state_req</code> or <code>lp_linkerror</code> out of a gated state, and before sending on <code>lp_cfg</code>. For a state change it may move the request without waiting for the ack; for <code>lp_cfg</code> it must wait.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A state request is a level: the PHY will see it whenever its clock returns. A sideband packet is a burst of several cycles on an 8, 16 or 32-bit bus, so all of it must land in clocked flops. The Adapter may keep <code>lp_wake_req</code> high through Active, Retrain and LinkError, where the PHY cannot gate anyway.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 128-bit register-write packet on a 16-bit <code>lp_cfg</code> takes 8 cycles. If the PHY's clock came back on cycle 3, cycles 0–2 would be lost. Waiting for <code>pl_wake_ack</code> first avoids that.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A register write to the PHY during L1 is silently dropped; compliance software reads back stale values.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Rules 1–6 <span class="ref">§10.1.3.1, p.530</span></li>
+          <li><span class="kind spec">Spec</span>NC = 8, 16 or 32 <span class="ref">Table 10-1 (lp_cfg), p.526</span></li>
+          <li><span class="kind derived">Derived</span>128 bits ÷ 16 = 8 cycles</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshakes &amp; clock gating</span><span>§10.1.3.2 p.530–531</span></div>
+        <h3>PHY wakes the Adapter before anything it must notice</h3>
+        <p class="rule">The PHY does <code>pl_clk_req/lp_clk_ack</code> for: <code>pl_inband_pres</code> changes, LinkError entered on its own from Reset or PM, a remote PM-exit request, any <code>pl_cfg</code> packet, error pulses, and <code>pl_phyinrecenter</code> in a gated state. For exits from Reset or PM to anything but LinkError, it raises <code>pl_clk_req</code> before the status changes and holds it until the status has moved.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A gated Adapter cannot see a level change or a one-cycle pulse. The handshake guarantees its clock is running first. <code>pl_inband_pres</code> may change before the ack (it is a level and will be seen once the clock returns), but it is not guaranteed observed until the handshake completes.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An Adapter gated in Reset waits for training. When the LTSM reaches LINKINIT, the PHY raises <code>pl_clk_req</code> and <code>pl_inband_pres</code> together, and keeps <code>pl_clk_req</code> up until status leaves Reset, as the spec recommends.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that pulses <code>pl_cerror</code> while the Adapter is gated: the error is never logged, and correctable-error counts in software are wrong.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Rules 1–9 <span class="ref">§10.1.3.2, p.530–531</span></li>
+          <li><span class="kind spec">Spec</span>Gated Adapter waits for <code>pl_inband_pres</code> before requesting Active <span class="ref">rule 8, p.531</span></li>
+          <li><span class="kind spec">Spec</span>Error pulses and <code>pl_phyinrecenter</code> need the handshake in gated states <span class="ref">Table 10-1, p.524–525</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshakes &amp; clock gating</span><span>Table 10-1 p.525–526</span></div>
+        <h3>No gating? Still answer the handshake</h3>
+        <p class="rule">A side that does not support dynamic clock gating still stages the incoming request for one or more cycles and returns it as the ack. A side whose partner cannot gate may tie its own request to 1.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The requester's logic waits for the ack. If one side skipped the handshake, every partner would need a "my peer does not gate" configuration bit. Turning the request around costs one flop and keeps every Adapter compatible with every PHY.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A test-chip PHY without clock gating: <code>pl_wake_ack</code> = <code>lp_wake_req</code> delayed by one flop. The Adapter's driver code is identical to the one used with a production PHY that gates.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Wiring <code>pl_wake_ack</code> = <code>lp_wake_req</code> combinationally creates the zero-cycle path the handshake forbids, and a loop if the Adapter's request also depends on the ack.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Stage and turn around; tie-to-1 permission <span class="ref">Table 10-1 (pl_clk_req, lp_clk_ack, lp_wake_req, pl_wake_ack), p.525–526</span></li>
+          <li><span class="kind spec">Spec</span>At least one clock between request and ack <span class="ref">§10.1.3.1 rule 2, §10.1.3.2 rule 2, p.530</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshakes &amp; clock gating</span><span>§10.3.2 p.563</span></div>
+        <h3>Stall at a clean boundary before every Active exit</h3>
+        <p class="rule">On RDI the PHY must use <code>pl_stallreq/lp_stallack</code> whenever it leaves Active for Retrain, PM, LinkReset or Disabled. The Adapter acks only at a clean boundary: a flit boundary for 256B formats; for 68B formats, after PDS, its zero padding and any parity bytes are sent. While acked, <code>lp_valid</code> and <code>lp_irdy</code> are low.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY must stop sending in a place the remote receiver can recognise. For 68B flits that means the stream has been closed with PDS so the remote side knows where data ends. FDI in Flit mode needs the stall only for PM, because the Adapter itself owns flit boundaries there; on RDI the PHY does not.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>The PHY raises <code>pl_stallreq</code> mid-flit. The Adapter finishes the current 4-beat flit (the PHY keeps accepting with <code>pl_trdy</code>, gaps allowed), then raises <code>lp_stallack</code>. The PHY can now send Req.Retrain knowing no partial flit is on the wire.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Acking mid-flit for 68B format leaves the remote Adapter with a partial flit and no PDS; it reports a framing error and the retrain loops.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>RDI must use stall for every Active exit; rules 1–10; clean boundary definitions <span class="ref">§10.3.2, p.563</span></li>
+          <li><span class="kind spec">Spec</span>Recommended: <code>lp_stallack</code> on a free-running clock <span class="ref">rule 10, p.563 · Table 10-1, p.525</span></li>
+          <li><span class="kind spec">Spec</span>Two acceptable lower-layer orderings <span class="ref">Implementation Note, p.564–565</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshakes &amp; clock gating</span><span>Table 10-1 p.526</span></div>
+        <h3>Sideband config bus: credits, atomic writes</h3>
+        <p class="rule"><code>lp_cfg/pl_cfg</code> carry Chapter 7 packets on an NC = 8, 16 or 32-bit bus. Each credit covers 64 bits of header plus 64 bits of data, even for packets with less. Initial credits are design parameters, so none are returned at reset. Register writes must be atomic: all 32 or 64 bits update in one cycle.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Fixed-size credits make buffer accounting trivial. Design-parameter initial credits avoid a startup exchange on a bus that may be gated. Atomicity matters because NC can be as narrow as 8 bits: without it, software could read a half-written 64-bit register.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>NC = 8. A 64-bit register write arrives as 16 byte-wide cycles. The PHY assembles the full packet and updates all 64 bits on one clock, then returns one credit on <code>pl_cfg_crd</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A credit return pulsed while the receiver is clock-gated is lost. The sender's counter leaks one credit per occurrence until the bus deadlocks. Credit returns follow the same wake rules as packets.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Credit size, no init credits, clock-gating rule for returns, atomicity <span class="ref">Table 10-1 (pl_cfg*, lp_cfg*), p.526</span></li>
+          <li><span class="kind spec">Spec</span>Flow-control rules <span class="ref">§7.1.3.1</span></li>
+          <li><span class="kind derived">Derived</span>128 bits ÷ 8 = 16 cycles</li>
+        </ul></div>
+      </article>
+
+      <!-- ===== err ===== -->
+      <article class="wcard" data-g="err">
+        <div class="meta"><span>Errors &amp; link-down</span><span>Table 10-1 p.523 · §10.3.3.7 p.568</span></div>
+        <h3><code>lp_linkerror</code>: a wire, not an encoding</h3>
+        <p class="rule"><code>lp_linkerror</code> takes the PHY to LinkError at once and keeps it there while high. No stall handshake is required. The Adapter ORs its own internal fatal conditions with <code>lp_linkerror</code> from every FDI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Error containment (for example a CXL viral escalation) must be as fast as possible. A request encoding would wait behind whatever request is in progress; a dedicated wire bypasses all of it. The OR makes the path from any Protocol Layer to the PHY a single gate.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL.cachemem stack detects an uncorrectable error mid-transfer. Its <code>lp_linkerror</code> on FDI ORs through the Adapter to RDI on the next cycle. The PHY goes to LinkError and sends <code>{LinkMgmt.RDI.Req.LinkError}</code>. The Adapter cleans its datapath after sampling LinkError for one cycle, whether or not it gets <code>pl_trdy</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that registers <code>lp_linkerror</code> through its state-request arbiter adds the latency of an in-progress PM handshake to containment.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Definition, viral example, OR rule <span class="ref">Table 10-1 (lp_linkerror), p.523</span></li>
+          <li><span class="kind spec">Spec</span>No stall needed; datapath cleanup after one cycle <span class="ref">§10.3.3.7, p.568</span></li>
+          <li><span class="kind spec">Spec</span>RDI LinkError before Adapter LSMs <span class="ref">§3.5, p.90 · §10.3.3.8, p.569</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="err">
+        <div class="meta"><span>Errors &amp; link-down</span><span>§10.3.3.7 p.569 · §10.3.3.8 p.569</span></div>
+        <h3>16 ms in LinkError: twice the 8 ms timeout</h3>
+        <p class="rule">A PHY that sends a LinkError, LinkReset or Disabled request and gets no answer in 8 ms moves to LinkError. Every lower layer stays in LinkError at least 16 ms before it may exit to Reset.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If the sideband died, the remote die never received the LinkError message. But it will notice something is wrong (its own sideband handshakes time out after 8 ms) and go to LinkError on its own. Staying 16 ms guarantees the local die is still down when that happens, so the two dies cannot end up one up and one down.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0's Adapter asserts <code>lp_linkerror</code> at t = 0, but the sideband lane is broken. Die 1 gets nothing; its pending handshake times out at about 8 ms and it enters LinkError. Die 0 may leave LinkError at 16 ms, after Die 1 is safely down.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A 1 ms residency lets Die 0 retrain while Die 1 still believes the link is Active; Die 1 interprets the training patterns as data.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>16 ms minimum residency and its reason <span class="ref">§10.3.3.7, p.569</span></li>
+          <li><span class="kind spec">Spec</span>8 ms no-response → LinkError <span class="ref">§10.3.3.8, p.569</span></li>
+          <li><span class="kind spec">Spec</span>LinkError → Reset needs Active request, <code>lp_linkerror</code> = 0, residency met <span class="ref">§10.3.3.7, p.569</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="err">
+        <div class="meta"><span>Errors &amp; link-down</span><span>Table 10-1 p.524 · §4.5.3.8 p.171</span></div>
+        <h3><code>pl_trainerror</code> is a level that outlives the error</h3>
+        <p class="rule"><code>pl_trainerror</code> signals a fatal PHY error. The PHY moves status to LinkError and holds <code>pl_trainerror</code> until RDI goes from LinkError to Reset. Meanwhile the LTSM must stay in TRAINERROR as long as RDI is in LinkError.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A fatal error needs software attention and may raise an interrupt, depending on the Uncorrectable Internal Error mask and severity in the Adapter. A level that persists until recovery lets a gated or busy Adapter still see it, and lets software read the cause while the link is held down.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>MBTRAIN fails at every speed. The LTSM enters TRAINERROR, the PHY raises <code>pl_trainerror</code> and LinkError. The Adapter logs an Uncorrectable Internal Error. Software reads the PHY's status registers over the still-working sideband, then resets the link.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Pulsing <code>pl_trainerror</code> for one cycle: an Adapter that was mid clock-gating handshake never logs the fatal error.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Level until LinkError → Reset; escalation by mask and severity <span class="ref">Table 10-1 (pl_trainerror), p.524</span></li>
+          <li><span class="kind spec">Spec</span>TRAINERROR held while RDI is in LinkError <span class="ref">§4.5.3.8, p.171</span></li>
+        </ul></div>
+      </article>
+
+      <!-- ===== mpm ===== -->
+      <article class="wcard" data-g="mpm">
+        <div class="meta"><span>Management transport</span><span>§10.1.2 p.529 · Table 10-2 p.527–529</span></div>
+        <h3>A management path that works with mainband clocks off</h3>
+        <p class="rule">When Management Transport over sideband is supported, the RDI config bus and the Table 10-2 signals may run on a separate <code>Mgmt_clk</code> (for example an auxiliary clock). <code>mp_mgmt_pkt</code>/<code>pm_mgmt_pkt</code> mark each transfer as a management packet (MPM) or a link management packet. <code>mp_rxqid</code>/<code>pm_rxqid</code> steer MPMs to the right sideband link and receive queue.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Management (firmware update, telemetry, debug) must reach a chiplet even when its mainband is untrained or powered down. Putting the path on its own clock decouples it from lclk. The extra handshakes (<code>mp_wake_req/pm_wake_ack</code>, <code>pm_clk_req/mp_clk_ack</code>) are independent of RDI state.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A board controller pushes firmware to a chiplet whose mainband is in L2. Traffic flows through the Management Port Gateway on Mgmt_clk over the sideband. RDI <code>pl_state_sts</code> never leaves L2.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Delivering <code>pm_param_done</code> (a 2-clock pulse) before <code>mp_clk_ack</code> to a gated gateway: it misses the pulse and never learns how many modules negotiated management transport.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Separate Mgmt_clk allowed <span class="ref">§10.1.2, p.529</span></li>
+          <li><span class="kind spec">Spec</span>Packet steering, RxQ-ID, credits per 64 bits, pulses after <code>mp_clk_ack</code> <span class="ref">Table 10-2, p.527–529</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mpm">
+        <div class="meta"><span>Management transport</span><span>Table 10-2 p.527</span></div>
+        <h3>The gateway can hold or restart training</h3>
+        <p class="rule"><code>mp_stall_after_mbinit_param</code> tells the PHY to stall receive-side training at MBINIT.PARAM using the SBFE stall encoding. <code>mp_mgmt_init_start</code> (a 2-clock pulse) forces the LTSM to RESET, through TRAINERROR if needed, and can take the mainband down.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Management transport is negotiated at MBINIT.PARAM. If the gateway is not ready, letting mainband training race ahead would finish without it. A stall lets the management path catch up. Forcing RESET is the only way to re-run that negotiation once the link is up.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After a management-domain reset the gateway raises <code>mp_mgmt_port_gateway_ready</code> together with <code>mp_stall_after_mbinit_param</code>. The LTSM pauses at MBINIT.PARAM until the gateway drops the stall.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A gateway that pulses <code>mp_mgmt_init_start</code> without first dropping <code>mp_mgmt_up</code> violates the spec and leaves the PHY's SB_MGMT_UP flag inconsistent.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span><code>mp_stall_after_mbinit_param</code>, <code>mp_mgmt_init_start</code>, <code>mp_mgmt_up</code> <span class="ref">Table 10-2, p.527</span></li>
+          <li><span class="kind spec">Spec</span>SBFE stall encoding <span class="ref">§4.5.3.3.1.2</span></li>
+        </ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
