@@ -20,5 +20,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   folder works offline.
 - `tools/build.py` to regenerate the pages from `src/`, with a `--check` mode.
 - `tools/check_site.py` for offline link, anchor, navigation and external-URL checks.
+- Maintainer and agent handoff documents: `AGENTS.md` (with a `CLAUDE.md` import), `PROJECT_CONTEXT.md` and `docs/ARCHITECTURE.md`.
 
 [1.0.0]: https://github.com/MAHANTHADEEKSHA-SB/self_practice_f/tree/main/ucie-field-guides

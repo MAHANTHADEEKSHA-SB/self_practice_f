@@ -124,6 +124,11 @@ ucie-field-guides/
 ├── tools/
 │   ├── build.py            Rebuilds guides/ and index.html from src/
 │   └── check_site.py       Offline link and navigation checks
+├── docs/
+│   └── ARCHITECTURE.md     Page anatomy, data format, adding a guide
+├── AGENTS.md               Instructions for AI agents and new maintainers
+├── CLAUDE.md               Imports AGENTS.md for Claude Code
+├── PROJECT_CONTEXT.md      Handoff: status, decisions, validation, open items
 ├── CHANGELOG.md
 └── README.md
 ```
@@ -148,6 +153,8 @@ Where things live:
 - **Look and feel**: `src/template/style.css` and `extra.css`; colors are CSS variables at the top of `style.css`, with a dark theme that follows the OS setting.
 
 ## Contributing
+
+New maintainers and AI agents: start with [AGENTS.md](AGENTS.md), then [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - Branch from `main` as `<type>/<short-description>`, for example `feat/ucie-field-guides-pcie-gen6` or `fix/ucie-field-guides-broken-anchor`.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) with the folder as scope: `feat(ucie-field-guides): …`, `fix(…)`, `docs(…)`, `build(…)`.
