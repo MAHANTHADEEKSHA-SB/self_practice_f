@@ -1,0 +1,361 @@
+
+<!-- 10. RATIONALE -->
+<section id="rationale">
+  <div class="wrap">
+    <h2>10 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives an Adapter rule, the reason behind it, a worked example, and what breaks without it. Unless a card says otherwise, numbers assume one x64 Advanced module at 16 GT/s: 128 GB/s per direction, one 256B flit every 2 ns.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <!-- negotiation -->
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>§3.2.1.2 p.65</span></div>
+        <h3>The Downstream Port speaks first and decides</h3>
+        <p class="rule">For PCIe or CXL, the UP waits for the DP's <code>{AdvCap.Adapter}</code>, may change its own bits after reading it, then answers. Only the DP sends <code>{FinCap.Adapter}</code> and <code>{FinCap.CXL}</code>.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If both sides computed the result independently, any difference in their resolution logic would leave them running different formats. One decider removes that risk. It mirrors PCIe, where the downstream port controls link configuration.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU (DP) supports CXL 256B with Format 6; an accelerator (UP) supports both CXL and PCIe. The UP sees the DP's advert, keeps CXL, and answers. The DP's FinCap.Adapter sets CXL 256B Flit Mode and CXL_LatOpt_Fmt6, so the link runs Format 6.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A UP that sends its AdvCap at once, without waiting, may advertise a combination the DP cannot accept, and the DP's FinCap then contradicts what the UP already configured.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>UP waits, may change; DP sends FinCap <span class="ref">§3.2.1.2, p.65 · Table 9-42</span></li>
+          <li><span class="kind bg">Background</span>The PCIe analogy</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>Table 3-1 p.63 · §3.3.2 p.71</span></div>
+        <h3>68B formats stop at 32 GT/s</h3>
+        <p class="rule">68B Flit Mode is mandatory for CXL and PCIe when the negotiated maximum data rate is ≤ 32 GT/s, and must be 0 above it. The Adapter learns the rate from <code>pl_max_speedmode</code>, because it was settled in Stage 2.</p>
+        <div class="part"><span class="l l-why">Why</span><p>CXL 68B mode and PCIe Non-Flit mode only exist up to 32 GT/s in their base specifications; faster PCIe and CXL generations require 256B flits. UCIe follows the protocol rules. The Adapter cannot know the rate on its own, so RDI hands it over before Stage 3 begins.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Standard Package link negotiates a 48 GT/s maximum in MBINIT.PARAM. <code>pl_max_speedmode</code> = 1, so the Adapter clears 68B Flit Mode and the link must use a 256B format, even if it later degrades to 16 GT/s.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that advertises 68B at 48 GT/s may settle on Format 2, which is not supported there. Either side may take the link to LinkError on an illegal combination.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>≤ 32 GT/s rule and pl_max_speedmode <span class="ref">Table 3-1, p.63 · §3.3.2, p.71</span></li>
+          <li><span class="kind spec">Spec</span>Illegal format/protocol → LinkError permitted <span class="ref">§3.4, p.87</span></li>
+          <li><span class="kind bg">Background</span>PCIe 6.0 / CXL 3.x use 256B flits at 64 GT/s</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>§3.2.1.2 p.70</span></div>
+        <h3>8 ms to negotiate, but only while RDI is Active</h3>
+        <p class="rule">Parameter exchange must finish within 8 ms (−0%/+50%). The timer counts only while RDI is Active and restarts on any Stall message. Expiry is an Uncorrectable Internal Error and RDI goes to LinkError.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A partner that never answers must not hang the link forever. But time spent retraining is not the partner's fault, so the timer pauses when RDI is not Active. Stall messages let a Retimer, which must first resolve capabilities with the far side, buy time.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Host → Retimer → off-package link → Retimer → device. The near Retimer cannot answer until the far side has answered, so it sends <code>{AdvCap.Adapter.Stall}</code> every 4 ms, resetting the host's timer each time.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Retimer that stalls every 10 ms lets the host time out at 8 ms; the link drops to LinkError on every boot.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Timer, tolerance, reset on Stall, UIE, Retimer 4 ms <span class="ref">§3.2.1.2, p.70</span></li>
+          <li><span class="kind spec">Spec</span>Stall MsgInfo FFFFh <span class="ref">Table 7-8, p.276 · p.283</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>§3.4 p.85 · §3.8 p.93</span></div>
+        <h3>Protocol, format and Retry are fixed until PHY Reset</h3>
+        <p class="rule">Once negotiated, protocol and flit format cannot change until the PHY returns to Reset. Retry cannot be turned off even if the link later degrades to a speed that would not need it.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Changing format would change byte positions, CRC coverage and buffer sizes with traffic in flight. A speed degrade happens in the middle of operation (through Retrain), and the Retry state (sequence numbers, buffered flits) would have to be torn down safely. Keeping it on is simpler and costs little at a lower BER.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An Advanced link trains at 32 GT/s with Retry. A runtime Retrain degrades it to 12 GT/s, where BER is 1e-27. Retry stays on; it just never has to replay.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that drops Retry after degrade disagrees with the remote Adapter about whether flit headers carry sequence numbers.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Fixed until Reset <span class="ref">§3.4, p.85</span></li>
+          <li><span class="kind spec">Spec</span>Retry not disabled on degrade; renegotiated at next init <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind spec">Spec</span>BER by speed <span class="ref">Table 1-2, p.40</span></li>
+        </ul></div>
+      </article>
+
+      <!-- formats -->
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.3 p.76</span></div>
+        <h3>The Protocol Layer leaves the Adapter's bytes at zero</h3>
+        <p class="rule">In 256B formats the Protocol Layer drives 0 on header and CRC bytes, but fills the Protocol ID bits (and for PCIe/CXL.io, the Flit_Marker bit and fields). On receive, the Adapter passes the flit up unchanged and the Protocol Layer ignores bits that are not its own.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Sequence numbers, Ack/Nak and CRC depend on retry state that only the Adapter has. The protocol knows which protocol a flit belongs to and whether it carries a Flit Marker. Splitting the header along that line means no extra wires on FDI and no rewriting of protocol bytes.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL.cachemem flit arrives on FDI with byte 0 = 10xx_xxxx (Protocol ID 10b) and byte 1 = 0. The Adapter sets the stack bit, the sequence or Ack/Nak fields, then computes CRC over the final bytes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that leaves garbage in the CRC bytes is harmless (the Adapter overwrites them). One that sets Protocol ID 00b on a Streaming flit makes the receiver drop it as a NOP.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Driving 0, Protocol ID, Flit_Marker <span class="ref">§3.3.3, p.76 · Table 3-6, p.84</span></li>
+          <li><span class="kind spec">Spec</span>Streaming never sets 00b <span class="ref">§3.3.3, p.76 · Table 3-5, p.80</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.3 p.76</span></div>
+        <h3>DLLPs bypass Retry, so the DLP bytes are split</h3>
+        <p class="rule">For PCIe and CXL.io, DLP bytes 0–1 become the UCIe Flit Header. The Adapter inserts DLLPs from FDI's DLLP interface into DLP bytes 2–5 (as Optimized_Update_FC when possible), unless the flit carries a Flit Marker. On receive, it extracts them back onto FDI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>DLLPs (credit updates, Acks in PCIe) must not be replayed from an old flit: a replayed credit update could double-count credits. Inserting them as the flit leaves, after the retry buffer, gives each transmission (and each replay) the current DLLP.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Flit #57 is replayed 300 ns after its first transmission. The first copy carried an UpdateFC for 8 credits; the replay carries whatever DLLP is current now, not the stale one.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Storing DLLPs in the retry buffer: a replay delivers the old UpdateFC again and the receiver's credit counter drifts.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>DLP split, insertion, Optimized_Update_FC, extraction <span class="ref">§3.3.3, p.76</span></li>
+          <li><span class="kind spec">Spec</span>FDI DLLP side channel <span class="ref">Table 10-3, p.540–541 · §10.2.4.1, p.550</span></li>
+          <li><span class="kind illus">Illustrative</span>The 300 ns and 8-credit numbers</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.4 p.80–81</span></div>
+        <h3>Latency-Optimized: each 128B half has its own CRC</h3>
+        <p class="rule">Formats 5 and 6 put CRC0 at bytes 126–127 covering bytes 0–125, and CRC1 at 254–255 covering 128–253. Format 6 also lets the Protocol Layer use bytes that Format 5 leaves reserved.</p>
+        <div class="part"><span class="l l-why">Why</span><p>With one CRC at the end of 256B, the receiver must wait for the whole flit before trusting any of it. With a CRC per half, the first 128B can be checked and consumed one half-flit time earlier. That is why the spec strongly recommends Format 6 for CXL 256B.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 at 16 GT/s: a 256B flit takes 2 ns on the wire. A CXL.cachemem read response in the first half can be released about 1 ns earlier than with Format 4.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that consumed half 0 and then sees CRC1 fail must not consume half 0 again on replay. The FDI <code>pl_flit_cancel</code> rules for Latency-Optimized flits exist for this case.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>CRC coverage <span class="ref">§3.3.4, p.81</span></li>
+          <li><span class="kind spec">Spec</span>Format 6 strongly recommended <span class="ref">§3.3.4, p.80 · Table 3-7, p.85</span></li>
+          <li><span class="kind derived">Derived</span>Half of 2 ns ≈ 1 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.2.1 p.73</span></div>
+        <h3>68B flits: shift by 4 every flit, close with PDS</h3>
+        <p class="rule">Each 68B flit adds 4 bytes to a 64B payload, so successive flits shift 4 bytes across the bus. Data on RDI is always a multiple of 256B. To pause, the Adapter sends a PDS header, zeros to the next 64B boundary, at least two more all-zero 64B chunks, and more zeros to reach a 256B multiple.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY and any Retimer work in 256B units (Retimer credits are 256B). The two zero chunks give the receiver's byte shifter time to reset, so the next flit can start at byte 0 of a 256B-aligned transfer.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Three flits then idle: flits use bytes 0–203, PDS header 204–205, zeros 206–255, two zero chunks 256–383, more zeros 384–511. The pause costs 512 bytes total: 4 ns on a x64 16 GT/s link.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Stopping right after the PDS header leaves the receiver's shifter mid-flit; the next flit is decoded 4·k bytes off and fails CRC.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Shift, 256B multiples, PDS padding <span class="ref">§3.3.2.1, p.73 · Figures 3-12 and 3-13, p.75</span></li>
+          <li><span class="kind derived">Derived</span>The 3-flit byte positions and 4 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.2.1 p.73–74</span></div>
+        <h3>PDS detection: 2 of 4 with Retry, exact without</h3>
+        <p class="rule">A PDS header sets four things: Byte 0 bit 4, Byte 1 bits 7 and 6, and Byte 1 [5:4] = 00b with the expected sequence value. With Retry, the receiver treats a header as PDS if any two hold. Without Retry, conditions 1 and 2 must hold.</p>
+        <div class="part"><span class="l l-why">Why</span><p>At BER 1e-15 a bit flip in the header is possible. "2 of 4" means three bit errors are needed to turn a PDS into a regular header, and even that is caught by CRC and replayed. The reverse (a regular header aliasing to PDS with two errors) is why the spec recommends checking that the first flit after a weak PDS has the expected explicit sequence number.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A PDS arrives with Byte 1 bit 6 flipped. Three of four conditions hold, so it is still a PDS. The receiver then checks that the next valid flit carries the expected sequence number before trusting the stream.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Requiring all four with Retry enabled turns a single bit error into a lost PDS, a misaligned stream and a burst of CRC errors.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Conditions and rules <span class="ref">§3.3.2.1, p.73</span></li>
+          <li><span class="kind spec">Spec</span>Aliasing analysis and recommended check <span class="ref">Implementation Note, p.74</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.2.1 p.73–74</span></div>
+        <h3>PDS before replay, before Retrain, and how to resume</h3>
+        <p class="rule">In 68B format a PDS must be sent before replaying from the retry buffer and before acking a stall for Retrain, so replayed flits start 256B-aligned. With Retry disabled, the first flit after a PDS must be a payload or test flit, not a NOP.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A replay restarts the stream from an older flit, so the byte shifter must restart too. A NOP can be all zeros, which is indistinguishable from PDS padding; without sequence numbers the receiver could not tell that the stream had resumed.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Nak for flit #33 arrives. The Adapter finishes the current flit, sends PDS plus padding, then replays #33 starting at byte 0 of a new 256B block with an explicit sequence number.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Replaying without a PDS leaves the remote shifter at the old offset; every replayed flit fails CRC and the replay counter escalates to Retrain.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>PDS on Retry and Retrain; resume rules <span class="ref">§3.3.2.1, p.73–74</span></li>
+          <li><span class="kind spec">Spec</span>PDS error may map to Retrain (Retry) or LinkError (no Retry) <span class="ref">p.74</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>Table 3-10 notes p.88</span></div>
+        <h3>Format priority: 6 › 4 › 3 › 2 › 5</h3>
+        <p class="rule">When several formats are possible (Truth Table 2), Raw wins if advertised, then Format 6, then Format 4 over 3, then 68B, with Format 5 last.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The spec's notes give the reasons. Raw is only advertised when it is the required mode. Format 6 has the best performance. Start Header (4) beats End Header (3) because the receiver learns the protocol and stack from the first bytes, so multiplexed stacks can be steered earlier. Format 5 carries the most overhead.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Two Streaming stacks; both sides advertise Std End Header, Std Start Header and LatOpt without optional bytes. Result: Format 4.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that resolves by its own preference ("lowest latency = 5") picks a different format than its partner; traffic is undecodable.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Truth Tables 1 and 2 with notes a and b <span class="ref">Tables 3-9 and 3-10, p.88</span></li>
+        </ul></div>
+      </article>
+
+      <!-- crc & retry -->
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.7 p.92</span></div>
+        <h3>One CRC-16 over 128 bytes, everywhere</h3>
+        <p class="rule">CRC polynomial x<sup>16</sup>+x<sup>15</sup>+x<sup>2</sup>+1 over a 128B message, zero-extended at the MSB end, initial value 0, bit 0 of byte 0 first. A 256B flit carries two CRCs; a 68B flit carries one over 66B.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The (x<sup>15</sup>+x+1) primitive factor guarantees detection of any two bit errors; the (x+1) factor adds odd parity, catching any odd number, so any three are caught. One engine sized for 128B serves every format, which keeps CRC logic small and identical on both dies.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 68B flit's CRC covers bytes 0–65 (header plus 64B payload). The CRC engine sees bytes 66–127 as zeros. A Format 3 flit's CRC1 covers bytes 128–241 as message bytes 0–113.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Computing CRC before inserting the sequence number into the header: every flit fails CRC at the receiver. The spec requires the final transmitted values to be used.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Polynomial, guarantee, zero extension, init, bit order, golden <code>crc_gen.vs</code> <span class="ref">§3.7, p.92</span></li>
+          <li><span class="kind spec">Spec</span>68B CRC message mapping <span class="ref">§3.3.2, p.71</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.93</span></div>
+        <h3>Alternate explicit-sequence and Ack/Nak flits</h3>
+        <p class="rule">Flit headers carry either the flit's own sequence number or an Ack/Nak, never both. UCIe alternates them (PCIe sends three explicit ones first). Consecutive explicit-sequence flits are allowed only when no Ack/Nak is pending.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Every other flit returns an Ack, so the sender learns quickly what arrived and can free retry-buffer space sooner. Faster Acks mean a smaller retry buffer for the same bandwidth.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>With alternation, an Ack can leave every 4 ns (two flits at 2 ns). If the round trip for an Ack is 40 ns, about 20 flits are in flight: 5 KB of retry buffer at 256B per flit.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Following PCIe's 3-in-a-row rule triples the worst-case Ack gap and stalls a minimum-sized retry buffer.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Alternation and CONSECUTIVE_TX_EXPLICIT_SEQ_NUM_FLIT &lt; 1 <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind illus">Illustrative</span>The 40 ns round trip</li>
+          <li><span class="kind derived">Derived</span>40 ns ÷ 2 ns × 256B ≈ 5 KB</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.93</span></div>
+        <h3>No selective Nak, no receive retry buffer</h3>
+        <p class="rule">After a bad flit, the receiver drops everything until the sender replays from the Nak'ed flit. Selective Nak and Rx retry-buffer rules from PCIe must not be implemented.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Errors are rare on a 2 mm Advanced Package channel. Go-back-N replay costs a few flits of bandwidth per error; selective repeat would need a reorder buffer on every receiver. The trade-off favours the simpler design.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>At BER 1e-15 and 1.024 Tb/s per direction, a bit error arrives about once every 16 minutes. Replaying 5 flits costs 10 ns each time. At 64 GT/s with BER 1e-12 it is about 4 per second, still negligible.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that keeps good flits after a bad one and later accepts the replay as well delivers duplicates.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Selective Nak and Rx buffer not allowed <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind spec">Spec</span>BER values <span class="ref">Tables 1-1 and 1-2, p.40</span></li>
+          <li><span class="kind derived">Derived</span>1.024e12 × 1e-15 ≈ 1e-3 errors/s; 4.096e12 × 1e-12 ≈ 4/s</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.93</span></div>
+        <h3>The replay timer counts idle time too</h3>
+        <p class="rule">REPLAY_TIMEOUT_FLIT_COUNT is a 9-bit counter that also increments for every Flit Time (lclk cycles to move 256B at the current speed and width) in which no flit was sent. A replay is scheduled at ≥ 375. Timeouts are logged as Correctable Internal Errors.</p>
+        <div class="part"><span class="l l-why">Why</span><p>PCIe sends IDLE flits continuously, so counting flits measures time. UCIe lets the Adapter stop sending NOPs to save power, so a pure flit count could freeze with an unacknowledged flit in the buffer. Counting idle Flit Times restores the link between count and time.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Last payload #88 is sent and its Ack is corrupted. The link goes idle. After 375 Flit Times (750 ns at 2 ns per flit) the sender replays #88 and the remote resends the Ack.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Counting only transmitted flits: the idle link never times out, #88 sits unacknowledged forever, and the retry buffer never drains before PM entry.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>9-bit, saturates at 1FFh, Flit Time rule, ≥ 375, logging <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind derived">Derived</span>375 × 2 ns = 750 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.94</span></div>
+        <h3>Sequence Number Handshake on every FDI Active entry</h3>
+        <p class="rule">Every time FDI enters Active (bring-up, Retrain exit, PM exit) the Adapters run the PCIe Sequence Number Handshake, using NOP flits if there is no payload. Not done within 128 flits: Retrain. Retry variables reset whenever RDI is in Reset or Retrain.</p>
+        <div class="part"><span class="l l-why">Why</span><p>PCIe uses an IDLE flit handshake when the data link comes up. UCIe already agrees "link up" over sideband, so the IDLE phase is dropped, but both sides still have to agree where the sequence numbers stand before trusting Acks.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After L1 exit, FDI goes Active with no traffic pending. The Adapter sends NOP flits with explicit sequence numbers until the handshake completes, a few dozen ns.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Skipping the handshake after Retrain: the first Ack refers to a number from before the Retrain and purges flits that were never received.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Every FDI Active entry, 128 flits, NOP use, variable init <span class="ref">§3.8, p.93–94</span></li>
+          <li><span class="kind illus">Illustrative</span>"A few dozen ns"</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 Impl. Note p.94</span></div>
+        <h3>After a Nak, send two Acks before going quiet</h3>
+        <p class="rule">Recommended: after handling a received Nak (including any replay), send at least two flits carrying an Ack before stopping transmission. Re-sending the last Ack on a NOP is allowed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If the only Ack before going idle is corrupted, the partner waits for its replay timer. One extra Ack makes that very unlikely. It is a cheap guard for a link that is allowed to stop sending NOPs.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 sends its last NOP with Ack 52 and it is corrupted. Without a second Ack, Die 1 replays #52 after 750 ns. With a second Ack on another NOP, Die 1 frees #52 straight away.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Nothing fails functionally (replay timeout recovers it), but idle-time latency spikes and PM entry is delayed by stuck retry buffers.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Recommendation and scenario <span class="ref">§3.8 Implementation Note, p.94</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.94</span></div>
+        <h3>Protocol errors become UIE; "Recovery" becomes Retrain</h3>
+        <p class="rule">An invalid sequence number in a received Ack or Nak, or a payload flit with explicit sequence number 0, is an Uncorrectable Internal Error. PCIe conditions that would send the port to Recovery make the Adapter request Retrain on RDI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>UCIe has no LTSSM Recovery: link retraining belongs to the PHY's LTSM, and the Adapter's way to ask for it is a Retrain request on RDI. Sequence corruption that CRC did not catch means the retry state can no longer be trusted, so it escalates.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>FLIT_REPLAY_NUM shows the same flit replayed repeatedly without progress. In PCIe the port would enter Recovery; the UCIe Adapter drives <code>lp_state_req</code> = Retrain.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that logs "Data Link Protocol Error" (a PCIe AER error) instead of UIE reports the wrong error to software.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>UIE mapping; Recovery → Retrain; FLIT_REPLAY_NUM guidance <span class="ref">§3.8, p.93–94</span></li>
+          <li><span class="kind spec">Spec</span>Adapter Retrain triggers on RDI <span class="ref">§10.3.3.4, p.566</span></li>
+        </ul></div>
+      </article>
+
+      <!-- mux -->
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.59</span></div>
+        <h3>Never two flits in a row from one stack</h3>
+        <p class="rule">With Multi_Protocol_Enable, the Adapter never sends consecutive flits from the same stack: not from FDI, not from the retry buffer, not when restarting after a pause. It may insert NOP flits to keep the rule.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The mode exists so two stacks each designed for half the link rate can share a fast link. Their receive paths can absorb consecutive <em>chunks</em> of one flit at full speed, but not consecutive flits. The rule guarantees each receiver at most half the flit rate.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Two CXL stacks each sized for 32 GT/s CXL SERDES bandwidth share a UCIe link that carries twice that. Only stack 0 is busy: the link sends S0, NOP, S0, NOP… and stack 0 still gets its full designed rate.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A replay of five stack-0 flits sent back to back overruns stack 0's receiver, which was never built to accept them at link rate.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>The rule, NOP insertion, replay case, no fixed pattern <span class="ref">§3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Motivation: CXL 68B at 32 GT/s SERDES bandwidth <span class="ref">§3.1 Implementation Note, p.59</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.59–60</span></div>
+        <h3>NOP flits: zeros that never enter the retry buffer</h3>
+        <p class="rule">A NOP flit has the Adapter's Protocol ID (00b) in its header and an all-zero body. It may bypass the Tx Retry buffer, and the receiving Adapter never forwards it to a Protocol Layer.</p>
+        <div class="part"><span class="l l-why">Why</span><p>NOPs carry no data, so there is nothing to replay. Keeping them out of the retry buffer saves space and lets the Adapter insert them freely, even during a replay.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A replay of #20–#24 (all stack 0) becomes #20, NOP, #21, NOP, … The NOPs are generated on the fly, not stored.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Storing NOPs in the retry buffer and giving them sequence numbers wastes buffer space and may push MAX_UNACKNOWLEDGED_FLITS to its limit.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>NOP definition and handling <span class="ref">§3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Protocol ID 00b <span class="ref">Table 3-5, p.80</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.60</span></div>
+        <h3>Enhanced mode: receivers advertise a limit, round robin if both are unlimited</h3>
+        <p class="rule">With Enhanced Multi_Protocol_Enable, each Adapter advertises per stack whether its receiver takes 100% or only 50% of the link. The transmitter must support both. If both stacks may use 100%, arbitration is per flit and round robin.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Different protocols on the two stacks may have very different receive capacity. Advertising a per-stack limit lets a fast stack use the full link while a slow stack is protected. Round robin stops one busy stack from starving the other.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Stack 0 PCIe (full-rate receiver), stack 1 Streaming (receiver limited to 50%). Stack 0 can send back-to-back flits; stack 1 flits are always separated by another flit or a NOP.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A fixed-priority arbiter favouring stack 0 starves stack 1 under load, violating the round-robin requirement.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>100%/50%, round robin, per flit <span class="ref">§3.1, p.60</span></li>
+          <li><span class="kind spec">Spec</span>Stack 0/1 Maximum Bandwidth_Limit bits <span class="ref">Table 3-1, p.65</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.59</span></div>
+        <h3>Multiplexing and Raw Format are mutually exclusive</h3>
+        <p class="rule">Neither Multi_Protocol_Enable nor Enhanced Multi_Protocol_Enable can be used with Raw Format.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Demultiplexing relies on the stack ID bit in the flit header, and Raw Format has no header. It also has no NOP flit, so the alternation rule could not be kept.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A design with two Streaming stacks that wants Raw Format must give each its own UCIe link.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Advertising both is a configuration error; the negotiated combination is invalid.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Mutual exclusion <span class="ref">§3.1, p.59–60</span></li>
+          <li><span class="kind derived">Derived</span>The reason (no header, no NOP)</li>
+        </ul></div>
+      </article>
+
+      <!-- pm -->
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>States &amp; PM</span><span>§3.6 p.90–91</span></div>
+        <h3>PM entry top-down: vLSM, Adapter LSM, RDI</h3>
+        <p class="rule">For CXL, both vLSMs reach PM via ALMPs first, then the retry buffer must be empty, then the Adapter LSM negotiates PM on sideband, and only when all Adapter LSMs are in PM does RDI go to PM.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Each layer must be idle before the layer below can turn off. ALMPs ride through the retry buffer, so the buffer must be drained (all ALMPs acknowledged) before the mainband is allowed to stop.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>CXL.io idles first, CXL.cachemem 3 µs later. Only when both vLSMs report L1 and the last ALMP is acked does the Adapter send <code>{LinkMgmt.Adapter0.Req.L1}</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Entering Adapter-LSM PM with an unacknowledged ALMP in the retry buffer: the replay timer fires after the PHY has powered down.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Four-step sequence; sideband stays active <span class="ref">§3.6, p.90–91 · Figure 3-28, p.91</span></li>
+          <li><span class="kind spec">Spec</span>CXL 68B over UCIe uses 256B ALMP formats and flows <span class="ref">§3.6, p.90–91</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>States &amp; PM</span><span>§3.5 p.89–90 · Table 7-8</span></div>
+        <h3>Adapter LSMs never negotiate Retrain or LinkError</h3>
+        <p class="rule">There are no <code>{LinkMgmt.Adapter*}</code> messages for Retrain or LinkError. RDI goes to Retrain or LinkError first and pushes it up to the Adapter LSMs. LinkReset and Disabled go the other way: negotiated per Adapter LSM, and pushed down to RDI only when every stack is there.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Retrain and LinkError are about the physical link, shared by both stacks, so the PHY owns them. LinkReset and Disabled are about one protocol's reset semantics, so they belong to that stack and must not disturb the other.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Stack 0 (PCIe) hot-resets: its Adapter LSM goes to LinkReset via <code>{LinkMgmt.Adapter0.Req.LinkReset}</code>. Stack 1 keeps running. A framing error then retrains RDI, and both Adapter LSMs that are Active see Retrain.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that takes RDI to LinkReset for one stack's hot reset drops the other stack's traffic.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Hierarchy rules <span class="ref">§3.5, p.89–90</span></li>
+          <li><span class="kind spec">Spec</span>Adapter0/1 message list <span class="ref">Table 7-8, p.276–277</span></li>
+        </ul></div>
+      </article>
+
+      <!-- parity -->
+      <article class="wcard" data-g="par">
+        <div class="meta"><span>Runtime parity</span><span>§3.9 p.95 · §4.1.1 p.98</span></div>
+        <h3>The 64N stride makes it per-lane parity</h3>
+        <p class="rule">Parity byte X covers data bytes X, X+64N, X+128N, … over a 256·256·N-byte window. With N = 4 that is 256 parity bytes per 256 KiB of data, each covering 1,024 data bytes.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Bytes are striped across lanes, and on a x64 module byte k of each 64B transfer goes to the same lane every time. Because the stride is a multiple of 64, all bytes covered by one parity bit travelled on the same lane. A parity error therefore points at a lane, which is exactly what you want when deciding whether to repair or degrade.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>N = 4 at 128 GB/s: 256B of parity every 262,144B, an insert every 2.05 µs and 0.098% overhead. Repeated parity errors at byte positions X ≡ 17 (mod 64) implicate lane 17.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Counting parity bytes themselves as data, or not counting NOPs and PDS padding, puts the receiver's window out of step with the transmitter's; every check fails.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Insert rate, N = 4, parity formula, what counts <span class="ref">§3.9, p.95–96</span></li>
+          <li><span class="kind spec">Spec</span>Byte-to-lane mapping <span class="ref">§4.1.1, p.98</span></li>
+          <li><span class="kind derived">Derived</span>Per-lane property, 1,024 bytes per parity bit, 2.05 µs, 0.098%</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="par">
+        <div class="meta"><span>Runtime parity</span><span>§3.9 p.95–96</span></div>
+        <h3>Enable in Retrain, with an explicit Ack</h3>
+        <p class="rule">Parity is enabled per direction and takes effect only after a Retrain. During Retrain (or L1) the sending Adapter sends <code>{ParityFeature.Req}</code>; the receiver Acks or Naks. The requester must not exit Retrain or L1 on RDI until it has the answer.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receiver may need to switch to a slower data path to strip and check parity bytes. If the transmitter started inserting before the receiver was ready, parity bytes would be decoded as flits. The spec says the explicit handshake exists to give both sides time to switch.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software enables Tx on Die 1 and Rx on Die 0, then sets the Retrain bit. In Retrain, Die 1 sends ParityFeature.Req; Die 0 answers Ack; Die 1 only then gives the NOP→Active edge on RDI.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A requester that exits Retrain before the Ack: Die 0's Rx path is still in normal mode when parity bytes arrive.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Negotiation, ordering, logging, timeout <span class="ref">§3.9, p.95–96 · Figures 3-30, 3-31</span></li>
+          <li><span class="kind spec">Spec</span>NOP→Active edge lets the Adapter wait <span class="ref">§10.3.3.4 note, p.567</span></li>
+        </ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>

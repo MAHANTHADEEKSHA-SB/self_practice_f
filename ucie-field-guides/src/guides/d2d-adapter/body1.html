@@ -1,0 +1,398 @@
+<header class="top">
+  <div class="wrap hero">
+    <!-- @nav -->
+    <div class="eyebrow">UCIe 3.0 · Chapter 3 · Die-to-Die Adapter</div>
+    <h1>UCIe D2D Adapter Field Guide</h1>
+    <p class="lede">The Die-to-Die Adapter sits between the protocol stacks (on FDI) and the Physical Layer (on RDI). It makes the link reliable (CRC and Retry), shares it between two protocol stacks, manages link states with the remote Adapter, and negotiates protocol and flit format at bring-up. This guide covers each of those jobs, the byte layout of every flit format, the rules and why they exist, flit-level scenarios, and how to verify it.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw sq" style="background:var(--lp)"></i>bytes / signals from the Protocol Layer</span>
+      <span><i class="sw sq" style="background:var(--pl)"></i>bytes inserted or owned by the Adapter</span>
+      <span><i class="sw sq" style="background:var(--sb)"></i>sideband messages</span>
+      <span><i class="sw sq" style="background:var(--line)"></i>reserved or zero</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Facts are tagged <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span> (arithmetic or a direct consequence of spec rules), <span class="kind illus">Illustrative</span> (example numbers) or <span class="kind bg">Background</span> (general knowledge, not from the UCIe spec).</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why it exists</a>
+    <a href="#where">2 · Where it sits</a>
+    <a href="#negotiate">3 · Parameter exchange</a>
+    <a href="#formats">4 · Flit formats</a>
+    <a href="#crc">5 · CRC and Retry</a>
+    <a href="#mux">6 · Stack mux</a>
+    <a href="#pm">7 · States and PM</a>
+    <a href="#parity">8 · Runtime parity</a>
+    <a href="#msgs">9 · Sideband messages</a>
+    <a href="#rationale">10 · Why each rule</a>
+    <a href="#live">11 · Live scenarios</a>
+    <a href="#silicon">12 · Real silicon</a>
+    <a href="#verify">13 · Verification</a>
+    <a href="#quiz">14 · Test yourself</a>
+    <a href="#refs">15 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- 1. WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why the Adapter exists</h2>
+    <p class="sub">The spec gives the Adapter four jobs. Every rule in Chapter 3 serves one of them.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Reliability</div>
+        <h3>CRC on every flit, Retry when needed</h3>
+        <p>Above 8 GT/s (Standard Package) or 12 GT/s (Advanced Package) the raw bit error rate is 1e-15 or worse, so bit errors will happen in normal operation. The Adapter adds a 16-bit CRC to every flit and, when negotiated, a Retry scheme based on PCIe Flit Mode so that errors are corrected without the Protocol Layer noticing.</p>
+        <p class="src"><span class="sl">Spec</span>§3.0, p.58 · §3.7, p.92 · §3.8, p.93 · Tables 1-1 and 1-2, p.40</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Sharing</div>
+        <h3>Two protocol stacks, one link</h3>
+        <p>A UCIe link can be faster than one protocol stack needs. The Adapter can multiplex two stacks over it, tagging each flit with a stack ID and keeping a separate link state machine for each stack.</p>
+        <p class="src"><span class="sl">Spec</span>§3.1, p.59–60 · Figure 3-2, p.61</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Link state management</div>
+        <h3>One Adapter LSM per stack</h3>
+        <p>Each stack's Adapter LSM agrees Active, L1/L2, LinkReset and Disabled with the remote Adapter over sideband. It sits between the RDI state machine below and, for CXL, the ARB/MUX vLSMs above.</p>
+        <p class="src"><span class="sl">Spec</span>§3.5, p.89–90 · §3.6, p.90–91</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Negotiation</div>
+        <h3>Agree protocol and flit format at bring-up</h3>
+        <p>In Stage 3 of link initialization the two Adapters exchange capability messages and settle on protocol (PCIe, CXL, Streaming, Management Transport), flit format, Retry and stack configuration. The result is fixed until the PHY goes back to Reset.</p>
+        <p class="src"><span class="sl">Spec</span>§3.2.1, p.62–70 · §3.4, p.85</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. WHERE -->
+<section id="where">
+  <div class="wrap">
+    <h2>2 · Where it sits and what's inside</h2>
+    <p class="sub">FDI above (one per stack), RDI below (one per link). Transmit flows down the left, receive flows up the right.</p>
+    <div class="twocol">
+      <figure>
+        <svg viewBox="0 0 560 420" role="img" aria-label="Adapter datapath: FDI from one or two Protocol Layers into a stack arbiter, then header and DLP insertion, CRC, Tx Retry buffer, parity insertion and RDI. Receive side: RDI into PDS and alignment, CRC check and Ack/Nak, parity check, demux by stack ID, and FDI with flit cancel. Sideband messages for parameter exchange and Adapter LSM.">
+          <defs><marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g style="color:var(--ink)" font-family="var(--font-body)" font-size="12">
+            <rect x="20" y="8" width="150" height="34" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="95" y="29" text-anchor="middle" fill="var(--lp)">Protocol Layer, stack 0</text>
+            <rect x="190" y="8" width="150" height="34" rx="6" fill="var(--surface)" stroke="var(--lp)" stroke-dasharray="4 3"/><text x="265" y="29" text-anchor="middle" fill="var(--lp)">Protocol Layer, stack 1</text>
+            <text x="356" y="29" fill="var(--muted)" font-size="11">FDI × 1–2</text>
+            <rect x="20" y="58" width="520" height="300" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="30" y="76" font-weight="600" font-size="13">Die-to-Die Adapter</text>
+            <text x="150" y="96" text-anchor="middle" fill="var(--muted)" font-size="11">Transmit</text>
+            <text x="400" y="96" text-anchor="middle" fill="var(--muted)" font-size="11">Receive</text>
+            <g fill="var(--bg)" stroke="var(--line)">
+              <rect x="50" y="104" width="200" height="30" rx="5"/><rect x="50" y="144" width="200" height="30" rx="5"/><rect x="50" y="184" width="200" height="30" rx="5"/><rect x="50" y="224" width="200" height="30" rx="5"/><rect x="50" y="264" width="200" height="30" rx="5"/>
+              <rect x="300" y="104" width="200" height="30" rx="5"/><rect x="300" y="144" width="200" height="30" rx="5"/><rect x="300" y="184" width="200" height="30" rx="5"/><rect x="300" y="224" width="200" height="30" rx="5"/><rect x="300" y="264" width="200" height="30" rx="5"/>
+            </g>
+            <text x="150" y="124" text-anchor="middle">Stack arbiter + NOP insert</text>
+            <text x="150" y="164" text-anchor="middle" fill="var(--pl)">Flit Header, DLP2–5</text>
+            <text x="150" y="204" text-anchor="middle" fill="var(--pl)">CRC (2B per 128B)</text>
+            <text x="150" y="244" text-anchor="middle" fill="var(--pl)">Tx Retry buffer (shared)</text>
+            <text x="150" y="284" text-anchor="middle">68B shift + PDS · parity insert</text>
+            <text x="400" y="124" text-anchor="middle">Demux by stack ID · pl_flit_cancel</text>
+            <text x="400" y="164" text-anchor="middle">Strip header, extract DLLPs</text>
+            <text x="400" y="204" text-anchor="middle" fill="var(--pl)">CRC check → Ack / Nak</text>
+            <text x="400" y="244" text-anchor="middle">Sequence number check</text>
+            <text x="400" y="284" text-anchor="middle">68B align · PDS detect · parity check</text>
+            <g stroke="currentColor" stroke-width="1.1">
+              <line x1="150" y1="44" x2="150" y2="102" marker-end="url(#a1)"/><line x1="150" y1="134" x2="150" y2="142" marker-end="url(#a1)"/><line x1="150" y1="174" x2="150" y2="182" marker-end="url(#a1)"/><line x1="150" y1="214" x2="150" y2="222" marker-end="url(#a1)"/><line x1="150" y1="254" x2="150" y2="262" marker-end="url(#a1)"/><line x1="150" y1="294" x2="150" y2="372" marker-end="url(#a1)"/>
+              <line x1="400" y1="372" x2="400" y2="296" marker-end="url(#a1)"/><line x1="400" y1="262" x2="400" y2="256" marker-end="url(#a1)"/><line x1="400" y1="222" x2="400" y2="216" marker-end="url(#a1)"/><line x1="400" y1="182" x2="400" y2="176" marker-end="url(#a1)"/><line x1="400" y1="142" x2="400" y2="136" marker-end="url(#a1)"/><line x1="400" y1="102" x2="400" y2="46" marker-end="url(#a1)"/>
+            </g>
+            <path d="M300,204 C275,204 275,244 252,244" fill="none" stroke="var(--pl)" stroke-dasharray="4 3" marker-end="url(#a1)"/>
+            <text x="276" y="238" text-anchor="middle" fill="var(--pl)" font-size="10">Ack/Nak</text>
+            <rect x="50" y="306" width="450" height="40" rx="5" fill="none" stroke="var(--sb)" stroke-dasharray="4 3"/>
+            <text x="275" y="322" text-anchor="middle" fill="var(--sb)" font-size="11.5">Link state management + parameter negotiation (sideband via lp_cfg/pl_cfg)</text>
+            <text x="275" y="338" text-anchor="middle" fill="var(--sb)" font-size="11">{AdvCap/FinCap.*} · {LinkMgmt.Adapter0/1.*} · {ParityFeature.*} · {ErrMsg}</text>
+            <rect x="20" y="374" width="520" height="34" rx="6" fill="var(--hl)" stroke="var(--pl)"/>
+            <text x="280" y="395" text-anchor="middle" font-weight="600">RDI → Physical Layer (one per link)</text>
+          </g>
+        </svg>
+        <figcaption>Block placement is a typical implementation; the spec defines the functions, not the pipeline order. The Tx Retry buffer is shared by both stacks; NOP flits bypass it.<span class="ref">Spec: Figure 3-1, p.58 · §3.1, p.59 · §3.3, p.71–84 · §3.8, p.93 · §3.9, p.95</span></figcaption>
+      </figure>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <div class="tagline">Configurations (Figure 3-2)</div>
+          <ul class="tight" style="font-size:15px">
+            <li><strong>(a)</strong> One protocol stack: PCIe or Streaming.</li>
+            <li><strong>(b)</strong> One CXL stack: CXL.io and CXL.cachemem joined by an ARB/MUX inside the Adapter.</li>
+            <li><strong>(c)</strong> Two identical CXL stacks multiplexed (Multi_Protocol_Enable).</li>
+            <li><strong>(d)</strong> Two stacks, possibly different protocols (Enhanced Multi_Protocol_Enable).</li>
+          </ul>
+          <p class="src"><span class="sl">Spec</span>Figure 3-2, p.61 · §3.1, p.59–60</p>
+        </div>
+        <div class="card">
+          <div class="tagline">Where the Adapter is "upper" and "lower"</div>
+          <p style="font-size:15px">On FDI the Adapter is the <em>lower</em> layer: it drives <code>pl_*</code>, answers state requests and stalls the Protocol Layer. On RDI it is the <em>upper</em> layer: it drives <code>lp_*</code> and requests states from the PHY. Many Adapter bugs come from mixing those two roles up.</p>
+          <p class="src"><span class="sl">Spec</span>§10.3, p.559</p>
+        </div>
+        <div class="card">
+          <div class="tagline">What the Adapter does not do</div>
+          <p style="font-size:15px">It does not decode TLPs or CXL messages, train lanes, or pick the link speed. Speed is negotiated by the PHY in Stage 2 (MBINIT.PARAM); the Adapter only reads the result on <code>pl_max_speedmode</code>.</p>
+          <p class="src"><span class="sl">Spec</span>Table 3-1 note, p.63 · Table 10-1, p.525</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. NEGOTIATION -->
+<section id="negotiate">
+  <div class="wrap">
+    <h2>3 · Stage 3: parameter exchange</h2>
+    <p class="sub">Starts when RDI reaches Active, ends when FDI reaches Active. Three parts: determine local capabilities, exchange them with the remote Adapter, bring up FDI.</p>
+    <div class="twocol">
+      <div class="flow">
+        <div><span class="n">1</span><p><strong>Local capabilities.</strong> Read PHY results (<code>pl_max_speedmode</code>, <code>pl_lnk_cfg</code>), decide whether Retry is needed, gather Link Control register settings. A Retimer also works out its receive-buffer credits (256B each).</p></div>
+        <div><span class="n">2</span><p><strong>DP advertises.</strong> For PCIe or CXL, the Downstream Port sends <code class="sbc">{AdvCap.Adapter}</code> first.</p></div>
+        <div><span class="n">3</span><p><strong>UP answers.</strong> The Upstream Port waits for it, reviews it, may adjust its own bits, then sends its <code class="sbc">{AdvCap.Adapter}</code>.</p></div>
+        <div><span class="n">4</span><p><strong>DP finalizes.</strong> DP sends <code class="sbc">{FinCap.Adapter}</code> with the agreed bits.</p></div>
+        <div><span class="n">5</span><p><strong>CXL details.</strong> If 68B Flit Mode or CXL 256B Flit Mode is set in FinCap.Adapter, a second round of <code class="sbc">{AdvCap.CXL}</code> and DP's <code class="sbc">{FinCap.CXL}</code> picks CXL vs PCIe and the CXL options.</p></div>
+        <div><span class="n">6</span><p><strong>FDI bring-up.</strong> The Adapter reports protocol and flit format on FDI, raises <code>pl_inband_pres</code>, and runs the FDI Active handshake per stack. Then the Sequence Number Handshake.</p></div>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Streaming and Management Transport are simpler</h3>
+          <p style="font-size:15px">No DP/UP roles and no <code>{FinCap.*}</code>: each side sends its own <code>{AdvCap.Adapter}</code>, and the result is the logical AND of what was sent and received. Vendor-defined messages may negotiate extensions.</p>
+          <p class="src"><span class="sl">Spec</span>§3.2.1.2, p.66–67 · §3.4, p.87</p>
+        </div>
+        <div class="card">
+          <h3>Two different protocols (Enhanced Multi-Protocol)</h3>
+          <p style="font-size:15px">Stack 0 is negotiated with <code>{AdvCap/FinCap.Adapter}</code>; Stack 1 with <code>{MultiProtAdvCap/MultiProtFinCap.Adapter}</code>, with the same DP-first rule. CXL details for Stack 1 use <code>{*.CXL}</code> with MsgInfo 0001h.</p>
+          <p class="src"><span class="sl">Spec</span>§3.2.1.2, p.67</p>
+        </div>
+        <div class="card" style="border-left:4px solid var(--bad)">
+          <h3>Timeout: 8 ms (−0% / +50%)</h3>
+          <p style="font-size:15px">Covers Parts 1 and 2. Counts only while RDI is Active. Resets on any <code>*.Stall</code> message. Expiry is an Uncorrectable Internal Error and the Adapter takes RDI to LinkError. A Retimer resolving with its far partner sends a Stall every 4 ms.</p>
+          <p class="src"><span class="sl">Spec</span>§3.2.1.2, p.70</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 8px">{AdvCap.Adapter} capability bits (64-bit data payload)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Bit</th><th>Capability</th><th>Advertise when</th><th>Final value</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">0</td><td>Raw Format</td><td>Link Control register bit set; required for plain Streaming without Flit Format capability</td><td>Both advertise</td></tr>
+          <tr><td class="mono">1</td><td>68B Flit Mode</td><td>CXL 68B or PCIe Non-Flit supported; mandatory for CXL/PCIe if max rate ≤ 32 GT/s; must be 0 above 32 GT/s</td><td>Both advertise</td></tr>
+          <tr><td class="mono">2–4</td><td>CXL 256B Flit Mode · PCIe Flit Mode · Streaming</td><td>Protocol supported by Adapter and Protocol Layer; Streaming excludes PCIe/CXL on that stack</td><td>Both advertise</td></tr>
+          <tr><td class="mono">5</td><td>Retry</td><td>Adapter supports Retry; link cannot run without it if Retry is needed (except Raw)</td><td>Both advertise and not Raw</td></tr>
+          <tr><td class="mono">6–8</td><td>Multi_Protocol_Enable · Stack0_Enable · Stack1_Enable</td><td>Two FDIs, same protocol, firmware chose this mode; both stack bits set</td><td>Lowest common denominator; Stack 0 if one stack</td></tr>
+          <tr><td class="mono">9–10</td><td>CXL_LatOpt_Fmt5 · Fmt6</td><td>CXL 256B mode with Latency-Optimized format support</td><td>Both advertise</td></tr>
+          <tr><td class="mono">11, 20:12</td><td>Retimer · Retimer_Credits</td><td>Retimer Adapter talking to its in-package die; 9-bit credit count, 256B each</td><td>—</td></tr>
+          <tr><td class="mono">21–22</td><td>DP · UP</td><td>Port role (PCIe/CXL); 0 if Retimer</td><td>—</td></tr>
+          <tr><td class="mono">23–27</td><td>68B · Std End Hdr · Std Start Hdr · LatOpt w/o · LatOpt with optional bytes Flit Format</td><td>Enhanced Multi-Protocol or Streaming Flit Format capability (and PCIe extras for 25, 27)</td><td>Truth Table 2</td></tr>
+          <tr><td class="mono">28–30</td><td>Enhanced_Multi_Protocol_Enable · Stack 0/1 Maximum Bandwidth_Limit</td><td>Two FDIs that share a flit format; limit bit = receiver takes ≤ 50%</td><td>Both advertise</td></tr>
+          <tr><td class="mono">31</td><td>Management Transport Protocol</td><td>Protocol Layer and Adapter support it</td><td>Both advertise</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>Table 3-1, p.63–65 · bit positions from the {AdvCap.Adapter} encoding, p.283 · final values §3.2.1.2, p.65–67</p>
+  </div>
+</section>
+
+<!-- 4. FORMATS -->
+<section id="formats">
+  <div class="wrap">
+    <h2>4 · Flit formats: who owns which byte</h2>
+    <p class="sub">Six formats. In every format except Raw, the Protocol Layer leaves header and CRC bytes at 0 and the Adapter fills them. Each bar below is one 64-byte row as it crosses a 64B FDI/RDI.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Header</th><th>CRC</th><th>Used by</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1</td><td>Raw</td><td>none</td><td>none</td><td>Mandatory for Streaming; optional for others. No Retry.</td></tr>
+          <tr><td class="mono">2</td><td>68B Flit</td><td>2B prefix</td><td>2B suffix over 66B</td><td>Mandatory for CXL 68B and PCIe Non-Flit when max rate ≤ 32 GT/s; not supported above</td></tr>
+          <tr><td class="mono">3</td><td>Standard 256B End Header</td><td>bytes 236–237</td><td>CRC0 over 0–127, CRC1 over 128–241</td><td>Mandatory for PCIe Flit Mode</td></tr>
+          <tr><td class="mono">4</td><td>Standard 256B Start Header</td><td>bytes 0–1</td><td>same as Format 3</td><td>Mandatory for CXL 256B; optional for PCIe</td></tr>
+          <tr><td class="mono">5</td><td>Latency-Optimized 256B, no optional bytes</td><td>bytes 0–1</td><td>CRC0 over 0–125 (in 126–127), CRC1 over 128–253 (in 254–255)</td><td>Optional</td></tr>
+          <tr><td class="mono">6</td><td>Latency-Optimized 256B with optional bytes</td><td>bytes 0–1</td><td>same as Format 5</td><td>Strongly recommended for CXL 256B and PCIe (if capable)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>Table 3-6, p.84 · Table 3-7, p.85 · §3.3.3, p.76 · §3.3.4, p.80–81</p>
+
+    <div class="chips" role="group" aria-label="Pick a format to draw" id="fmtchips" style="margin-top:16px"></div>
+    <figure>
+      <div id="fmtmap"></div>
+      <figcaption id="fmtcap"></figcaption>
+    </figure>
+
+    <h3 style="margin:26px 0 8px">Flit Header with Retry (Formats 3–6)</h3>
+    <div class="bitfield" aria-label="Flit header byte 0">
+      <div><span class="bn">B0 [7:6]</span><span class="f lp">Protocol ID</span><span class="bn">00 NOP · 01 io/PCIe · 10 cachemem · 11 ARB/MUX</span></div>
+      <div><span class="bn">B0 [5]</span><span class="f pl">Stack ID</span></div>
+      <div><span class="bn">B0 [4]</span><span class="f lp">DLP2–5 holds Opt_Update_FC / Flit_Marker</span></div>
+      <div><span class="bn">B0 [3:0]</span><span class="f pl">S[7:4]</span></div>
+    </div>
+    <div class="bitfield" style="margin-top:8px" aria-label="Flit header byte 1">
+      <div><span class="bn">B1 [7:6]</span><span class="f lp">Flit Type</span><span class="bn">00 protocol/NOP · 01 Test · 10 Mgmt</span></div>
+      <div><span class="bn">B1 [5:4]</span><span class="f pl">Ack/Nak</span><span class="bn">00 explicit S · 01 Ack · 10 Nak</span></div>
+      <div><span class="bn">B1 [3:0]</span><span class="f pl">S[3:0]</span></div>
+    </div>
+    <p class="note-s" style="margin-top:8px">Amber fields are populated by the Protocol Layer; teal fields by the Adapter. A Nak carries S = N−1 for Nak'ed flit N (255 if N = 1). Sequence number 0 is reserved and means "no Ack or Nak". For Streaming, Protocol ID 00b is reserved for Adapter NOPs; the Protocol Layer must never send 00b. In Format 2 with Retry, Byte 1 [7:6] = 11b marks a PDS header.<span class="ref" style="display:block">Spec: Table 3-5, p.80–81 · Table 3-3, p.72 · §3.3.3, p.76</span></p>
+
+    <h3 style="margin:26px 0 8px">Which format gets picked</h3>
+    <p class="note-s" style="margin:0 0 10px">Tick the bits that ended up set (FinCap.Adapter, or the AND of sent and received AdvCap.Adapter for Truth Table 2). The resolver applies the spec's truth tables.</p>
+    <div class="twocol">
+      <div class="card">
+        <div class="chips" role="group" id="ttsel"></div>
+        <div id="ttbits" style="display:grid;gap:6px;font-size:14px"></div>
+      </div>
+      <div class="card">
+        <div class="tagline">Result</div>
+        <h3 id="ttout"></h3>
+        <p id="ttwhy" style="font-size:15px"></p>
+        <p class="src" id="ttsrc"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. CRC & RETRY -->
+<section id="crc">
+  <div class="wrap">
+    <h2>5 · CRC and Retry</h2>
+    <p class="sub">One CRC definition for every format; one Retry scheme borrowed from PCIe Flit Mode and simplified for a short, clean link.</p>
+    <div class="twocol">
+      <div class="card">
+        <div class="tagline">CRC-16, always over 128 bytes</div>
+        <ul class="tight" style="font-size:15px">
+          <li>Polynomial (x+1)(x<sup>15</sup>+x+1) = x<sup>16</sup>+x<sup>15</sup>+x<sup>2</sup>+1. Guaranteed to detect any 3 random bit errors.</li>
+          <li>Message is always 128B; shorter messages are zero-extended at the MSB end. Reserved bits count as 0.</li>
+          <li>Initial value 0000h. Bit 0 of byte 0 first.</li>
+          <li>Adapter-inserted bytes (header, DLP) are included with the values that will go on the link.</li>
+          <li><code>crc_gen.vs</code>, attached to the spec PDF, is the golden reference.</li>
+          <li>CRC is sent even when Retry is not negotiated; then a CRC error should be treated as an Uncorrectable Internal Error.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§3.7, p.92 · §3.3.2, p.71 · §3.3.3, p.76</p>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Retry rule</th><th>PCIe Flit Mode</th><th>UCIe</th></tr></thead>
+          <tbody>
+            <tr><td>Sequence number width</td><td>10 bits (1023)</td><td>8 bits (255)</td></tr>
+            <tr><td>Selective Nak, Rx retry buffer</td><td>Yes</td><td>Not allowed</td></tr>
+            <tr><td>Explicit-seq flits in a row</td><td>3</td><td>Alternate with Ack/Nak flits</td></tr>
+            <tr><td>Replay timeout</td><td>Timer-based</td><td>9-bit flit count ≥ 375, also counts idle Flit Times</td></tr>
+            <tr><td>MAX_UNACKNOWLEDGED_FLITS</td><td>—</td><td>min(retry buffer, 127)</td></tr>
+            <tr><td>IDLE Flit Handshake</td><td>Yes</td><td>No; init in RDI Reset/Retrain</td></tr>
+            <tr><td>Sequence Number Handshake</td><td>On link up</td><td>Every FDI Active entry; 128-flit timeout → Retrain</td></tr>
+            <tr><td>NAK_WITHDRAWAL_ALLOWED</td><td>—</td><td>Always 0</td></tr>
+            <tr><td>Bad seq in Ack/Nak, explicit S = 0</td><td>Data Link Protocol Error</td><td>Uncorrectable Internal Error</td></tr>
+            <tr><td>"Go to Recovery"</td><td>LTSSM Recovery</td><td>Adapter requests Retrain on RDI</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>§3.8, p.93–94. PCIe column is background from PCIe Base Specification, as referenced by §3.8.</p>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>When is Retry required?</strong> Whenever the raw BER is worse than 1e-27, unless Raw Format is the only format. Both package tables list 1e-27 only at the lowest speeds (Standard ≤ 8 GT/s, Advanced ≤ 12 GT/s), so in practice Retry is needed above those. A PHY whose Adapter has no Retry must not advertise those speeds. Once negotiated, Retry stays on until the next link initialization, even if the speed degrades. The Tx Retry buffer is shared by both stacks.</p>
+      <p class="src"><span class="sl">Spec</span>§3.8, p.93 · Tables 1-1 and 1-2, p.40</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6. STACK MUX -->
+<section id="mux">
+  <div class="wrap">
+    <h2>6 · Stack multiplexing</h2>
+    <p class="sub">Two ways to put two stacks on one link. Both use a 1-bit stack ID in every flit header and one Adapter LSM per stack.</p>
+    <div class="tbl-wrap diff">
+      <table>
+        <thead><tr><th></th><th>Multi_Protocol_Enable</th><th>Enhanced Multi_Protocol_Enable</th></tr></thead>
+        <tbody>
+          <tr><td>Protocols</td><td>Same protocol, same capabilities, same flit format</td><td>Same or different, with one common flit format</td></tr>
+          <tr><td>Bandwidth per stack</td><td>Each stack ≤ half the link</td><td>Each receiver advertises 100% or 50%</td></tr>
+          <tr><td>Rule on the wire</td><td>Never two consecutive flits from one stack</td><td>Same rule only for a stack whose receiver advertised 50%</td></tr>
+          <tr><td>Arbitration</td><td>Per flit; any pattern that obeys the rule</td><td>Per flit; round robin required when both may use 100%</td></tr>
+          <tr><td>Filler</td><td colspan="2">NOP flits (Protocol ID 00b, all-zero body), bypass the Tx Retry buffer, not forwarded by the receiver; also needed during replay</td></tr>
+          <tr><td>Raw Format</td><td colspan="2">Mutually exclusive with both</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>§3.1, p.59–60 · Table 3-1, p.63–65</p>
+  </div>
+</section>
+
+<!-- 7. PM -->
+<section id="pm">
+  <div class="wrap">
+    <h2>7 · Link states and power management</h2>
+    <p class="sub">The Adapter LSM uses the same state set and request/status contract as FDI. PM is entered top-down and exited bottom-up.</p>
+    <div class="twocol">
+      <div class="flow">
+        <div><span class="n">1</span><p><strong>Protocol Layer asks</strong> on FDI, based on its own idle-time algorithm. CXL vLSMs negotiate PM with ALMPs on mainband, through the Retry buffer. PCIe in UCIe Flit Mode does not use PM DLLPs.</p></div>
+        <div><span class="n">2</span><p><strong>Adapter LSM</strong> negotiates PM with the remote Adapter on sideband, once the vLSMs (if CXL) are in PM and the Retry buffer is empty. Each stack does this independently.</p></div>
+        <div><span class="n">3</span><p><strong>RDI</strong>: when every Adapter LSM is in PM, the Adapter requests PM on RDI.</p></div>
+        <div><span class="n">4</span><p><strong>PHY</strong> goes to a deeper power state. The sideband stays on: PM exit starts there.</p></div>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Exit is the reverse</h3>
+          <p style="font-size:15px">Active request travels down FDI and RDI; the PHY wakes and retrains via sideband; RDI goes Active on both dies; Adapter LSMs exit PM via sideband; for CXL, ALMPs then bring the vLSMs to Active.</p>
+          <p class="src"><span class="sl">Spec</span>§3.6, p.91</p>
+        </div>
+        <div class="card">
+          <h3>Protocols that don't want PM</h3>
+          <p style="font-size:15px">PM is mandatory for PCIe and CXL. Other protocols may disable it by always answering a remote PM request with PMNAK. The PHY may map L1 and L2 to one internal state.</p>
+          <p class="src"><span class="sl">Spec</span>§3.6, p.90</p>
+        </div>
+        <div class="card">
+          <h3>Adapter LSM messages</h3>
+          <p style="font-size:15px"><code>{LinkMgmt.Adapter0/1.Req/Rsp.*}</code> cover Active, L1, L2, LinkReset and Disable (plus Rsp.PMNAK). There is no Adapter-level Retrain or LinkError message: those states always come up from RDI.</p>
+          <p class="src"><span class="sl">Spec</span>Table 7-8, p.276–277 · §3.5, p.89–90</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. PARITY -->
+<section id="parity">
+  <div class="wrap">
+    <h2>8 · Runtime Link Testing with parity</h2>
+    <p class="sub">An optional way to measure link health while traffic runs: the Adapter periodically inserts parity bytes that the receiver checks and logs.</p>
+    <div class="twocol">
+      <div class="card">
+        <ul class="tight" style="font-size:15px">
+          <li>Insert <strong>64·N bytes</strong> after every <strong>256·256·N bytes</strong> of data. N comes from "Number of 64 Byte Inserts". Software must use N = 4 in Flit mode, so inserts are 256B.</li>
+          <li>Only bit 0 of each inserted byte carries parity: parity byte X = XOR of all bits of data bytes X, X+64N, X+128N, … within the window. Bits 7:1 are reserved.</li>
+          <li>All transmitted bytes count, including NOP flits and, for 68B, PDS headers and padding. Parity bytes themselves do not count.</li>
+          <li>Counters reset on leaving Active; enabling must be renegotiated before the next Active.</li>
+          <li>Enabled per direction (Tx Enable at the sender, Rx Enable at the receiver), and takes effect only after a Retrain.</li>
+          <li>Retimers neither buffer nor forward parity bytes; parity checks only the local UCIe link.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§3.9, p.95–96</p>
+      </div>
+      <div class="flow">
+        <div><span class="n">1</span><p>Software sets Tx Enable (sender) and Rx Enable (receiver), then triggers a Retrain.</p></div>
+        <div><span class="n">2</span><p>While Adapter LSMs and RDI are in Retrain (or L1), the sender's Adapter sends <code class="sbc">{ParityFeature.Req}</code>.</p></div>
+        <div><span class="n">3</span><p>Receiver answers <code class="sbc">{ParityFeature.Ack}</code> if enabled and ready, otherwise <code class="sbc">{ParityFeature.Nak}</code> (logged by the requester).</p></div>
+        <div><span class="n">4</span><p>The requester must not request Retrain or L1 exit on RDI until the answer arrives. A responder-only Adapter must not delay the exit.</p></div>
+        <div><span class="n">5</span><p>Back in Active, counting starts at 0 on both sides.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9. MESSAGES -->
+<section id="msgs">
+  <div class="wrap">
+    <h2>9 · Sideband messages the Adapter sends and receives</h2>
+    <p class="sub">These travel through <code>lp_cfg</code>/<code>pl_cfg</code> on RDI and the PHY's sideband. Msgcode/MsgSubcode from Table 7-8 where the message carries no data.</p>
+    <div class="chips" role="group" aria-label="Filter messages" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Message</th><th>Sent by</th><th>Kind</th><th>Purpose</th><th>Notes</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,201 @@
+
+<!-- 11. LIVE -->
+<section id="live">
+  <div class="wrap">
+    <h2>11 · Live scenarios</h2>
+    <p class="sub">Each column is one step or one flit slot (2 ns on an x64 16 GT/s link), as the scenario says. Step through; shaded columns are the ones the step describes.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar">
+          <button class="btn" id="prev" type="button">← Previous</button>
+          <button class="btn primary" id="next" type="button">Next →</button>
+          <div class="dots" id="dots" aria-label="Steps"></div>
+          <span class="cycles" id="cyc"></span>
+        </div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px">Sequence numbers, slot positions and latencies are illustrative. The spec fixes ordering, encodings and limits, not exact slot timing.</p>
+  </div>
+</section>
+
+<!-- 12. SILICON -->
+<section id="silicon">
+  <div class="wrap">
+    <h2>12 · Real silicon: what the theory turns into</h2>
+    <p class="sub">Sizing numbers and design consequences that follow from Chapter 3.</p>
+    <div class="twocol">
+      <div>
+        <h3 style="margin-bottom:8px">Flit Time and the replay timeout</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Link</th><th class="num">Flit Time (256B)</th><th class="num">375 Flit Times</th><th class="num">128-flit SNH limit</th></tr></thead>
+            <tbody>
+              <tr><td>x16 Standard, 16 GT/s</td><td class="num">8 ns</td><td class="num">3.0 µs</td><td class="num">1.02 µs</td></tr>
+              <tr><td>x16 Standard, 32 GT/s</td><td class="num">4 ns</td><td class="num">1.5 µs</td><td class="num">512 ns</td></tr>
+              <tr><td>x64 Advanced, 16 GT/s</td><td class="num">2 ns</td><td class="num">750 ns</td><td class="num">256 ns</td></tr>
+              <tr><td>x64 Advanced, 32 GT/s</td><td class="num">1 ns</td><td class="num">375 ns</td><td class="num">128 ns</td></tr>
+              <tr><td>x64 Advanced, 64 GT/s</td><td class="num">0.5 ns</td><td class="num">188 ns</td><td class="num">64 ns</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:14px;color:var(--muted)">Flit Time = 2048 bits ÷ (lanes × rate). Replay threshold ≥ 375 and the 128-flit Sequence Number Handshake limit are from §3.8, p.93–94; the times are derived.</p>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="callout">
+          <p><strong>Retry buffer ceiling.</strong> MAX_UNACKNOWLEDGED_FLITS is at most 127, so a buffer bigger than 127 flits buys nothing: 127 × 256B = 32,512 bytes for 256B formats, 127 × 68B = 8,636 bytes for 68B. Real designs size for the Ack round trip instead (next card).</p>
+          <p class="src"><span class="sl">Spec</span>§3.8, p.94 · byte counts derived</p>
+        </div>
+        <div class="callout" style="border-left-color:var(--lp)">
+          <p><strong>Sizing for the round trip.</strong> Buffer flits ≥ (Ack round-trip time ÷ Flit Time) + margin. With a 40 ns round trip at 2 ns per flit that is about 20 flits, 5 KB. Alternating Ack flits keep the round trip short, which is the reason for the rule.</p>
+          <p class="src"><span class="sl">Derived</span>The 40 ns round trip is illustrative</p>
+        </div>
+        <div class="callout" style="border-left-color:var(--sb)">
+          <p><strong>Expected replay rate.</strong> 1.024 Tb/s at BER 1e-15 gives about one bit error every 16 minutes per direction; at 64 GT/s with BER 1e-12 it is about 4 per second. Retry is a real, frequently used path at the top speeds, not just a corner case.</p>
+          <p class="src"><span class="sl">Derived</span>From Tables 1-1 and 1-2, p.40</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+        <tbody>
+          <tr><td>Link drops to LinkError at boot, only with a Retimer</td><td>Retimer stalls less often than every 4 ms, or the host timer runs while RDI is not Active.</td><td class="ref">§3.2.1.2, p.70</td></tr>
+          <tr><td>Both sides Active but nothing decodes</td><td>Format resolved by local preference instead of Truth Table 1/2; or UP finalised its own config.</td><td class="ref">Tables 3-9 and 3-10, p.88 · §3.2.1.2, p.65</td></tr>
+          <tr><td>Every flit fails CRC</td><td>CRC computed before the Adapter wrote the header or DLP bytes; reserved bits not zero; wrong bit order. Compare against <code>crc_gen.vs</code>.</td><td class="ref">§3.7, p.92</td></tr>
+          <tr><td>CRC errors after every replay (68B)</td><td>No PDS before the replay, so the replayed flit is not 256B-aligned.</td><td class="ref">§3.3.2.1, p.73</td></tr>
+          <tr><td>Retry buffer never drains on an idle link</td><td>REPLAY_TIMEOUT_FLIT_COUNT counts only transmitted flits, not idle Flit Times.</td><td class="ref">§3.8, p.93</td></tr>
+          <tr><td>Credit counts drift after replays (PCIe/CXL.io)</td><td>DLLPs stored in the retry buffer and replayed with old values.</td><td class="ref">§3.3.3, p.76</td></tr>
+          <tr><td>Stack receiver overruns after a replay</td><td>Replay path skipped NOP insertion in Multi_Protocol_Enable mode.</td><td class="ref">§3.1, p.59</td></tr>
+          <tr><td>Retrain loop after L1 exit</td><td>Sequence Number Handshake skipped on FDI Active re-entry.</td><td class="ref">§3.8, p.94</td></tr>
+          <tr><td>Parity errors on every window</td><td>Parity bytes counted as data, or NOP/PDS bytes excluded; counters not reset on leaving Active.</td><td class="ref">§3.9, p.95–96</td></tr>
+          <tr><td>One stack's hot reset kills the other stack</td><td>Adapter forwarded a single stack's LinkReset to RDI.</td><td class="ref">§3.5, p.90 · §10.3.3.8, p.569</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 13. VERIFY -->
+<section id="verify">
+  <div class="wrap">
+    <h2>13 · Verification</h2>
+    <p class="sub">An Adapter testbench needs an FDI agent per stack (Protocol Layer side), an RDI agent (PHY side), a sideband message model, and a reference model for flit packing, CRC and Retry. Use <code>crc_gen.vs</code> as the CRC reference.</p>
+    <div class="twocol">
+      <div class="card">
+        <h3>Checkers</h3>
+        <ul class="tight">
+          <li>Parameter exchange order: DP AdvCap → UP AdvCap → DP FinCap (→ CXL round); UP never sends FinCap. <span class="ref">§3.2.1.2, p.65</span></li>
+          <li>Negotiated format matches Truth Table 1 or 2 for the bits exchanged. <span class="ref">Tables 3-9, 3-10, p.88</span></li>
+          <li>No 68B Flit Mode advertised when <code>pl_max_speedmode</code> = 1. <span class="ref">Table 3-1, p.63</span></li>
+          <li>Every transmitted flit's CRC matches the reference over the final bytes. <span class="ref">§3.7, p.92</span></li>
+          <li>Header: alternation of explicit S and Ack/Nak; S ≠ 0 on payload; Nak S = N−1. <span class="ref">§3.8, p.93 · Table 3-5</span></li>
+          <li>Unacknowledged flits ≤ min(buffer, 127). <span class="ref">§3.8, p.94</span></li>
+          <li>Multi_Protocol_Enable: no two consecutive same-stack flits, including replay. <span class="ref">§3.1, p.59</span></li>
+          <li>NOP flits: Protocol ID 00b, zero body, never forwarded on FDI. <span class="ref">§3.1, p.59</span></li>
+          <li>68B: transfers in 256B multiples; PDS padding rules; replay starts 256B-aligned. <span class="ref">§3.3.2.1, p.73</span></li>
+          <li>Adapter LSM PM request only with empty retry buffer and (CXL) both vLSMs in PM. <span class="ref">§3.6, p.90–91</span></li>
+          <li>Parity: 64N bytes after each 256·256·N data bytes; correct bit 0. <span class="ref">§3.9, p.95</span></li>
+        </ul>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Scenarios that find real bugs</h3>
+          <ul class="tight">
+            <li>CRC error on CRC1 of a Latency-Optimized flit after half 0 was consumed. <span class="ref">§3.3.4 · §10.2.5</span></li>
+            <li>Corrupt the last Ack before idle; check replay at 375 Flit Times. <span class="ref">§3.8, p.93–94</span></li>
+            <li>PDS header with 1, 2 and 3 bit errors, Retry on and off. <span class="ref">§3.3.2.1, p.73–74</span></li>
+            <li>Retimer partner stalling every 4 ms for 50 ms; then stalling every 9 ms. <span class="ref">§3.2.1.2, p.70</span></li>
+            <li>Nak during replay; Nak for the first replayed flit; Nak with sequence wrap 255→1. <span class="ref">§3.8</span></li>
+            <li>Stack 0 LinkReset while stack 1 streams; then PM on stack 1 only (virtual L2 on stack 0). <span class="ref">§3.5 · §10.3.3.8</span></li>
+            <li>Speed degrade at runtime: Retry stays on, format unchanged. <span class="ref">§3.4 · §3.8</span></li>
+            <li>Parity enabled on one direction only; parity Nak; parity across L1 exit. <span class="ref">§3.9</span></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Coverage</h3>
+          <ul class="tight">
+            <li>Every row of Truth Tables 1 and 2, plus "no valid format".</li>
+            <li>Each flit type × Ack/Nak encoding × Protocol ID × stack ID.</li>
+            <li>68B stream lengths 1…4 flits before PDS (each padding case).</li>
+            <li>Retry: error in each 64B chunk of a flit, in header vs payload vs CRC bytes.</li>
+            <li>Stack mux: each arbitration pattern, both bandwidth-limit settings.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14. QUIZ -->
+<section id="quiz">
+  <div class="wrap">
+    <h2>14 · Test yourself</h2>
+    <p class="sub">Interview-style questions, basic to advanced. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>Name the four jobs of the D2D Adapter. <span class="lvl">Basic</span></summary><div><p>Reliable data transfer (CRC and Retry, or parity), arbitration and multiplexing of protocol stacks, link state management, and protocol/parameter negotiation with the remote partner.</p><p class="src"><span class="sl">Spec</span>§3.0, p.58</p></div></details>
+    <details><summary>In Format 2, what does the Adapter add to the Protocol Layer's 64 bytes? <span class="lvl">Basic</span></summary><div><p>A 2-byte Flit Header in front and a 2-byte CRC behind, computed over the header and payload (66 bytes, zero-extended to 128). Then it shifts the result across the RDI bus, since each flit is 4 bytes longer than 64.</p><p class="src"><span class="sl">Spec</span>§3.3.2, p.71 · §3.3.2.1, p.73</p></div></details>
+    <details><summary>Which format is mandatory for PCIe Flit Mode, and which for CXL 256B Flit Mode? <span class="lvl">Basic</span></summary><div><p>PCIe Flit Mode: Format 3, Standard 256B End Header. CXL 256B Flit Mode: Format 4, Standard 256B Start Header. Format 6 is strongly recommended for both (for PCIe, if the capability is supported).</p><p class="src"><span class="sl">Spec</span>Table 3-7, p.85</p></div></details>
+    <details><summary>Who sends {FinCap.Adapter}, and why not both sides? <span class="lvl">Intermediate</span></summary><div><p>Only the Downstream Port, after the Upstream Port has replied to its advertisement. One decider means both dies always end up with the same configuration. For Streaming there is no FinCap at all; each side ANDs what it sent and received.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.65–67</p></div></details>
+    <details><summary>Why does UCIe alternate explicit-sequence flits with Ack/Nak flits? <span class="lvl">Intermediate</span></summary><div><p>To return Acks faster, which shortens how long flits stay in the retry buffer and lets it be smaller. Consecutive explicit-sequence flits are allowed only when no Ack/Nak is pending.</p><p class="src"><span class="sl">Spec</span>§3.8, p.93</p></div></details>
+    <details><summary>Why does REPLAY_TIMEOUT_FLIT_COUNT also count idle Flit Times? <span class="lvl">Intermediate</span></summary><div><p>Because UCIe lets a transmitter stop sending NOP flits when idle, to save power. A count of transmitted flits would freeze, and an unacknowledged flit would never be replayed. Counting idle Flit Times keeps the counter tied to time; replay is scheduled at ≥ 375.</p><p class="src"><span class="sl">Spec</span>§3.8, p.93</p></div></details>
+    <details><summary>What is a PDS and when must the Adapter send one? <span class="lvl">Intermediate</span></summary><div><p>Pause of Data Stream, in 68B format: a special 2-byte header followed by zeros to the next 64B boundary, two more zero 64B chunks, and zeros up to a 256B multiple. Sent before pausing an idle stream (unless sending continuous NOPs instead), before replaying, and before acking a stall for Retrain.</p><p class="src"><span class="sl">Spec</span>§3.3.2.1, p.73</p></div></details>
+    <details><summary>With Multi_Protocol_Enable, only stack 0 has traffic. What does the link carry? <span class="lvl">Advanced</span></summary><div><p>Stack-0 flits separated by NOP flits (or stack-1 flits when there are any): never two stack-0 flits in a row. NOPs bypass the retry buffer and are dropped by the receiving Adapter. The same applies during replay.</p><p class="src"><span class="sl">Spec</span>§3.1, p.59</p></div></details>
+    <details><summary>Why is there no {LinkMgmt.Adapter0.Req.Retrain}? <span class="lvl">Advanced</span></summary><div><p>Retrain (and LinkError) concern the shared physical link, so they start at RDI and are pushed up to every Active Adapter LSM. The Adapter asks for a retrain by requesting Retrain on RDI. LinkReset and Disabled, by contrast, are per stack and are negotiated per Adapter LSM.</p><p class="src"><span class="sl">Spec</span>§3.5, p.89–90 · Table 7-8 · §10.3.3.4</p></div></details>
+    <details><summary>Why does runtime parity use a stride of 64·N bytes? <span class="lvl">Advanced</span></summary><div><p>Every byte covered by one parity bit travels on the same lane, because byte k of each 64B transfer always goes to lane k on a x64 module. So parity errors point to a specific lane. (This is a consequence of §3.9 and §4.1.1, not stated as a reason in the spec.)</p><p class="src"><span class="sl">Derived</span>§3.9, p.95 · §4.1.1, p.98</p></div></details>
+    <details><summary>A Latency-Optimized flit passes CRC0 and fails CRC1. What happens? <span class="lvl">Advanced</span></summary><div><p>Half 0 may already have been forwarded and consumed. Half 1 is cancelled on FDI and a Nak triggers replay of the whole flit. When the replay arrives, the receiver must not consume half 0 a second time; the FDI cancel rules cover this.</p><p class="src"><span class="sl">Spec</span>§3.3.4, p.81 · §10.2.5, p.551</p></div></details>
+    <details><summary>The link degrades from 32 GT/s to 12 GT/s at runtime. Can Retry be turned off? Can the format change? <span class="lvl">Advanced</span></summary><div><p>No to both. Retry stays enabled until the next link initialization (RDI to Reset), and protocol and flit format are fixed until the PHY goes to Reset.</p><p class="src"><span class="sl">Spec</span>§3.8, p.93 · §3.4, p.85</p></div></details>
+  </div>
+</section>
+
+<!-- 15. SPEC INDEX -->
+<section id="refs">
+  <div class="wrap">
+    <h2>15 · Spec reference index</h2>
+    <p class="sub">Every section, table and figure this page cites, from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025).</p>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>Tables 1-1, 1-2</td><td>Characteristics of UCIe on Standard / Advanced Package (BER)</td><td class="num">40</td><td>1, 5, 10, 12</td></tr>
+          <tr><td>§3.0, Figure 3-1</td><td>Die-to-Die Adapter; Functionalities in the Adapter</td><td class="num">58</td><td>1, 2, 14</td></tr>
+          <tr><td>§3.1, Figure 3-2</td><td>Stack Multiplexing; Example Configurations</td><td class="num">59–61</td><td>1, 2, 6, 10, 11, 13, 14</td></tr>
+          <tr><td>§3.2, §3.2.1, Figure 3-3</td><td>Link Initialization; Stage 3</td><td class="num">62</td><td>1, 3</td></tr>
+          <tr><td>§3.2.1.2, Table 3-1, Figures 3-4 to 3-9</td><td>Parameter Exchange with Remote Link Partner</td><td class="num">63–70</td><td>3, 10, 11, 12, 13, 14</td></tr>
+          <tr><td>§3.2.1.3</td><td>Part 3: FDI bring up</td><td class="num">70</td><td>3, 11</td></tr>
+          <tr><td>§3.3.1</td><td>Raw Format for All Protocols</td><td class="num">71</td><td>4</td></tr>
+          <tr><td>§3.3.2, Tables 3-2 and 3-3</td><td>68B Flit Format; Flit Header for Format 2</td><td class="num">71–72</td><td>4, 5, 10, 14</td></tr>
+          <tr><td>§3.3.2.1, Figures 3-11 to 3-13</td><td>68B Flit Format Alignment and Padding Rules</td><td class="num">73–75</td><td>4, 10, 12, 13, 14</td></tr>
+          <tr><td>§3.3.3, Figures 3-14 to 3-19</td><td>Standard 256B Flit Formats</td><td class="num">75–79</td><td>4, 5, 10, 12</td></tr>
+          <tr><td>§3.3.4, Table 3-5, Figures 3-20 to 3-26</td><td>Latency-Optimized 256B Flit Formats; Flit Header for Formats 3–6</td><td class="num">80–84</td><td>4, 10, 13, 14</td></tr>
+          <tr><td>§3.3.5, Tables 3-6 and 3-7</td><td>Summary of Flit Formats; Protocol Mapping and Requirements</td><td class="num">84–85</td><td>4, 14</td></tr>
+          <tr><td>§3.4, Tables 3-8 to 3-10</td><td>Decision Table for Flit Format and Protocol; Truth Tables 1 and 2</td><td class="num">85–88</td><td>4, 10, 12, 13, 14</td></tr>
+          <tr><td>§3.5, Figure 3-27</td><td>State Machine Hierarchy</td><td class="num">89–90</td><td>1, 7, 10, 14</td></tr>
+          <tr><td>§3.6, Figure 3-28</td><td>Power Management Link States; Hierarchical PM Entry for CXL</td><td class="num">90–91</td><td>7, 10, 11, 13</td></tr>
+          <tr><td>§3.7, Figure 3-29</td><td>CRC Computation</td><td class="num">92</td><td>5, 10, 12, 13</td></tr>
+          <tr><td>§3.8</td><td>Retry Rules</td><td class="num">93–94</td><td>5, 10, 11, 12, 13, 14</td></tr>
+          <tr><td>§3.9, Figures 3-30, 3-31</td><td>Runtime Link Testing using Parity</td><td class="num">95–96</td><td>8, 10, 12, 13, 14</td></tr>
+          <tr><td>§4.1.1</td><td>Byte to Lane Mapping</td><td class="num">98</td><td>10, 14</td></tr>
+          <tr><td>Table 7-8</td><td>Message Encodings for Messages without Data</td><td class="num">275–277</td><td>7, 9, 10</td></tr>
+          <tr><td>{AdvCap.Adapter}, {FinCap.Adapter}, {AdvCap.CXL}, {FinCap.CXL} encodings</td><td>Messages with data (Chapter 7)</td><td class="num">283–284</td><td>3, 9</td></tr>
+          <tr><td>Table 9-42</td><td>Finalized CXL Capability Log Register (DP sends, UP receives)</td><td class="num">—</td><td>3, 10</td></tr>
+          <tr><td>§10.2.5, §10.2.8</td><td>pl_flit_cancel timing; FDI Bring up flow</td><td class="num">551–555</td><td>10, 11, 14</td></tr>
+          <tr><td>§10.3.3.4, §10.3.3.8</td><td>Retrain State Rules; Common State Rules</td><td class="num">566–570</td><td>10, 12, 13</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>What is not from the spec.</strong> <span class="kind derived">Derived</span> items are arithmetic on spec values. <span class="kind illus">Illustrative</span> items (round-trip times, sequence numbers, slot positions) are examples. <span class="kind bg">Background</span> items refer to PCIe and CXL base specifications, which UCIe builds on but this page does not quote.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 3 Die-to-Die Adapter, with Chapters 1, 4.1, 7 and 10 for context. Section 15 lists every cited section, table and figure with its page.</div>
+</footer>

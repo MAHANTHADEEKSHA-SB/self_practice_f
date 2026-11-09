@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe D2D Adapter Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the UCIe field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="fdi.html">FDI</a><a href="rdi.html">RDI</a><span class="here">D2D Adapter</span></div>
+    <div class="eyebrow">UCIe 3.0 · Chapter 3 · Die-to-Die Adapter</div>
+    <h1>UCIe D2D Adapter Field Guide</h1>
+    <p class="lede">The Die-to-Die Adapter sits between the protocol stacks (on FDI) and the Physical Layer (on RDI). It makes the link reliable (CRC and Retry), shares it between two protocol stacks, manages link states with the remote Adapter, and negotiates protocol and flit format at bring-up. This guide covers each of those jobs, the byte layout of every flit format, the rules and why they exist, flit-level scenarios, and how to verify it.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw sq" style="background:var(--lp)"></i>bytes / signals from the Protocol Layer</span>
+      <span><i class="sw sq" style="background:var(--pl)"></i>bytes inserted or owned by the Adapter</span>
+      <span><i class="sw sq" style="background:var(--sb)"></i>sideband messages</span>
+      <span><i class="sw sq" style="background:var(--line)"></i>reserved or zero</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Facts are tagged <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span> (arithmetic or a direct consequence of spec rules), <span class="kind illus">Illustrative</span> (example numbers) or <span class="kind bg">Background</span> (general knowledge, not from the UCIe spec).</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why it exists</a>
+    <a href="#where">2 · Where it sits</a>
+    <a href="#negotiate">3 · Parameter exchange</a>
+    <a href="#formats">4 · Flit formats</a>
+    <a href="#crc">5 · CRC and Retry</a>
+    <a href="#mux">6 · Stack mux</a>
+    <a href="#pm">7 · States and PM</a>
+    <a href="#parity">8 · Runtime parity</a>
+    <a href="#msgs">9 · Sideband messages</a>
+    <a href="#rationale">10 · Why each rule</a>
+    <a href="#live">11 · Live scenarios</a>
+    <a href="#silicon">12 · Real silicon</a>
+    <a href="#verify">13 · Verification</a>
+    <a href="#quiz">14 · Test yourself</a>
+    <a href="#refs">15 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- 1. WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why the Adapter exists</h2>
+    <p class="sub">The spec gives the Adapter four jobs. Every rule in Chapter 3 serves one of them.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Reliability</div>
+        <h3>CRC on every flit, Retry when needed</h3>
+        <p>Above 8 GT/s (Standard Package) or 12 GT/s (Advanced Package) the raw bit error rate is 1e-15 or worse, so bit errors will happen in normal operation. The Adapter adds a 16-bit CRC to every flit and, when negotiated, a Retry scheme based on PCIe Flit Mode so that errors are corrected without the Protocol Layer noticing.</p>
+        <p class="src"><span class="sl">Spec</span>§3.0, p.58 · §3.7, p.92 · §3.8, p.93 · Tables 1-1 and 1-2, p.40</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Sharing</div>
+        <h3>Two protocol stacks, one link</h3>
+        <p>A UCIe link can be faster than one protocol stack needs. The Adapter can multiplex two stacks over it, tagging each flit with a stack ID and keeping a separate link state machine for each stack.</p>
+        <p class="src"><span class="sl">Spec</span>§3.1, p.59–60 · Figure 3-2, p.61</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Link state management</div>
+        <h3>One Adapter LSM per stack</h3>
+        <p>Each stack's Adapter LSM agrees Active, L1/L2, LinkReset and Disabled with the remote Adapter over sideband. It sits between the RDI state machine below and, for CXL, the ARB/MUX vLSMs above.</p>
+        <p class="src"><span class="sl">Spec</span>§3.5, p.89–90 · §3.6, p.90–91</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Negotiation</div>
+        <h3>Agree protocol and flit format at bring-up</h3>
+        <p>In Stage 3 of link initialization the two Adapters exchange capability messages and settle on protocol (PCIe, CXL, Streaming, Management Transport), flit format, Retry and stack configuration. The result is fixed until the PHY goes back to Reset.</p>
+        <p class="src"><span class="sl">Spec</span>§3.2.1, p.62–70 · §3.4, p.85</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. WHERE -->
+<section id="where">
+  <div class="wrap">
+    <h2>2 · Where it sits and what's inside</h2>
+    <p class="sub">FDI above (one per stack), RDI below (one per link). Transmit flows down the left, receive flows up the right.</p>
+    <div class="twocol">
+      <figure>
+        <svg viewBox="0 0 560 420" role="img" aria-label="Adapter datapath: FDI from one or two Protocol Layers into a stack arbiter, then header and DLP insertion, CRC, Tx Retry buffer, parity insertion and RDI. Receive side: RDI into PDS and alignment, CRC check and Ack/Nak, parity check, demux by stack ID, and FDI with flit cancel. Sideband messages for parameter exchange and Adapter LSM.">
+          <defs><marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g style="color:var(--ink)" font-family="var(--font-body)" font-size="12">
+            <rect x="20" y="8" width="150" height="34" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="95" y="29" text-anchor="middle" fill="var(--lp)">Protocol Layer, stack 0</text>
+            <rect x="190" y="8" width="150" height="34" rx="6" fill="var(--surface)" stroke="var(--lp)" stroke-dasharray="4 3"/><text x="265" y="29" text-anchor="middle" fill="var(--lp)">Protocol Layer, stack 1</text>
+            <text x="356" y="29" fill="var(--muted)" font-size="11">FDI × 1–2</text>
+            <rect x="20" y="58" width="520" height="300" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+            <text x="30" y="76" font-weight="600" font-size="13">Die-to-Die Adapter</text>
+            <text x="150" y="96" text-anchor="middle" fill="var(--muted)" font-size="11">Transmit</text>
+            <text x="400" y="96" text-anchor="middle" fill="var(--muted)" font-size="11">Receive</text>
+            <g fill="var(--bg)" stroke="var(--line)">
+              <rect x="50" y="104" width="200" height="30" rx="5"/><rect x="50" y="144" width="200" height="30" rx="5"/><rect x="50" y="184" width="200" height="30" rx="5"/><rect x="50" y="224" width="200" height="30" rx="5"/><rect x="50" y="264" width="200" height="30" rx="5"/>
+              <rect x="300" y="104" width="200" height="30" rx="5"/><rect x="300" y="144" width="200" height="30" rx="5"/><rect x="300" y="184" width="200" height="30" rx="5"/><rect x="300" y="224" width="200" height="30" rx="5"/><rect x="300" y="264" width="200" height="30" rx="5"/>
+            </g>
+            <text x="150" y="124" text-anchor="middle">Stack arbiter + NOP insert</text>
+            <text x="150" y="164" text-anchor="middle" fill="var(--pl)">Flit Header, DLP2–5</text>
+            <text x="150" y="204" text-anchor="middle" fill="var(--pl)">CRC (2B per 128B)</text>
+            <text x="150" y="244" text-anchor="middle" fill="var(--pl)">Tx Retry buffer (shared)</text>
+            <text x="150" y="284" text-anchor="middle">68B shift + PDS · parity insert</text>
+            <text x="400" y="124" text-anchor="middle">Demux by stack ID · pl_flit_cancel</text>
+            <text x="400" y="164" text-anchor="middle">Strip header, extract DLLPs</text>
+            <text x="400" y="204" text-anchor="middle" fill="var(--pl)">CRC check → Ack / Nak</text>
+            <text x="400" y="244" text-anchor="middle">Sequence number check</text>
+            <text x="400" y="284" text-anchor="middle">68B align · PDS detect · parity check</text>
+            <g stroke="currentColor" stroke-width="1.1">
+              <line x1="150" y1="44" x2="150" y2="102" marker-end="url(#a1)"/><line x1="150" y1="134" x2="150" y2="142" marker-end="url(#a1)"/><line x1="150" y1="174" x2="150" y2="182" marker-end="url(#a1)"/><line x1="150" y1="214" x2="150" y2="222" marker-end="url(#a1)"/><line x1="150" y1="254" x2="150" y2="262" marker-end="url(#a1)"/><line x1="150" y1="294" x2="150" y2="372" marker-end="url(#a1)"/>
+              <line x1="400" y1="372" x2="400" y2="296" marker-end="url(#a1)"/><line x1="400" y1="262" x2="400" y2="256" marker-end="url(#a1)"/><line x1="400" y1="222" x2="400" y2="216" marker-end="url(#a1)"/><line x1="400" y1="182" x2="400" y2="176" marker-end="url(#a1)"/><line x1="400" y1="142" x2="400" y2="136" marker-end="url(#a1)"/><line x1="400" y1="102" x2="400" y2="46" marker-end="url(#a1)"/>
+            </g>
+            <path d="M300,204 C275,204 275,244 252,244" fill="none" stroke="var(--pl)" stroke-dasharray="4 3" marker-end="url(#a1)"/>
+            <text x="276" y="238" text-anchor="middle" fill="var(--pl)" font-size="10">Ack/Nak</text>
+            <rect x="50" y="306" width="450" height="40" rx="5" fill="none" stroke="var(--sb)" stroke-dasharray="4 3"/>
+            <text x="275" y="322" text-anchor="middle" fill="var(--sb)" font-size="11.5">Link state management + parameter negotiation (sideband via lp_cfg/pl_cfg)</text>
+            <text x="275" y="338" text-anchor="middle" fill="var(--sb)" font-size="11">{AdvCap/FinCap.*} · {LinkMgmt.Adapter0/1.*} · {ParityFeature.*} · {ErrMsg}</text>
+            <rect x="20" y="374" width="520" height="34" rx="6" fill="var(--hl)" stroke="var(--pl)"/>
+            <text x="280" y="395" text-anchor="middle" font-weight="600">RDI → Physical Layer (one per link)</text>
+          </g>
+        </svg>
+        <figcaption>Block placement is a typical implementation; the spec defines the functions, not the pipeline order. The Tx Retry buffer is shared by both stacks; NOP flits bypass it.<span class="ref">Spec: Figure 3-1, p.58 · §3.1, p.59 · §3.3, p.71–84 · §3.8, p.93 · §3.9, p.95</span></figcaption>
+      </figure>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <div class="tagline">Configurations (Figure 3-2)</div>
+          <ul class="tight" style="font-size:15px">
+            <li><strong>(a)</strong> One protocol stack: PCIe or Streaming.</li>
+            <li><strong>(b)</strong> One CXL stack: CXL.io and CXL.cachemem joined by an ARB/MUX inside the Adapter.</li>
+            <li><strong>(c)</strong> Two identical CXL stacks multiplexed (Multi_Protocol_Enable).</li>
+            <li><strong>(d)</strong> Two stacks, possibly different protocols (Enhanced Multi_Protocol_Enable).</li>
+          </ul>
+          <p class="src"><span class="sl">Spec</span>Figure 3-2, p.61 · §3.1, p.59–60</p>
+        </div>
+        <div class="card">
+          <div class="tagline">Where the Adapter is "upper" and "lower"</div>
+          <p style="font-size:15px">On FDI the Adapter is the <em>lower</em> layer: it drives <code>pl_*</code>, answers state requests and stalls the Protocol Layer. On RDI it is the <em>upper</em> layer: it drives <code>lp_*</code> and requests states from the PHY. Many Adapter bugs come from mixing those two roles up.</p>
+          <p class="src"><span class="sl">Spec</span>§10.3, p.559</p>
+        </div>
+        <div class="card">
+          <div class="tagline">What the Adapter does not do</div>
+          <p style="font-size:15px">It does not decode TLPs or CXL messages, train lanes, or pick the link speed. Speed is negotiated by the PHY in Stage 2 (MBINIT.PARAM); the Adapter only reads the result on <code>pl_max_speedmode</code>.</p>
+          <p class="src"><span class="sl">Spec</span>Table 3-1 note, p.63 · Table 10-1, p.525</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. NEGOTIATION -->
+<section id="negotiate">
+  <div class="wrap">
+    <h2>3 · Stage 3: parameter exchange</h2>
+    <p class="sub">Starts when RDI reaches Active, ends when FDI reaches Active. Three parts: determine local capabilities, exchange them with the remote Adapter, bring up FDI.</p>
+    <div class="twocol">
+      <div class="flow">
+        <div><span class="n">1</span><p><strong>Local capabilities.</strong> Read PHY results (<code>pl_max_speedmode</code>, <code>pl_lnk_cfg</code>), decide whether Retry is needed, gather Link Control register settings. A Retimer also works out its receive-buffer credits (256B each).</p></div>
+        <div><span class="n">2</span><p><strong>DP advertises.</strong> For PCIe or CXL, the Downstream Port sends <code class="sbc">{AdvCap.Adapter}</code> first.</p></div>
+        <div><span class="n">3</span><p><strong>UP answers.</strong> The Upstream Port waits for it, reviews it, may adjust its own bits, then sends its <code class="sbc">{AdvCap.Adapter}</code>.</p></div>
+        <div><span class="n">4</span><p><strong>DP finalizes.</strong> DP sends <code class="sbc">{FinCap.Adapter}</code> with the agreed bits.</p></div>
+        <div><span class="n">5</span><p><strong>CXL details.</strong> If 68B Flit Mode or CXL 256B Flit Mode is set in FinCap.Adapter, a second round of <code class="sbc">{AdvCap.CXL}</code> and DP's <code class="sbc">{FinCap.CXL}</code> picks CXL vs PCIe and the CXL options.</p></div>
+        <div><span class="n">6</span><p><strong>FDI bring-up.</strong> The Adapter reports protocol and flit format on FDI, raises <code>pl_inband_pres</code>, and runs the FDI Active handshake per stack. Then the Sequence Number Handshake.</p></div>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Streaming and Management Transport are simpler</h3>
+          <p style="font-size:15px">No DP/UP roles and no <code>{FinCap.*}</code>: each side sends its own <code>{AdvCap.Adapter}</code>, and the result is the logical AND of what was sent and received. Vendor-defined messages may negotiate extensions.</p>
+          <p class="src"><span class="sl">Spec</span>§3.2.1.2, p.66–67 · §3.4, p.87</p>
+        </div>
+        <div class="card">
+          <h3>Two different protocols (Enhanced Multi-Protocol)</h3>
+          <p style="font-size:15px">Stack 0 is negotiated with <code>{AdvCap/FinCap.Adapter}</code>; Stack 1 with <code>{MultiProtAdvCap/MultiProtFinCap.Adapter}</code>, with the same DP-first rule. CXL details for Stack 1 use <code>{*.CXL}</code> with MsgInfo 0001h.</p>
+          <p class="src"><span class="sl">Spec</span>§3.2.1.2, p.67</p>
+        </div>
+        <div class="card" style="border-left:4px solid var(--bad)">
+          <h3>Timeout: 8 ms (−0% / +50%)</h3>
+          <p style="font-size:15px">Covers Parts 1 and 2. Counts only while RDI is Active. Resets on any <code>*.Stall</code> message. Expiry is an Uncorrectable Internal Error and the Adapter takes RDI to LinkError. A Retimer resolving with its far partner sends a Stall every 4 ms.</p>
+          <p class="src"><span class="sl">Spec</span>§3.2.1.2, p.70</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 8px">{AdvCap.Adapter} capability bits (64-bit data payload)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Bit</th><th>Capability</th><th>Advertise when</th><th>Final value</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">0</td><td>Raw Format</td><td>Link Control register bit set; required for plain Streaming without Flit Format capability</td><td>Both advertise</td></tr>
+          <tr><td class="mono">1</td><td>68B Flit Mode</td><td>CXL 68B or PCIe Non-Flit supported; mandatory for CXL/PCIe if max rate ≤ 32 GT/s; must be 0 above 32 GT/s</td><td>Both advertise</td></tr>
+          <tr><td class="mono">2–4</td><td>CXL 256B Flit Mode · PCIe Flit Mode · Streaming</td><td>Protocol supported by Adapter and Protocol Layer; Streaming excludes PCIe/CXL on that stack</td><td>Both advertise</td></tr>
+          <tr><td class="mono">5</td><td>Retry</td><td>Adapter supports Retry; link cannot run without it if Retry is needed (except Raw)</td><td>Both advertise and not Raw</td></tr>
+          <tr><td class="mono">6–8</td><td>Multi_Protocol_Enable · Stack0_Enable · Stack1_Enable</td><td>Two FDIs, same protocol, firmware chose this mode; both stack bits set</td><td>Lowest common denominator; Stack 0 if one stack</td></tr>
+          <tr><td class="mono">9–10</td><td>CXL_LatOpt_Fmt5 · Fmt6</td><td>CXL 256B mode with Latency-Optimized format support</td><td>Both advertise</td></tr>
+          <tr><td class="mono">11, 20:12</td><td>Retimer · Retimer_Credits</td><td>Retimer Adapter talking to its in-package die; 9-bit credit count, 256B each</td><td>—</td></tr>
+          <tr><td class="mono">21–22</td><td>DP · UP</td><td>Port role (PCIe/CXL); 0 if Retimer</td><td>—</td></tr>
+          <tr><td class="mono">23–27</td><td>68B · Std End Hdr · Std Start Hdr · LatOpt w/o · LatOpt with optional bytes Flit Format</td><td>Enhanced Multi-Protocol or Streaming Flit Format capability (and PCIe extras for 25, 27)</td><td>Truth Table 2</td></tr>
+          <tr><td class="mono">28–30</td><td>Enhanced_Multi_Protocol_Enable · Stack 0/1 Maximum Bandwidth_Limit</td><td>Two FDIs that share a flit format; limit bit = receiver takes ≤ 50%</td><td>Both advertise</td></tr>
+          <tr><td class="mono">31</td><td>Management Transport Protocol</td><td>Protocol Layer and Adapter support it</td><td>Both advertise</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>Table 3-1, p.63–65 · bit positions from the {AdvCap.Adapter} encoding, p.283 · final values §3.2.1.2, p.65–67</p>
+  </div>
+</section>
+
+<!-- 4. FORMATS -->
+<section id="formats">
+  <div class="wrap">
+    <h2>4 · Flit formats: who owns which byte</h2>
+    <p class="sub">Six formats. In every format except Raw, the Protocol Layer leaves header and CRC bytes at 0 and the Adapter fills them. Each bar below is one 64-byte row as it crosses a 64B FDI/RDI.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Name</th><th>Header</th><th>CRC</th><th>Used by</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1</td><td>Raw</td><td>none</td><td>none</td><td>Mandatory for Streaming; optional for others. No Retry.</td></tr>
+          <tr><td class="mono">2</td><td>68B Flit</td><td>2B prefix</td><td>2B suffix over 66B</td><td>Mandatory for CXL 68B and PCIe Non-Flit when max rate ≤ 32 GT/s; not supported above</td></tr>
+          <tr><td class="mono">3</td><td>Standard 256B End Header</td><td>bytes 236–237</td><td>CRC0 over 0–127, CRC1 over 128–241</td><td>Mandatory for PCIe Flit Mode</td></tr>
+          <tr><td class="mono">4</td><td>Standard 256B Start Header</td><td>bytes 0–1</td><td>same as Format 3</td><td>Mandatory for CXL 256B; optional for PCIe</td></tr>
+          <tr><td class="mono">5</td><td>Latency-Optimized 256B, no optional bytes</td><td>bytes 0–1</td><td>CRC0 over 0–125 (in 126–127), CRC1 over 128–253 (in 254–255)</td><td>Optional</td></tr>
+          <tr><td class="mono">6</td><td>Latency-Optimized 256B with optional bytes</td><td>bytes 0–1</td><td>same as Format 5</td><td>Strongly recommended for CXL 256B and PCIe (if capable)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>Table 3-6, p.84 · Table 3-7, p.85 · §3.3.3, p.76 · §3.3.4, p.80–81</p>
+
+    <div class="chips" role="group" aria-label="Pick a format to draw" id="fmtchips" style="margin-top:16px"></div>
+    <figure>
+      <div id="fmtmap"></div>
+      <figcaption id="fmtcap"></figcaption>
+    </figure>
+
+    <h3 style="margin:26px 0 8px">Flit Header with Retry (Formats 3–6)</h3>
+    <div class="bitfield" aria-label="Flit header byte 0">
+      <div><span class="bn">B0 [7:6]</span><span class="f lp">Protocol ID</span><span class="bn">00 NOP · 01 io/PCIe · 10 cachemem · 11 ARB/MUX</span></div>
+      <div><span class="bn">B0 [5]</span><span class="f pl">Stack ID</span></div>
+      <div><span class="bn">B0 [4]</span><span class="f lp">DLP2–5 holds Opt_Update_FC / Flit_Marker</span></div>
+      <div><span class="bn">B0 [3:0]</span><span class="f pl">S[7:4]</span></div>
+    </div>
+    <div class="bitfield" style="margin-top:8px" aria-label="Flit header byte 1">
+      <div><span class="bn">B1 [7:6]</span><span class="f lp">Flit Type</span><span class="bn">00 protocol/NOP · 01 Test · 10 Mgmt</span></div>
+      <div><span class="bn">B1 [5:4]</span><span class="f pl">Ack/Nak</span><span class="bn">00 explicit S · 01 Ack · 10 Nak</span></div>
+      <div><span class="bn">B1 [3:0]</span><span class="f pl">S[3:0]</span></div>
+    </div>
+    <p class="note-s" style="margin-top:8px">Amber fields are populated by the Protocol Layer; teal fields by the Adapter. A Nak carries S = N−1 for Nak'ed flit N (255 if N = 1). Sequence number 0 is reserved and means "no Ack or Nak". For Streaming, Protocol ID 00b is reserved for Adapter NOPs; the Protocol Layer must never send 00b. In Format 2 with Retry, Byte 1 [7:6] = 11b marks a PDS header.<span class="ref" style="display:block">Spec: Table 3-5, p.80–81 · Table 3-3, p.72 · §3.3.3, p.76</span></p>
+
+    <h3 style="margin:26px 0 8px">Which format gets picked</h3>
+    <p class="note-s" style="margin:0 0 10px">Tick the bits that ended up set (FinCap.Adapter, or the AND of sent and received AdvCap.Adapter for Truth Table 2). The resolver applies the spec's truth tables.</p>
+    <div class="twocol">
+      <div class="card">
+        <div class="chips" role="group" id="ttsel"></div>
+        <div id="ttbits" style="display:grid;gap:6px;font-size:14px"></div>
+      </div>
+      <div class="card">
+        <div class="tagline">Result</div>
+        <h3 id="ttout"></h3>
+        <p id="ttwhy" style="font-size:15px"></p>
+        <p class="src" id="ttsrc"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. CRC & RETRY -->
+<section id="crc">
+  <div class="wrap">
+    <h2>5 · CRC and Retry</h2>
+    <p class="sub">One CRC definition for every format; one Retry scheme borrowed from PCIe Flit Mode and simplified for a short, clean link.</p>
+    <div class="twocol">
+      <div class="card">
+        <div class="tagline">CRC-16, always over 128 bytes</div>
+        <ul class="tight" style="font-size:15px">
+          <li>Polynomial (x+1)(x<sup>15</sup>+x+1) = x<sup>16</sup>+x<sup>15</sup>+x<sup>2</sup>+1. Guaranteed to detect any 3 random bit errors.</li>
+          <li>Message is always 128B; shorter messages are zero-extended at the MSB end. Reserved bits count as 0.</li>
+          <li>Initial value 0000h. Bit 0 of byte 0 first.</li>
+          <li>Adapter-inserted bytes (header, DLP) are included with the values that will go on the link.</li>
+          <li><code>crc_gen.vs</code>, attached to the spec PDF, is the golden reference.</li>
+          <li>CRC is sent even when Retry is not negotiated; then a CRC error should be treated as an Uncorrectable Internal Error.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§3.7, p.92 · §3.3.2, p.71 · §3.3.3, p.76</p>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Retry rule</th><th>PCIe Flit Mode</th><th>UCIe</th></tr></thead>
+          <tbody>
+            <tr><td>Sequence number width</td><td>10 bits (1023)</td><td>8 bits (255)</td></tr>
+            <tr><td>Selective Nak, Rx retry buffer</td><td>Yes</td><td>Not allowed</td></tr>
+            <tr><td>Explicit-seq flits in a row</td><td>3</td><td>Alternate with Ack/Nak flits</td></tr>
+            <tr><td>Replay timeout</td><td>Timer-based</td><td>9-bit flit count ≥ 375, also counts idle Flit Times</td></tr>
+            <tr><td>MAX_UNACKNOWLEDGED_FLITS</td><td>—</td><td>min(retry buffer, 127)</td></tr>
+            <tr><td>IDLE Flit Handshake</td><td>Yes</td><td>No; init in RDI Reset/Retrain</td></tr>
+            <tr><td>Sequence Number Handshake</td><td>On link up</td><td>Every FDI Active entry; 128-flit timeout → Retrain</td></tr>
+            <tr><td>NAK_WITHDRAWAL_ALLOWED</td><td>—</td><td>Always 0</td></tr>
+            <tr><td>Bad seq in Ack/Nak, explicit S = 0</td><td>Data Link Protocol Error</td><td>Uncorrectable Internal Error</td></tr>
+            <tr><td>"Go to Recovery"</td><td>LTSSM Recovery</td><td>Adapter requests Retrain on RDI</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>§3.8, p.93–94. PCIe column is background from PCIe Base Specification, as referenced by §3.8.</p>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>When is Retry required?</strong> Whenever the raw BER is worse than 1e-27, unless Raw Format is the only format. Both package tables list 1e-27 only at the lowest speeds (Standard ≤ 8 GT/s, Advanced ≤ 12 GT/s), so in practice Retry is needed above those. A PHY whose Adapter has no Retry must not advertise those speeds. Once negotiated, Retry stays on until the next link initialization, even if the speed degrades. The Tx Retry buffer is shared by both stacks.</p>
+      <p class="src"><span class="sl">Spec</span>§3.8, p.93 · Tables 1-1 and 1-2, p.40</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6. STACK MUX -->
+<section id="mux">
+  <div class="wrap">
+    <h2>6 · Stack multiplexing</h2>
+    <p class="sub">Two ways to put two stacks on one link. Both use a 1-bit stack ID in every flit header and one Adapter LSM per stack.</p>
+    <div class="tbl-wrap diff">
+      <table>
+        <thead><tr><th></th><th>Multi_Protocol_Enable</th><th>Enhanced Multi_Protocol_Enable</th></tr></thead>
+        <tbody>
+          <tr><td>Protocols</td><td>Same protocol, same capabilities, same flit format</td><td>Same or different, with one common flit format</td></tr>
+          <tr><td>Bandwidth per stack</td><td>Each stack ≤ half the link</td><td>Each receiver advertises 100% or 50%</td></tr>
+          <tr><td>Rule on the wire</td><td>Never two consecutive flits from one stack</td><td>Same rule only for a stack whose receiver advertised 50%</td></tr>
+          <tr><td>Arbitration</td><td>Per flit; any pattern that obeys the rule</td><td>Per flit; round robin required when both may use 100%</td></tr>
+          <tr><td>Filler</td><td colspan="2">NOP flits (Protocol ID 00b, all-zero body), bypass the Tx Retry buffer, not forwarded by the receiver; also needed during replay</td></tr>
+          <tr><td>Raw Format</td><td colspan="2">Mutually exclusive with both</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src" style="margin-top:6px"><span class="sl">Spec</span>§3.1, p.59–60 · Table 3-1, p.63–65</p>
+  </div>
+</section>
+
+<!-- 7. PM -->
+<section id="pm">
+  <div class="wrap">
+    <h2>7 · Link states and power management</h2>
+    <p class="sub">The Adapter LSM uses the same state set and request/status contract as FDI. PM is entered top-down and exited bottom-up.</p>
+    <div class="twocol">
+      <div class="flow">
+        <div><span class="n">1</span><p><strong>Protocol Layer asks</strong> on FDI, based on its own idle-time algorithm. CXL vLSMs negotiate PM with ALMPs on mainband, through the Retry buffer. PCIe in UCIe Flit Mode does not use PM DLLPs.</p></div>
+        <div><span class="n">2</span><p><strong>Adapter LSM</strong> negotiates PM with the remote Adapter on sideband, once the vLSMs (if CXL) are in PM and the Retry buffer is empty. Each stack does this independently.</p></div>
+        <div><span class="n">3</span><p><strong>RDI</strong>: when every Adapter LSM is in PM, the Adapter requests PM on RDI.</p></div>
+        <div><span class="n">4</span><p><strong>PHY</strong> goes to a deeper power state. The sideband stays on: PM exit starts there.</p></div>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Exit is the reverse</h3>
+          <p style="font-size:15px">Active request travels down FDI and RDI; the PHY wakes and retrains via sideband; RDI goes Active on both dies; Adapter LSMs exit PM via sideband; for CXL, ALMPs then bring the vLSMs to Active.</p>
+          <p class="src"><span class="sl">Spec</span>§3.6, p.91</p>
+        </div>
+        <div class="card">
+          <h3>Protocols that don't want PM</h3>
+          <p style="font-size:15px">PM is mandatory for PCIe and CXL. Other protocols may disable it by always answering a remote PM request with PMNAK. The PHY may map L1 and L2 to one internal state.</p>
+          <p class="src"><span class="sl">Spec</span>§3.6, p.90</p>
+        </div>
+        <div class="card">
+          <h3>Adapter LSM messages</h3>
+          <p style="font-size:15px"><code>{LinkMgmt.Adapter0/1.Req/Rsp.*}</code> cover Active, L1, L2, LinkReset and Disable (plus Rsp.PMNAK). There is no Adapter-level Retrain or LinkError message: those states always come up from RDI.</p>
+          <p class="src"><span class="sl">Spec</span>Table 7-8, p.276–277 · §3.5, p.89–90</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. PARITY -->
+<section id="parity">
+  <div class="wrap">
+    <h2>8 · Runtime Link Testing with parity</h2>
+    <p class="sub">An optional way to measure link health while traffic runs: the Adapter periodically inserts parity bytes that the receiver checks and logs.</p>
+    <div class="twocol">
+      <div class="card">
+        <ul class="tight" style="font-size:15px">
+          <li>Insert <strong>64·N bytes</strong> after every <strong>256·256·N bytes</strong> of data. N comes from "Number of 64 Byte Inserts". Software must use N = 4 in Flit mode, so inserts are 256B.</li>
+          <li>Only bit 0 of each inserted byte carries parity: parity byte X = XOR of all bits of data bytes X, X+64N, X+128N, … within the window. Bits 7:1 are reserved.</li>
+          <li>All transmitted bytes count, including NOP flits and, for 68B, PDS headers and padding. Parity bytes themselves do not count.</li>
+          <li>Counters reset on leaving Active; enabling must be renegotiated before the next Active.</li>
+          <li>Enabled per direction (Tx Enable at the sender, Rx Enable at the receiver), and takes effect only after a Retrain.</li>
+          <li>Retimers neither buffer nor forward parity bytes; parity checks only the local UCIe link.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§3.9, p.95–96</p>
+      </div>
+      <div class="flow">
+        <div><span class="n">1</span><p>Software sets Tx Enable (sender) and Rx Enable (receiver), then triggers a Retrain.</p></div>
+        <div><span class="n">2</span><p>While Adapter LSMs and RDI are in Retrain (or L1), the sender's Adapter sends <code class="sbc">{ParityFeature.Req}</code>.</p></div>
+        <div><span class="n">3</span><p>Receiver answers <code class="sbc">{ParityFeature.Ack}</code> if enabled and ready, otherwise <code class="sbc">{ParityFeature.Nak}</code> (logged by the requester).</p></div>
+        <div><span class="n">4</span><p>The requester must not request Retrain or L1 exit on RDI until the answer arrives. A responder-only Adapter must not delay the exit.</p></div>
+        <div><span class="n">5</span><p>Back in Active, counting starts at 0 on both sides.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9. MESSAGES -->
+<section id="msgs">
+  <div class="wrap">
+    <h2>9 · Sideband messages the Adapter sends and receives</h2>
+    <p class="sub">These travel through <code>lp_cfg</code>/<code>pl_cfg</code> on RDI and the PHY's sideband. Msgcode/MsgSubcode from Table 7-8 where the message carries no data.</p>
+    <div class="chips" role="group" aria-label="Filter messages" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Message</th><th>Sent by</th><th>Kind</th><th>Purpose</th><th>Notes</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 10. RATIONALE -->
+<section id="rationale">
+  <div class="wrap">
+    <h2>10 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives an Adapter rule, the reason behind it, a worked example, and what breaks without it. Unless a card says otherwise, numbers assume one x64 Advanced module at 16 GT/s: 128 GB/s per direction, one 256B flit every 2 ns.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <!-- negotiation -->
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>§3.2.1.2 p.65</span></div>
+        <h3>The Downstream Port speaks first and decides</h3>
+        <p class="rule">For PCIe or CXL, the UP waits for the DP's <code>{AdvCap.Adapter}</code>, may change its own bits after reading it, then answers. Only the DP sends <code>{FinCap.Adapter}</code> and <code>{FinCap.CXL}</code>.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If both sides computed the result independently, any difference in their resolution logic would leave them running different formats. One decider removes that risk. It mirrors PCIe, where the downstream port controls link configuration.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU (DP) supports CXL 256B with Format 6; an accelerator (UP) supports both CXL and PCIe. The UP sees the DP's advert, keeps CXL, and answers. The DP's FinCap.Adapter sets CXL 256B Flit Mode and CXL_LatOpt_Fmt6, so the link runs Format 6.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A UP that sends its AdvCap at once, without waiting, may advertise a combination the DP cannot accept, and the DP's FinCap then contradicts what the UP already configured.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>UP waits, may change; DP sends FinCap <span class="ref">§3.2.1.2, p.65 · Table 9-42</span></li>
+          <li><span class="kind bg">Background</span>The PCIe analogy</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>Table 3-1 p.63 · §3.3.2 p.71</span></div>
+        <h3>68B formats stop at 32 GT/s</h3>
+        <p class="rule">68B Flit Mode is mandatory for CXL and PCIe when the negotiated maximum data rate is ≤ 32 GT/s, and must be 0 above it. The Adapter learns the rate from <code>pl_max_speedmode</code>, because it was settled in Stage 2.</p>
+        <div class="part"><span class="l l-why">Why</span><p>CXL 68B mode and PCIe Non-Flit mode only exist up to 32 GT/s in their base specifications; faster PCIe and CXL generations require 256B flits. UCIe follows the protocol rules. The Adapter cannot know the rate on its own, so RDI hands it over before Stage 3 begins.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Standard Package link negotiates a 48 GT/s maximum in MBINIT.PARAM. <code>pl_max_speedmode</code> = 1, so the Adapter clears 68B Flit Mode and the link must use a 256B format, even if it later degrades to 16 GT/s.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that advertises 68B at 48 GT/s may settle on Format 2, which is not supported there. Either side may take the link to LinkError on an illegal combination.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>≤ 32 GT/s rule and pl_max_speedmode <span class="ref">Table 3-1, p.63 · §3.3.2, p.71</span></li>
+          <li><span class="kind spec">Spec</span>Illegal format/protocol → LinkError permitted <span class="ref">§3.4, p.87</span></li>
+          <li><span class="kind bg">Background</span>PCIe 6.0 / CXL 3.x use 256B flits at 64 GT/s</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>§3.2.1.2 p.70</span></div>
+        <h3>8 ms to negotiate, but only while RDI is Active</h3>
+        <p class="rule">Parameter exchange must finish within 8 ms (−0%/+50%). The timer counts only while RDI is Active and restarts on any Stall message. Expiry is an Uncorrectable Internal Error and RDI goes to LinkError.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A partner that never answers must not hang the link forever. But time spent retraining is not the partner's fault, so the timer pauses when RDI is not Active. Stall messages let a Retimer, which must first resolve capabilities with the far side, buy time.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Host → Retimer → off-package link → Retimer → device. The near Retimer cannot answer until the far side has answered, so it sends <code>{AdvCap.Adapter.Stall}</code> every 4 ms, resetting the host's timer each time.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Retimer that stalls every 10 ms lets the host time out at 8 ms; the link drops to LinkError on every boot.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Timer, tolerance, reset on Stall, UIE, Retimer 4 ms <span class="ref">§3.2.1.2, p.70</span></li>
+          <li><span class="kind spec">Spec</span>Stall MsgInfo FFFFh <span class="ref">Table 7-8, p.276 · p.283</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="neg">
+        <div class="meta"><span>Negotiation</span><span>§3.4 p.85 · §3.8 p.93</span></div>
+        <h3>Protocol, format and Retry are fixed until PHY Reset</h3>
+        <p class="rule">Once negotiated, protocol and flit format cannot change until the PHY returns to Reset. Retry cannot be turned off even if the link later degrades to a speed that would not need it.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Changing format would change byte positions, CRC coverage and buffer sizes with traffic in flight. A speed degrade happens in the middle of operation (through Retrain), and the Retry state (sequence numbers, buffered flits) would have to be torn down safely. Keeping it on is simpler and costs little at a lower BER.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An Advanced link trains at 32 GT/s with Retry. A runtime Retrain degrades it to 12 GT/s, where BER is 1e-27. Retry stays on; it just never has to replay.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that drops Retry after degrade disagrees with the remote Adapter about whether flit headers carry sequence numbers.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Fixed until Reset <span class="ref">§3.4, p.85</span></li>
+          <li><span class="kind spec">Spec</span>Retry not disabled on degrade; renegotiated at next init <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind spec">Spec</span>BER by speed <span class="ref">Table 1-2, p.40</span></li>
+        </ul></div>
+      </article>
+
+      <!-- formats -->
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.3 p.76</span></div>
+        <h3>The Protocol Layer leaves the Adapter's bytes at zero</h3>
+        <p class="rule">In 256B formats the Protocol Layer drives 0 on header and CRC bytes, but fills the Protocol ID bits (and for PCIe/CXL.io, the Flit_Marker bit and fields). On receive, the Adapter passes the flit up unchanged and the Protocol Layer ignores bits that are not its own.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Sequence numbers, Ack/Nak and CRC depend on retry state that only the Adapter has. The protocol knows which protocol a flit belongs to and whether it carries a Flit Marker. Splitting the header along that line means no extra wires on FDI and no rewriting of protocol bytes.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CXL.cachemem flit arrives on FDI with byte 0 = 10xx_xxxx (Protocol ID 10b) and byte 1 = 0. The Adapter sets the stack bit, the sequence or Ack/Nak fields, then computes CRC over the final bytes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Protocol Layer that leaves garbage in the CRC bytes is harmless (the Adapter overwrites them). One that sets Protocol ID 00b on a Streaming flit makes the receiver drop it as a NOP.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Driving 0, Protocol ID, Flit_Marker <span class="ref">§3.3.3, p.76 · Table 3-6, p.84</span></li>
+          <li><span class="kind spec">Spec</span>Streaming never sets 00b <span class="ref">§3.3.3, p.76 · Table 3-5, p.80</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.3 p.76</span></div>
+        <h3>DLLPs bypass Retry, so the DLP bytes are split</h3>
+        <p class="rule">For PCIe and CXL.io, DLP bytes 0–1 become the UCIe Flit Header. The Adapter inserts DLLPs from FDI's DLLP interface into DLP bytes 2–5 (as Optimized_Update_FC when possible), unless the flit carries a Flit Marker. On receive, it extracts them back onto FDI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>DLLPs (credit updates, Acks in PCIe) must not be replayed from an old flit: a replayed credit update could double-count credits. Inserting them as the flit leaves, after the retry buffer, gives each transmission (and each replay) the current DLLP.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Flit #57 is replayed 300 ns after its first transmission. The first copy carried an UpdateFC for 8 credits; the replay carries whatever DLLP is current now, not the stale one.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Storing DLLPs in the retry buffer: a replay delivers the old UpdateFC again and the receiver's credit counter drifts.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>DLP split, insertion, Optimized_Update_FC, extraction <span class="ref">§3.3.3, p.76</span></li>
+          <li><span class="kind spec">Spec</span>FDI DLLP side channel <span class="ref">Table 10-3, p.540–541 · §10.2.4.1, p.550</span></li>
+          <li><span class="kind illus">Illustrative</span>The 300 ns and 8-credit numbers</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.4 p.80–81</span></div>
+        <h3>Latency-Optimized: each 128B half has its own CRC</h3>
+        <p class="rule">Formats 5 and 6 put CRC0 at bytes 126–127 covering bytes 0–125, and CRC1 at 254–255 covering 128–253. Format 6 also lets the Protocol Layer use bytes that Format 5 leaves reserved.</p>
+        <div class="part"><span class="l l-why">Why</span><p>With one CRC at the end of 256B, the receiver must wait for the whole flit before trusting any of it. With a CRC per half, the first 128B can be checked and consumed one half-flit time earlier. That is why the spec strongly recommends Format 6 for CXL 256B.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 at 16 GT/s: a 256B flit takes 2 ns on the wire. A CXL.cachemem read response in the first half can be released about 1 ns earlier than with Format 4.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that consumed half 0 and then sees CRC1 fail must not consume half 0 again on replay. The FDI <code>pl_flit_cancel</code> rules for Latency-Optimized flits exist for this case.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>CRC coverage <span class="ref">§3.3.4, p.81</span></li>
+          <li><span class="kind spec">Spec</span>Format 6 strongly recommended <span class="ref">§3.3.4, p.80 · Table 3-7, p.85</span></li>
+          <li><span class="kind derived">Derived</span>Half of 2 ns ≈ 1 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.2.1 p.73</span></div>
+        <h3>68B flits: shift by 4 every flit, close with PDS</h3>
+        <p class="rule">Each 68B flit adds 4 bytes to a 64B payload, so successive flits shift 4 bytes across the bus. Data on RDI is always a multiple of 256B. To pause, the Adapter sends a PDS header, zeros to the next 64B boundary, at least two more all-zero 64B chunks, and more zeros to reach a 256B multiple.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The PHY and any Retimer work in 256B units (Retimer credits are 256B). The two zero chunks give the receiver's byte shifter time to reset, so the next flit can start at byte 0 of a 256B-aligned transfer.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Three flits then idle: flits use bytes 0–203, PDS header 204–205, zeros 206–255, two zero chunks 256–383, more zeros 384–511. The pause costs 512 bytes total: 4 ns on a x64 16 GT/s link.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Stopping right after the PDS header leaves the receiver's shifter mid-flit; the next flit is decoded 4·k bytes off and fails CRC.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Shift, 256B multiples, PDS padding <span class="ref">§3.3.2.1, p.73 · Figures 3-12 and 3-13, p.75</span></li>
+          <li><span class="kind derived">Derived</span>The 3-flit byte positions and 4 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.2.1 p.73–74</span></div>
+        <h3>PDS detection: 2 of 4 with Retry, exact without</h3>
+        <p class="rule">A PDS header sets four things: Byte 0 bit 4, Byte 1 bits 7 and 6, and Byte 1 [5:4] = 00b with the expected sequence value. With Retry, the receiver treats a header as PDS if any two hold. Without Retry, conditions 1 and 2 must hold.</p>
+        <div class="part"><span class="l l-why">Why</span><p>At BER 1e-15 a bit flip in the header is possible. "2 of 4" means three bit errors are needed to turn a PDS into a regular header, and even that is caught by CRC and replayed. The reverse (a regular header aliasing to PDS with two errors) is why the spec recommends checking that the first flit after a weak PDS has the expected explicit sequence number.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A PDS arrives with Byte 1 bit 6 flipped. Three of four conditions hold, so it is still a PDS. The receiver then checks that the next valid flit carries the expected sequence number before trusting the stream.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Requiring all four with Retry enabled turns a single bit error into a lost PDS, a misaligned stream and a burst of CRC errors.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Conditions and rules <span class="ref">§3.3.2.1, p.73</span></li>
+          <li><span class="kind spec">Spec</span>Aliasing analysis and recommended check <span class="ref">Implementation Note, p.74</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>§3.3.2.1 p.73–74</span></div>
+        <h3>PDS before replay, before Retrain, and how to resume</h3>
+        <p class="rule">In 68B format a PDS must be sent before replaying from the retry buffer and before acking a stall for Retrain, so replayed flits start 256B-aligned. With Retry disabled, the first flit after a PDS must be a payload or test flit, not a NOP.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A replay restarts the stream from an older flit, so the byte shifter must restart too. A NOP can be all zeros, which is indistinguishable from PDS padding; without sequence numbers the receiver could not tell that the stream had resumed.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Nak for flit #33 arrives. The Adapter finishes the current flit, sends PDS plus padding, then replays #33 starting at byte 0 of a new 256B block with an explicit sequence number.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Replaying without a PDS leaves the remote shifter at the old offset; every replayed flit fails CRC and the replay counter escalates to Retrain.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>PDS on Retry and Retrain; resume rules <span class="ref">§3.3.2.1, p.73–74</span></li>
+          <li><span class="kind spec">Spec</span>PDS error may map to Retrain (Retry) or LinkError (no Retry) <span class="ref">p.74</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="fmt">
+        <div class="meta"><span>Flit formats</span><span>Table 3-10 notes p.88</span></div>
+        <h3>Format priority: 6 › 4 › 3 › 2 › 5</h3>
+        <p class="rule">When several formats are possible (Truth Table 2), Raw wins if advertised, then Format 6, then Format 4 over 3, then 68B, with Format 5 last.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The spec's notes give the reasons. Raw is only advertised when it is the required mode. Format 6 has the best performance. Start Header (4) beats End Header (3) because the receiver learns the protocol and stack from the first bytes, so multiplexed stacks can be steered earlier. Format 5 carries the most overhead.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Two Streaming stacks; both sides advertise Std End Header, Std Start Header and LatOpt without optional bytes. Result: Format 4.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that resolves by its own preference ("lowest latency = 5") picks a different format than its partner; traffic is undecodable.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Truth Tables 1 and 2 with notes a and b <span class="ref">Tables 3-9 and 3-10, p.88</span></li>
+        </ul></div>
+      </article>
+
+      <!-- crc & retry -->
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.7 p.92</span></div>
+        <h3>One CRC-16 over 128 bytes, everywhere</h3>
+        <p class="rule">CRC polynomial x<sup>16</sup>+x<sup>15</sup>+x<sup>2</sup>+1 over a 128B message, zero-extended at the MSB end, initial value 0, bit 0 of byte 0 first. A 256B flit carries two CRCs; a 68B flit carries one over 66B.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The (x<sup>15</sup>+x+1) primitive factor guarantees detection of any two bit errors; the (x+1) factor adds odd parity, catching any odd number, so any three are caught. One engine sized for 128B serves every format, which keeps CRC logic small and identical on both dies.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 68B flit's CRC covers bytes 0–65 (header plus 64B payload). The CRC engine sees bytes 66–127 as zeros. A Format 3 flit's CRC1 covers bytes 128–241 as message bytes 0–113.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Computing CRC before inserting the sequence number into the header: every flit fails CRC at the receiver. The spec requires the final transmitted values to be used.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Polynomial, guarantee, zero extension, init, bit order, golden <code>crc_gen.vs</code> <span class="ref">§3.7, p.92</span></li>
+          <li><span class="kind spec">Spec</span>68B CRC message mapping <span class="ref">§3.3.2, p.71</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.93</span></div>
+        <h3>Alternate explicit-sequence and Ack/Nak flits</h3>
+        <p class="rule">Flit headers carry either the flit's own sequence number or an Ack/Nak, never both. UCIe alternates them (PCIe sends three explicit ones first). Consecutive explicit-sequence flits are allowed only when no Ack/Nak is pending.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Every other flit returns an Ack, so the sender learns quickly what arrived and can free retry-buffer space sooner. Faster Acks mean a smaller retry buffer for the same bandwidth.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>With alternation, an Ack can leave every 4 ns (two flits at 2 ns). If the round trip for an Ack is 40 ns, about 20 flits are in flight: 5 KB of retry buffer at 256B per flit.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Following PCIe's 3-in-a-row rule triples the worst-case Ack gap and stalls a minimum-sized retry buffer.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Alternation and CONSECUTIVE_TX_EXPLICIT_SEQ_NUM_FLIT &lt; 1 <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind illus">Illustrative</span>The 40 ns round trip</li>
+          <li><span class="kind derived">Derived</span>40 ns ÷ 2 ns × 256B ≈ 5 KB</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.93</span></div>
+        <h3>No selective Nak, no receive retry buffer</h3>
+        <p class="rule">After a bad flit, the receiver drops everything until the sender replays from the Nak'ed flit. Selective Nak and Rx retry-buffer rules from PCIe must not be implemented.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Errors are rare on a 2 mm Advanced Package channel. Go-back-N replay costs a few flits of bandwidth per error; selective repeat would need a reorder buffer on every receiver. The trade-off favours the simpler design.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>At BER 1e-15 and 1.024 Tb/s per direction, a bit error arrives about once every 16 minutes. Replaying 5 flits costs 10 ns each time. At 64 GT/s with BER 1e-12 it is about 4 per second, still negligible.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that keeps good flits after a bad one and later accepts the replay as well delivers duplicates.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Selective Nak and Rx buffer not allowed <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind spec">Spec</span>BER values <span class="ref">Tables 1-1 and 1-2, p.40</span></li>
+          <li><span class="kind derived">Derived</span>1.024e12 × 1e-15 ≈ 1e-3 errors/s; 4.096e12 × 1e-12 ≈ 4/s</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.93</span></div>
+        <h3>The replay timer counts idle time too</h3>
+        <p class="rule">REPLAY_TIMEOUT_FLIT_COUNT is a 9-bit counter that also increments for every Flit Time (lclk cycles to move 256B at the current speed and width) in which no flit was sent. A replay is scheduled at ≥ 375. Timeouts are logged as Correctable Internal Errors.</p>
+        <div class="part"><span class="l l-why">Why</span><p>PCIe sends IDLE flits continuously, so counting flits measures time. UCIe lets the Adapter stop sending NOPs to save power, so a pure flit count could freeze with an unacknowledged flit in the buffer. Counting idle Flit Times restores the link between count and time.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Last payload #88 is sent and its Ack is corrupted. The link goes idle. After 375 Flit Times (750 ns at 2 ns per flit) the sender replays #88 and the remote resends the Ack.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Counting only transmitted flits: the idle link never times out, #88 sits unacknowledged forever, and the retry buffer never drains before PM entry.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>9-bit, saturates at 1FFh, Flit Time rule, ≥ 375, logging <span class="ref">§3.8, p.93</span></li>
+          <li><span class="kind derived">Derived</span>375 × 2 ns = 750 ns</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.94</span></div>
+        <h3>Sequence Number Handshake on every FDI Active entry</h3>
+        <p class="rule">Every time FDI enters Active (bring-up, Retrain exit, PM exit) the Adapters run the PCIe Sequence Number Handshake, using NOP flits if there is no payload. Not done within 128 flits: Retrain. Retry variables reset whenever RDI is in Reset or Retrain.</p>
+        <div class="part"><span class="l l-why">Why</span><p>PCIe uses an IDLE flit handshake when the data link comes up. UCIe already agrees "link up" over sideband, so the IDLE phase is dropped, but both sides still have to agree where the sequence numbers stand before trusting Acks.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After L1 exit, FDI goes Active with no traffic pending. The Adapter sends NOP flits with explicit sequence numbers until the handshake completes, a few dozen ns.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Skipping the handshake after Retrain: the first Ack refers to a number from before the Retrain and purges flits that were never received.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Every FDI Active entry, 128 flits, NOP use, variable init <span class="ref">§3.8, p.93–94</span></li>
+          <li><span class="kind illus">Illustrative</span>"A few dozen ns"</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 Impl. Note p.94</span></div>
+        <h3>After a Nak, send two Acks before going quiet</h3>
+        <p class="rule">Recommended: after handling a received Nak (including any replay), send at least two flits carrying an Ack before stopping transmission. Re-sending the last Ack on a NOP is allowed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If the only Ack before going idle is corrupted, the partner waits for its replay timer. One extra Ack makes that very unlikely. It is a cheap guard for a link that is allowed to stop sending NOPs.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 sends its last NOP with Ack 52 and it is corrupted. Without a second Ack, Die 1 replays #52 after 750 ns. With a second Ack on another NOP, Die 1 frees #52 straight away.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Nothing fails functionally (replay timeout recovers it), but idle-time latency spikes and PM entry is delayed by stuck retry buffers.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Recommendation and scenario <span class="ref">§3.8 Implementation Note, p.94</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="crc">
+        <div class="meta"><span>CRC &amp; Retry</span><span>§3.8 p.94</span></div>
+        <h3>Protocol errors become UIE; "Recovery" becomes Retrain</h3>
+        <p class="rule">An invalid sequence number in a received Ack or Nak, or a payload flit with explicit sequence number 0, is an Uncorrectable Internal Error. PCIe conditions that would send the port to Recovery make the Adapter request Retrain on RDI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>UCIe has no LTSSM Recovery: link retraining belongs to the PHY's LTSM, and the Adapter's way to ask for it is a Retrain request on RDI. Sequence corruption that CRC did not catch means the retry state can no longer be trusted, so it escalates.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>FLIT_REPLAY_NUM shows the same flit replayed repeatedly without progress. In PCIe the port would enter Recovery; the UCIe Adapter drives <code>lp_state_req</code> = Retrain.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that logs "Data Link Protocol Error" (a PCIe AER error) instead of UIE reports the wrong error to software.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>UIE mapping; Recovery → Retrain; FLIT_REPLAY_NUM guidance <span class="ref">§3.8, p.93–94</span></li>
+          <li><span class="kind spec">Spec</span>Adapter Retrain triggers on RDI <span class="ref">§10.3.3.4, p.566</span></li>
+        </ul></div>
+      </article>
+
+      <!-- mux -->
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.59</span></div>
+        <h3>Never two flits in a row from one stack</h3>
+        <p class="rule">With Multi_Protocol_Enable, the Adapter never sends consecutive flits from the same stack: not from FDI, not from the retry buffer, not when restarting after a pause. It may insert NOP flits to keep the rule.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The mode exists so two stacks each designed for half the link rate can share a fast link. Their receive paths can absorb consecutive <em>chunks</em> of one flit at full speed, but not consecutive flits. The rule guarantees each receiver at most half the flit rate.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Two CXL stacks each sized for 32 GT/s CXL SERDES bandwidth share a UCIe link that carries twice that. Only stack 0 is busy: the link sends S0, NOP, S0, NOP… and stack 0 still gets its full designed rate.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A replay of five stack-0 flits sent back to back overruns stack 0's receiver, which was never built to accept them at link rate.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>The rule, NOP insertion, replay case, no fixed pattern <span class="ref">§3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Motivation: CXL 68B at 32 GT/s SERDES bandwidth <span class="ref">§3.1 Implementation Note, p.59</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.59–60</span></div>
+        <h3>NOP flits: zeros that never enter the retry buffer</h3>
+        <p class="rule">A NOP flit has the Adapter's Protocol ID (00b) in its header and an all-zero body. It may bypass the Tx Retry buffer, and the receiving Adapter never forwards it to a Protocol Layer.</p>
+        <div class="part"><span class="l l-why">Why</span><p>NOPs carry no data, so there is nothing to replay. Keeping them out of the retry buffer saves space and lets the Adapter insert them freely, even during a replay.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A replay of #20–#24 (all stack 0) becomes #20, NOP, #21, NOP, … The NOPs are generated on the fly, not stored.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Storing NOPs in the retry buffer and giving them sequence numbers wastes buffer space and may push MAX_UNACKNOWLEDGED_FLITS to its limit.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>NOP definition and handling <span class="ref">§3.1, p.59</span></li>
+          <li><span class="kind spec">Spec</span>Protocol ID 00b <span class="ref">Table 3-5, p.80</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.60</span></div>
+        <h3>Enhanced mode: receivers advertise a limit, round robin if both are unlimited</h3>
+        <p class="rule">With Enhanced Multi_Protocol_Enable, each Adapter advertises per stack whether its receiver takes 100% or only 50% of the link. The transmitter must support both. If both stacks may use 100%, arbitration is per flit and round robin.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Different protocols on the two stacks may have very different receive capacity. Advertising a per-stack limit lets a fast stack use the full link while a slow stack is protected. Round robin stops one busy stack from starving the other.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Stack 0 PCIe (full-rate receiver), stack 1 Streaming (receiver limited to 50%). Stack 0 can send back-to-back flits; stack 1 flits are always separated by another flit or a NOP.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A fixed-priority arbiter favouring stack 0 starves stack 1 under load, violating the round-robin requirement.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>100%/50%, round robin, per flit <span class="ref">§3.1, p.60</span></li>
+          <li><span class="kind spec">Spec</span>Stack 0/1 Maximum Bandwidth_Limit bits <span class="ref">Table 3-1, p.65</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="mux">
+        <div class="meta"><span>Stack mux</span><span>§3.1 p.59</span></div>
+        <h3>Multiplexing and Raw Format are mutually exclusive</h3>
+        <p class="rule">Neither Multi_Protocol_Enable nor Enhanced Multi_Protocol_Enable can be used with Raw Format.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Demultiplexing relies on the stack ID bit in the flit header, and Raw Format has no header. It also has no NOP flit, so the alternation rule could not be kept.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A design with two Streaming stacks that wants Raw Format must give each its own UCIe link.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Advertising both is a configuration error; the negotiated combination is invalid.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Mutual exclusion <span class="ref">§3.1, p.59–60</span></li>
+          <li><span class="kind derived">Derived</span>The reason (no header, no NOP)</li>
+        </ul></div>
+      </article>
+
+      <!-- pm -->
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>States &amp; PM</span><span>§3.6 p.90–91</span></div>
+        <h3>PM entry top-down: vLSM, Adapter LSM, RDI</h3>
+        <p class="rule">For CXL, both vLSMs reach PM via ALMPs first, then the retry buffer must be empty, then the Adapter LSM negotiates PM on sideband, and only when all Adapter LSMs are in PM does RDI go to PM.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Each layer must be idle before the layer below can turn off. ALMPs ride through the retry buffer, so the buffer must be drained (all ALMPs acknowledged) before the mainband is allowed to stop.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>CXL.io idles first, CXL.cachemem 3 µs later. Only when both vLSMs report L1 and the last ALMP is acked does the Adapter send <code>{LinkMgmt.Adapter0.Req.L1}</code>.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Entering Adapter-LSM PM with an unacknowledged ALMP in the retry buffer: the replay timer fires after the PHY has powered down.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Four-step sequence; sideband stays active <span class="ref">§3.6, p.90–91 · Figure 3-28, p.91</span></li>
+          <li><span class="kind spec">Spec</span>CXL 68B over UCIe uses 256B ALMP formats and flows <span class="ref">§3.6, p.90–91</span></li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="pm">
+        <div class="meta"><span>States &amp; PM</span><span>§3.5 p.89–90 · Table 7-8</span></div>
+        <h3>Adapter LSMs never negotiate Retrain or LinkError</h3>
+        <p class="rule">There are no <code>{LinkMgmt.Adapter*}</code> messages for Retrain or LinkError. RDI goes to Retrain or LinkError first and pushes it up to the Adapter LSMs. LinkReset and Disabled go the other way: negotiated per Adapter LSM, and pushed down to RDI only when every stack is there.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Retrain and LinkError are about the physical link, shared by both stacks, so the PHY owns them. LinkReset and Disabled are about one protocol's reset semantics, so they belong to that stack and must not disturb the other.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Stack 0 (PCIe) hot-resets: its Adapter LSM goes to LinkReset via <code>{LinkMgmt.Adapter0.Req.LinkReset}</code>. Stack 1 keeps running. A framing error then retrains RDI, and both Adapter LSMs that are Active see Retrain.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An Adapter that takes RDI to LinkReset for one stack's hot reset drops the other stack's traffic.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Hierarchy rules <span class="ref">§3.5, p.89–90</span></li>
+          <li><span class="kind spec">Spec</span>Adapter0/1 message list <span class="ref">Table 7-8, p.276–277</span></li>
+        </ul></div>
+      </article>
+
+      <!-- parity -->
+      <article class="wcard" data-g="par">
+        <div class="meta"><span>Runtime parity</span><span>§3.9 p.95 · §4.1.1 p.98</span></div>
+        <h3>The 64N stride makes it per-lane parity</h3>
+        <p class="rule">Parity byte X covers data bytes X, X+64N, X+128N, … over a 256·256·N-byte window. With N = 4 that is 256 parity bytes per 256 KiB of data, each covering 1,024 data bytes.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Bytes are striped across lanes, and on a x64 module byte k of each 64B transfer goes to the same lane every time. Because the stride is a multiple of 64, all bytes covered by one parity bit travelled on the same lane. A parity error therefore points at a lane, which is exactly what you want when deciding whether to repair or degrade.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>N = 4 at 128 GB/s: 256B of parity every 262,144B, an insert every 2.05 µs and 0.098% overhead. Repeated parity errors at byte positions X ≡ 17 (mod 64) implicate lane 17.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Counting parity bytes themselves as data, or not counting NOPs and PDS padding, puts the receiver's window out of step with the transmitter's; every check fails.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Insert rate, N = 4, parity formula, what counts <span class="ref">§3.9, p.95–96</span></li>
+          <li><span class="kind spec">Spec</span>Byte-to-lane mapping <span class="ref">§4.1.1, p.98</span></li>
+          <li><span class="kind derived">Derived</span>Per-lane property, 1,024 bytes per parity bit, 2.05 µs, 0.098%</li>
+        </ul></div>
+      </article>
+
+      <article class="wcard" data-g="par">
+        <div class="meta"><span>Runtime parity</span><span>§3.9 p.95–96</span></div>
+        <h3>Enable in Retrain, with an explicit Ack</h3>
+        <p class="rule">Parity is enabled per direction and takes effect only after a Retrain. During Retrain (or L1) the sending Adapter sends <code>{ParityFeature.Req}</code>; the receiver Acks or Naks. The requester must not exit Retrain or L1 on RDI until it has the answer.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receiver may need to switch to a slower data path to strip and check parity bytes. If the transmitter started inserting before the receiver was ready, parity bytes would be decoded as flits. The spec says the explicit handshake exists to give both sides time to switch.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Software enables Tx on Die 1 and Rx on Die 0, then sets the Retrain bit. In Retrain, Die 1 sends ParityFeature.Req; Die 0 answers Ack; Die 1 only then gives the NOP→Active edge on RDI.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A requester that exits Retrain before the Ack: Die 0's Rx path is still in normal mode when parity bytes arrive.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul>
+          <li><span class="kind spec">Spec</span>Negotiation, ordering, logging, timeout <span class="ref">§3.9, p.95–96 · Figures 3-30, 3-31</span></li>
+          <li><span class="kind spec">Spec</span>NOP→Active edge lets the Adapter wait <span class="ref">§10.3.3.4 note, p.567</span></li>
+        </ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- 11. LIVE -->
+<section id="live">
+  <div class="wrap">
+    <h2>11 · Live scenarios</h2>
+    <p class="sub">Each column is one step or one flit slot (2 ns on an x64 16 GT/s link), as the scenario says. Step through; shaded columns are the ones the step describes.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar">
+          <button class="btn" id="prev" type="button">← Previous</button>
+          <button class="btn primary" id="next" type="button">Next →</button>
+          <div class="dots" id="dots" aria-label="Steps"></div>
+          <span class="cycles" id="cyc"></span>
+        </div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px">Sequence numbers, slot positions and latencies are illustrative. The spec fixes ordering, encodings and limits, not exact slot timing.</p>
+  </div>
+</section>
+
+<!-- 12. SILICON -->
+<section id="silicon">
+  <div class="wrap">
+    <h2>12 · Real silicon: what the theory turns into</h2>
+    <p class="sub">Sizing numbers and design consequences that follow from Chapter 3.</p>
+    <div class="twocol">
+      <div>
+        <h3 style="margin-bottom:8px">Flit Time and the replay timeout</h3>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Link</th><th class="num">Flit Time (256B)</th><th class="num">375 Flit Times</th><th class="num">128-flit SNH limit</th></tr></thead>
+            <tbody>
+              <tr><td>x16 Standard, 16 GT/s</td><td class="num">8 ns</td><td class="num">3.0 µs</td><td class="num">1.02 µs</td></tr>
+              <tr><td>x16 Standard, 32 GT/s</td><td class="num">4 ns</td><td class="num">1.5 µs</td><td class="num">512 ns</td></tr>
+              <tr><td>x64 Advanced, 16 GT/s</td><td class="num">2 ns</td><td class="num">750 ns</td><td class="num">256 ns</td></tr>
+              <tr><td>x64 Advanced, 32 GT/s</td><td class="num">1 ns</td><td class="num">375 ns</td><td class="num">128 ns</td></tr>
+              <tr><td>x64 Advanced, 64 GT/s</td><td class="num">0.5 ns</td><td class="num">188 ns</td><td class="num">64 ns</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:14px;color:var(--muted)">Flit Time = 2048 bits ÷ (lanes × rate). Replay threshold ≥ 375 and the 128-flit Sequence Number Handshake limit are from §3.8, p.93–94; the times are derived.</p>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="callout">
+          <p><strong>Retry buffer ceiling.</strong> MAX_UNACKNOWLEDGED_FLITS is at most 127, so a buffer bigger than 127 flits buys nothing: 127 × 256B = 32,512 bytes for 256B formats, 127 × 68B = 8,636 bytes for 68B. Real designs size for the Ack round trip instead (next card).</p>
+          <p class="src"><span class="sl">Spec</span>§3.8, p.94 · byte counts derived</p>
+        </div>
+        <div class="callout" style="border-left-color:var(--lp)">
+          <p><strong>Sizing for the round trip.</strong> Buffer flits ≥ (Ack round-trip time ÷ Flit Time) + margin. With a 40 ns round trip at 2 ns per flit that is about 20 flits, 5 KB. Alternating Ack flits keep the round trip short, which is the reason for the rule.</p>
+          <p class="src"><span class="sl">Derived</span>The 40 ns round trip is illustrative</p>
+        </div>
+        <div class="callout" style="border-left-color:var(--sb)">
+          <p><strong>Expected replay rate.</strong> 1.024 Tb/s at BER 1e-15 gives about one bit error every 16 minutes per direction; at 64 GT/s with BER 1e-12 it is about 4 per second. Retry is a real, frequently used path at the top speeds, not just a corner case.</p>
+          <p class="src"><span class="sl">Derived</span>From Tables 1-1 and 1-2, p.40</p>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+        <tbody>
+          <tr><td>Link drops to LinkError at boot, only with a Retimer</td><td>Retimer stalls less often than every 4 ms, or the host timer runs while RDI is not Active.</td><td class="ref">§3.2.1.2, p.70</td></tr>
+          <tr><td>Both sides Active but nothing decodes</td><td>Format resolved by local preference instead of Truth Table 1/2; or UP finalised its own config.</td><td class="ref">Tables 3-9 and 3-10, p.88 · §3.2.1.2, p.65</td></tr>
+          <tr><td>Every flit fails CRC</td><td>CRC computed before the Adapter wrote the header or DLP bytes; reserved bits not zero; wrong bit order. Compare against <code>crc_gen.vs</code>.</td><td class="ref">§3.7, p.92</td></tr>
+          <tr><td>CRC errors after every replay (68B)</td><td>No PDS before the replay, so the replayed flit is not 256B-aligned.</td><td class="ref">§3.3.2.1, p.73</td></tr>
+          <tr><td>Retry buffer never drains on an idle link</td><td>REPLAY_TIMEOUT_FLIT_COUNT counts only transmitted flits, not idle Flit Times.</td><td class="ref">§3.8, p.93</td></tr>
+          <tr><td>Credit counts drift after replays (PCIe/CXL.io)</td><td>DLLPs stored in the retry buffer and replayed with old values.</td><td class="ref">§3.3.3, p.76</td></tr>
+          <tr><td>Stack receiver overruns after a replay</td><td>Replay path skipped NOP insertion in Multi_Protocol_Enable mode.</td><td class="ref">§3.1, p.59</td></tr>
+          <tr><td>Retrain loop after L1 exit</td><td>Sequence Number Handshake skipped on FDI Active re-entry.</td><td class="ref">§3.8, p.94</td></tr>
+          <tr><td>Parity errors on every window</td><td>Parity bytes counted as data, or NOP/PDS bytes excluded; counters not reset on leaving Active.</td><td class="ref">§3.9, p.95–96</td></tr>
+          <tr><td>One stack's hot reset kills the other stack</td><td>Adapter forwarded a single stack's LinkReset to RDI.</td><td class="ref">§3.5, p.90 · §10.3.3.8, p.569</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 13. VERIFY -->
+<section id="verify">
+  <div class="wrap">
+    <h2>13 · Verification</h2>
+    <p class="sub">An Adapter testbench needs an FDI agent per stack (Protocol Layer side), an RDI agent (PHY side), a sideband message model, and a reference model for flit packing, CRC and Retry. Use <code>crc_gen.vs</code> as the CRC reference.</p>
+    <div class="twocol">
+      <div class="card">
+        <h3>Checkers</h3>
+        <ul class="tight">
+          <li>Parameter exchange order: DP AdvCap → UP AdvCap → DP FinCap (→ CXL round); UP never sends FinCap. <span class="ref">§3.2.1.2, p.65</span></li>
+          <li>Negotiated format matches Truth Table 1 or 2 for the bits exchanged. <span class="ref">Tables 3-9, 3-10, p.88</span></li>
+          <li>No 68B Flit Mode advertised when <code>pl_max_speedmode</code> = 1. <span class="ref">Table 3-1, p.63</span></li>
+          <li>Every transmitted flit's CRC matches the reference over the final bytes. <span class="ref">§3.7, p.92</span></li>
+          <li>Header: alternation of explicit S and Ack/Nak; S ≠ 0 on payload; Nak S = N−1. <span class="ref">§3.8, p.93 · Table 3-5</span></li>
+          <li>Unacknowledged flits ≤ min(buffer, 127). <span class="ref">§3.8, p.94</span></li>
+          <li>Multi_Protocol_Enable: no two consecutive same-stack flits, including replay. <span class="ref">§3.1, p.59</span></li>
+          <li>NOP flits: Protocol ID 00b, zero body, never forwarded on FDI. <span class="ref">§3.1, p.59</span></li>
+          <li>68B: transfers in 256B multiples; PDS padding rules; replay starts 256B-aligned. <span class="ref">§3.3.2.1, p.73</span></li>
+          <li>Adapter LSM PM request only with empty retry buffer and (CXL) both vLSMs in PM. <span class="ref">§3.6, p.90–91</span></li>
+          <li>Parity: 64N bytes after each 256·256·N data bytes; correct bit 0. <span class="ref">§3.9, p.95</span></li>
+        </ul>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Scenarios that find real bugs</h3>
+          <ul class="tight">
+            <li>CRC error on CRC1 of a Latency-Optimized flit after half 0 was consumed. <span class="ref">§3.3.4 · §10.2.5</span></li>
+            <li>Corrupt the last Ack before idle; check replay at 375 Flit Times. <span class="ref">§3.8, p.93–94</span></li>
+            <li>PDS header with 1, 2 and 3 bit errors, Retry on and off. <span class="ref">§3.3.2.1, p.73–74</span></li>
+            <li>Retimer partner stalling every 4 ms for 50 ms; then stalling every 9 ms. <span class="ref">§3.2.1.2, p.70</span></li>
+            <li>Nak during replay; Nak for the first replayed flit; Nak with sequence wrap 255→1. <span class="ref">§3.8</span></li>
+            <li>Stack 0 LinkReset while stack 1 streams; then PM on stack 1 only (virtual L2 on stack 0). <span class="ref">§3.5 · §10.3.3.8</span></li>
+            <li>Speed degrade at runtime: Retry stays on, format unchanged. <span class="ref">§3.4 · §3.8</span></li>
+            <li>Parity enabled on one direction only; parity Nak; parity across L1 exit. <span class="ref">§3.9</span></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Coverage</h3>
+          <ul class="tight">
+            <li>Every row of Truth Tables 1 and 2, plus "no valid format".</li>
+            <li>Each flit type × Ack/Nak encoding × Protocol ID × stack ID.</li>
+            <li>68B stream lengths 1…4 flits before PDS (each padding case).</li>
+            <li>Retry: error in each 64B chunk of a flit, in header vs payload vs CRC bytes.</li>
+            <li>Stack mux: each arbitration pattern, both bandwidth-limit settings.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14. QUIZ -->
+<section id="quiz">
+  <div class="wrap">
+    <h2>14 · Test yourself</h2>
+    <p class="sub">Interview-style questions, basic to advanced. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>Name the four jobs of the D2D Adapter. <span class="lvl">Basic</span></summary><div><p>Reliable data transfer (CRC and Retry, or parity), arbitration and multiplexing of protocol stacks, link state management, and protocol/parameter negotiation with the remote partner.</p><p class="src"><span class="sl">Spec</span>§3.0, p.58</p></div></details>
+    <details><summary>In Format 2, what does the Adapter add to the Protocol Layer's 64 bytes? <span class="lvl">Basic</span></summary><div><p>A 2-byte Flit Header in front and a 2-byte CRC behind, computed over the header and payload (66 bytes, zero-extended to 128). Then it shifts the result across the RDI bus, since each flit is 4 bytes longer than 64.</p><p class="src"><span class="sl">Spec</span>§3.3.2, p.71 · §3.3.2.1, p.73</p></div></details>
+    <details><summary>Which format is mandatory for PCIe Flit Mode, and which for CXL 256B Flit Mode? <span class="lvl">Basic</span></summary><div><p>PCIe Flit Mode: Format 3, Standard 256B End Header. CXL 256B Flit Mode: Format 4, Standard 256B Start Header. Format 6 is strongly recommended for both (for PCIe, if the capability is supported).</p><p class="src"><span class="sl">Spec</span>Table 3-7, p.85</p></div></details>
+    <details><summary>Who sends {FinCap.Adapter}, and why not both sides? <span class="lvl">Intermediate</span></summary><div><p>Only the Downstream Port, after the Upstream Port has replied to its advertisement. One decider means both dies always end up with the same configuration. For Streaming there is no FinCap at all; each side ANDs what it sent and received.</p><p class="src"><span class="sl">Spec</span>§3.2.1.2, p.65–67</p></div></details>
+    <details><summary>Why does UCIe alternate explicit-sequence flits with Ack/Nak flits? <span class="lvl">Intermediate</span></summary><div><p>To return Acks faster, which shortens how long flits stay in the retry buffer and lets it be smaller. Consecutive explicit-sequence flits are allowed only when no Ack/Nak is pending.</p><p class="src"><span class="sl">Spec</span>§3.8, p.93</p></div></details>
+    <details><summary>Why does REPLAY_TIMEOUT_FLIT_COUNT also count idle Flit Times? <span class="lvl">Intermediate</span></summary><div><p>Because UCIe lets a transmitter stop sending NOP flits when idle, to save power. A count of transmitted flits would freeze, and an unacknowledged flit would never be replayed. Counting idle Flit Times keeps the counter tied to time; replay is scheduled at ≥ 375.</p><p class="src"><span class="sl">Spec</span>§3.8, p.93</p></div></details>
+    <details><summary>What is a PDS and when must the Adapter send one? <span class="lvl">Intermediate</span></summary><div><p>Pause of Data Stream, in 68B format: a special 2-byte header followed by zeros to the next 64B boundary, two more zero 64B chunks, and zeros up to a 256B multiple. Sent before pausing an idle stream (unless sending continuous NOPs instead), before replaying, and before acking a stall for Retrain.</p><p class="src"><span class="sl">Spec</span>§3.3.2.1, p.73</p></div></details>
+    <details><summary>With Multi_Protocol_Enable, only stack 0 has traffic. What does the link carry? <span class="lvl">Advanced</span></summary><div><p>Stack-0 flits separated by NOP flits (or stack-1 flits when there are any): never two stack-0 flits in a row. NOPs bypass the retry buffer and are dropped by the receiving Adapter. The same applies during replay.</p><p class="src"><span class="sl">Spec</span>§3.1, p.59</p></div></details>
+    <details><summary>Why is there no {LinkMgmt.Adapter0.Req.Retrain}? <span class="lvl">Advanced</span></summary><div><p>Retrain (and LinkError) concern the shared physical link, so they start at RDI and are pushed up to every Active Adapter LSM. The Adapter asks for a retrain by requesting Retrain on RDI. LinkReset and Disabled, by contrast, are per stack and are negotiated per Adapter LSM.</p><p class="src"><span class="sl">Spec</span>§3.5, p.89–90 · Table 7-8 · §10.3.3.4</p></div></details>
+    <details><summary>Why does runtime parity use a stride of 64·N bytes? <span class="lvl">Advanced</span></summary><div><p>Every byte covered by one parity bit travels on the same lane, because byte k of each 64B transfer always goes to lane k on a x64 module. So parity errors point to a specific lane. (This is a consequence of §3.9 and §4.1.1, not stated as a reason in the spec.)</p><p class="src"><span class="sl">Derived</span>§3.9, p.95 · §4.1.1, p.98</p></div></details>
+    <details><summary>A Latency-Optimized flit passes CRC0 and fails CRC1. What happens? <span class="lvl">Advanced</span></summary><div><p>Half 0 may already have been forwarded and consumed. Half 1 is cancelled on FDI and a Nak triggers replay of the whole flit. When the replay arrives, the receiver must not consume half 0 a second time; the FDI cancel rules cover this.</p><p class="src"><span class="sl">Spec</span>§3.3.4, p.81 · §10.2.5, p.551</p></div></details>
+    <details><summary>The link degrades from 32 GT/s to 12 GT/s at runtime. Can Retry be turned off? Can the format change? <span class="lvl">Advanced</span></summary><div><p>No to both. Retry stays enabled until the next link initialization (RDI to Reset), and protocol and flit format are fixed until the PHY goes to Reset.</p><p class="src"><span class="sl">Spec</span>§3.8, p.93 · §3.4, p.85</p></div></details>
+  </div>
+</section>
+
+<!-- 15. SPEC INDEX -->
+<section id="refs">
+  <div class="wrap">
+    <h2>15 · Spec reference index</h2>
+    <p class="sub">Every section, table and figure this page cites, from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025).</p>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>Tables 1-1, 1-2</td><td>Characteristics of UCIe on Standard / Advanced Package (BER)</td><td class="num">40</td><td>1, 5, 10, 12</td></tr>
+          <tr><td>§3.0, Figure 3-1</td><td>Die-to-Die Adapter; Functionalities in the Adapter</td><td class="num">58</td><td>1, 2, 14</td></tr>
+          <tr><td>§3.1, Figure 3-2</td><td>Stack Multiplexing; Example Configurations</td><td class="num">59–61</td><td>1, 2, 6, 10, 11, 13, 14</td></tr>
+          <tr><td>§3.2, §3.2.1, Figure 3-3</td><td>Link Initialization; Stage 3</td><td class="num">62</td><td>1, 3</td></tr>
+          <tr><td>§3.2.1.2, Table 3-1, Figures 3-4 to 3-9</td><td>Parameter Exchange with Remote Link Partner</td><td class="num">63–70</td><td>3, 10, 11, 12, 13, 14</td></tr>
+          <tr><td>§3.2.1.3</td><td>Part 3: FDI bring up</td><td class="num">70</td><td>3, 11</td></tr>
+          <tr><td>§3.3.1</td><td>Raw Format for All Protocols</td><td class="num">71</td><td>4</td></tr>
+          <tr><td>§3.3.2, Tables 3-2 and 3-3</td><td>68B Flit Format; Flit Header for Format 2</td><td class="num">71–72</td><td>4, 5, 10, 14</td></tr>
+          <tr><td>§3.3.2.1, Figures 3-11 to 3-13</td><td>68B Flit Format Alignment and Padding Rules</td><td class="num">73–75</td><td>4, 10, 12, 13, 14</td></tr>
+          <tr><td>§3.3.3, Figures 3-14 to 3-19</td><td>Standard 256B Flit Formats</td><td class="num">75–79</td><td>4, 5, 10, 12</td></tr>
+          <tr><td>§3.3.4, Table 3-5, Figures 3-20 to 3-26</td><td>Latency-Optimized 256B Flit Formats; Flit Header for Formats 3–6</td><td class="num">80–84</td><td>4, 10, 13, 14</td></tr>
+          <tr><td>§3.3.5, Tables 3-6 and 3-7</td><td>Summary of Flit Formats; Protocol Mapping and Requirements</td><td class="num">84–85</td><td>4, 14</td></tr>
+          <tr><td>§3.4, Tables 3-8 to 3-10</td><td>Decision Table for Flit Format and Protocol; Truth Tables 1 and 2</td><td class="num">85–88</td><td>4, 10, 12, 13, 14</td></tr>
+          <tr><td>§3.5, Figure 3-27</td><td>State Machine Hierarchy</td><td class="num">89–90</td><td>1, 7, 10, 14</td></tr>
+          <tr><td>§3.6, Figure 3-28</td><td>Power Management Link States; Hierarchical PM Entry for CXL</td><td class="num">90–91</td><td>7, 10, 11, 13</td></tr>
+          <tr><td>§3.7, Figure 3-29</td><td>CRC Computation</td><td class="num">92</td><td>5, 10, 12, 13</td></tr>
+          <tr><td>§3.8</td><td>Retry Rules</td><td class="num">93–94</td><td>5, 10, 11, 12, 13, 14</td></tr>
+          <tr><td>§3.9, Figures 3-30, 3-31</td><td>Runtime Link Testing using Parity</td><td class="num">95–96</td><td>8, 10, 12, 13, 14</td></tr>
+          <tr><td>§4.1.1</td><td>Byte to Lane Mapping</td><td class="num">98</td><td>10, 14</td></tr>
+          <tr><td>Table 7-8</td><td>Message Encodings for Messages without Data</td><td class="num">275–277</td><td>7, 9, 10</td></tr>
+          <tr><td>{AdvCap.Adapter}, {FinCap.Adapter}, {AdvCap.CXL}, {FinCap.CXL} encodings</td><td>Messages with data (Chapter 7)</td><td class="num">283–284</td><td>3, 9</td></tr>
+          <tr><td>Table 9-42</td><td>Finalized CXL Capability Log Register (DP sends, UP receives)</td><td class="num">—</td><td>3, 10</td></tr>
+          <tr><td>§10.2.5, §10.2.8</td><td>pl_flit_cancel timing; FDI Bring up flow</td><td class="num">551–555</td><td>10, 11, 14</td></tr>
+          <tr><td>§10.3.3.4, §10.3.3.8</td><td>Retrain State Rules; Common State Rules</td><td class="num">566–570</td><td>10, 12, 13</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>What is not from the spec.</strong> <span class="kind derived">Derived</span> items are arithmetic on spec values. <span class="kind illus">Illustrative</span> items (round-trip times, sequence numbers, slot positions) are examples. <span class="kind bg">Background</span> items refer to PCIe and CXL base specifications, which UCIe builds on but this page does not quote.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 3 Die-to-Die Adapter, with Chapters 1, 4.1, 7 and 10 for context. Section 15 lists every cited section, table and figure with its page.</div>
+</footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  /* ---------- flit format byte maps ---------- */
+  var FMT = [
+    { id: "f1", name: "1 · Raw", rows: [[["64B from Protocol Layer, passed through unchanged", 64, "p"]]],
+      cap: "Raw Format: no header, no CRC, no Retry. Mandatory for Streaming; optional for the others.", ref: "§3.3.1, p.71 · Figure 3-10" },
+    { id: "f2", name: "2 · 68B (3 flits + PDS)", rows: [
+        [["FH", 2, "a"], ["Flit 1: 62B", 62, "p"]],
+        [["2B", 2, "p"], ["CRC", 2, "a"], ["FH", 2, "a"], ["Flit 2: 58B", 58, "p"]],
+        [["6B", 6, "p"], ["CRC", 2, "a"], ["FH", 2, "a"], ["Flit 3: 54B", 54, "p"]],
+        [["10B", 10, "p"], ["CRC", 2, "a"], ["PDS", 2, "s"], ["50B zeros to the 64B boundary", 50, "r"]],
+        [["64B zeros (required chunk 1)", 64, "r"]],
+        [["64B zeros (required chunk 2)", 64, "r"]],
+        [["64B zeros (pad to 256B multiple)", 64, "r"]],
+        [["64B zeros (pad to 256B multiple)", 64, "r"]]],
+      cap: "Each flit is 64B of payload plus a 2B header and 2B CRC, so successive flits slide 4 bytes. Before pausing, the Adapter sends a PDS header, zeros to the next 64B boundary, at least two all-zero 64B chunks, and more zeros to make the total a multiple of 256B (512B here).", ref: "§3.3.2.1, p.73 · Figures 3-11 to 3-13, p.74–75" },
+    { id: "f3", name: "3 · Std 256B End Header (PCIe)", rows: [
+        [["Protocol Layer: bytes 0–63", 64, "p"]], [["bytes 64–127", 64, "p"]], [["bytes 128–191", 64, "p"]],
+        [["44B (to byte 235)", 44, "p"], ["FH", 2, "a"], ["DLP2–5", 4, "a"], ["10B reserved", 10, "r"], ["CRC0", 2, "a"], ["CRC1", 2, "a"]]],
+      cap: "PCIe and CXL.io: DLP0–1 become the UCIe Flit Header (bytes 236–237), DLP2–5 are inserted by the Adapter. CRC0 covers bytes 0–127, CRC1 covers 128–241. Mandatory for PCIe Flit Mode.", ref: "§3.3.3, p.76 · Figure 3-14, p.77" },
+    { id: "f4", name: "4 · Std 256B Start Header (CXL)", rows: [
+        [["FH", 2, "a"], ["Protocol Layer: 62B", 62, "p"]], [["64B", 64, "p"]], [["64B", 64, "p"]],
+        [["46B (to byte 237)", 46, "p"], ["DLP2–5", 4, "a"], ["10B reserved", 10, "r"], ["CRC0", 2, "a"], ["CRC1", 2, "a"]]],
+      cap: "Header first, so the receiver learns protocol and stack from byte 0. Shown for CXL.io/PCIe (with DLP2–5); without DLP the last row carries 50B of payload. Same CRC coverage as Format 3. Mandatory for CXL 256B Flit Mode.", ref: "§3.3.3, p.76 · Figures 3-17, 3-18, p.78 · Figure 10-25, p.559" },
+    { id: "f5", name: "5 · Latency-Optimized (no optional bytes)", rows: [
+        [["FH", 2, "a"], ["Protocol Layer: 62B", 62, "p"]],
+        [["58B", 58, "p"], ["DLP2–5", 4, "a"], ["CRC0", 2, "a"]],
+        [["64B", 64, "p"]],
+        [["52B", 52, "p"], ["6B reserved", 6, "r"], ["FM / OUFC", 4, "a"], ["CRC1", 2, "a"]]],
+      cap: "Each 128B half has its own CRC: CRC0 (bytes 126–127) covers 0–125; CRC1 (254–255) covers 128–253. The first half can be checked and used before the second arrives. Shown for CXL.io; FM bytes carry a Flit_Marker or Optimized_Update_FC.", ref: "§3.3.4, p.80–81 · Figure 3-20, p.81" },
+    { id: "f6", name: "6 · Latency-Optimized (with optional bytes)", rows: [
+        [["FH", 2, "a"], ["Protocol Layer: 62B", 62, "p"]],
+        [["58B", 58, "p"], ["DLP2–5", 4, "a"], ["CRC0", 2, "a"]],
+        [["64B", 64, "p"]],
+        [["52B", 52, "p"], ["+4B TLP", 4, "p"], ["2B", 2, "r"], ["FM / OUFC", 4, "a"], ["CRC1", 2, "a"]]],
+      cap: "Same layout as Format 5, but the Protocol Layer uses bytes that Format 5 leaves reserved. Shown for CXL.io: 4 extra TLP bytes (244–247); bytes 248–249 stay 0. For CXL.cachemem the extra space becomes an additional 14-byte H-slot between slots 7 and 8. Strongly recommended for CXL 256B Flit Mode.", ref: "§3.3.4, p.80–81 · §2.2.2, p.54 · Figures 3-23 to 3-26, p.82–84" }
+  ];
+  var CLR = { p: "var(--lp)", a: "var(--pl)", s: "var(--sb)", r: "var(--line)" };
+  function drawFmt(f) {
+    var h = "<div style=\"display:grid;grid-template-columns:minmax(0,1fr);gap:4px\">";
+    f.rows.forEach(function (row, ri) {
+      h += "<div style=\"display:flex;align-items:stretch;gap:6px\"><span class=\"mono\" style=\"width:62px;flex:none;font-size:11px;color:var(--muted);align-self:center\">" + (ri * 64) + "–" + (ri * 64 + 63) + "</span><div style=\"display:flex;flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;overflow:hidden\">";
+      row.forEach(function (sg) {
+        var bg = sg[2] === "r" ? "var(--bg)" : "color-mix(in srgb, " + CLR[sg[2]] + " 16%, var(--surface))";
+        var bd = CLR[sg[2]];
+        h += "<div title=\"" + esc(sg[0]) + " (" + sg[1] + "B)\" style=\"flex:" + sg[1] + " 0 0;min-width:0;background:" + bg + ";border-right:1px solid var(--line);box-shadow:inset 0 -3px 0 " + bd + ";padding:6px 4px;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-family:var(--font-mono)\">" + esc(sg[0]) + "</div>";
+      });
+      h += "</div></div>";
+    });
+    return h + "</div>";
+  }
+  (function () {
+    var chips = document.getElementById("fmtchips"), map = document.getElementById("fmtmap"), cap = document.getElementById("fmtcap");
+    if (!chips) return;
+    function pick(i) {
+      Array.prototype.forEach.call(chips.children, function (c, k) { c.setAttribute("aria-pressed", k === i ? "true" : "false"); });
+      map.innerHTML = drawFmt(FMT[i]);
+      cap.innerHTML = esc(FMT[i].cap) + "<span class=\"ref\">Spec: " + esc(FMT[i].ref) + "</span>";
+    }
+    FMT.forEach(function (f, i) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = f.name;
+      b.addEventListener("click", function () { pick(i); }); chips.appendChild(b);
+    });
+    pick(3);
+  })();
+
+  /* ---------- truth-table resolver ---------- */
+  (function () {
+    var sel = document.getElementById("ttsel"), box = document.getElementById("ttbits");
+    if (!sel) return;
+    var TT = [
+      { name: "Truth Table 1 (PCIe / CXL)", src: "Table 3-9, p.88 · bits from {FinCap.Adapter}",
+        bits: ["Raw Format", "68B Flit Mode", "CXL 256B Flit Mode", "PCIe Flit Mode", "CXL_LatOpt_Fmt5", "CXL_LatOpt_Fmt6"],
+        init: [0, 0, 1, 0, 0, 1],
+        f: function (v) {
+          if (v[0]) return ["Format 1: Raw", "Raw Format negotiated wins outright."];
+          if (v[2]) { if (v[5]) return ["Format 6: Latency-Optimized with optional bytes (CXL)", "CXL 256B Flit Mode with CXL_LatOpt_Fmt6."];
+                      if (v[4]) return ["Format 5: Latency-Optimized without optional bytes (CXL)", "CXL 256B Flit Mode with CXL_LatOpt_Fmt5 but not Fmt6."];
+                      return ["Format 4: Standard 256B Start Header (CXL)", "CXL 256B Flit Mode with neither Latency-Optimized option."]; }
+          if (v[3]) return ["Format 3: Standard 256B End Header (PCIe)", "PCIe Flit Mode, CXL 256B Flit Mode not set."];
+          if (v[1]) return ["Format 2: 68B Flit", "Only 68B Flit Mode is set (CXL 68B or PCIe Non-Flit, max rate ≤ 32 GT/s)."];
+          return ["No valid format", "Nothing negotiated. The Adapter takes the link down and reports the error if applicable."];
+        } },
+      { name: "Truth Table 2 (Streaming, Enhanced Multi-Protocol, PCIe extras)", src: "Table 3-10 and notes, p.88 · AND of sent and received {AdvCap.Adapter}, or {FinCap.Adapter} bits",
+        bits: ["Raw Format", "68B Flit Format", "Std 256B End Header", "Std 256B Start Header", "LatOpt 256B without optional bytes", "LatOpt 256B with optional bytes"],
+        init: [0, 1, 1, 1, 1, 0],
+        f: function (v) {
+          if (v[0]) return ["Format 1: Raw", "Raw is advertised only when it is the required mode, so it has top priority."];
+          if (v[5]) return ["Format 6", "Highest priority among flit formats: best performance."];
+          if (v[3]) return ["Format 4", "Start Header beats End Header: the receiver sees protocol and stack in the first bytes, lowering Adapter latency when multiplexing."];
+          if (v[2]) return ["Format 3", "End Header, chosen because Format 4 and Format 6 are not both available."];
+          if (v[1]) return ["Format 2: 68B", "No 256B Standard format and no Format 6 in common."];
+          if (v[4]) return ["Format 5", "Lowest priority: the most overhead of the 256B formats."];
+          return ["No valid format", "Either side may take the link to LinkError if the desired format is not negotiated."];
+        } }
+    ];
+    var cur = 0, vals;
+    function render() {
+      var t = TT[cur]; box.innerHTML = "";
+      t.bits.forEach(function (b, i) {
+        var l = document.createElement("label"); l.style.display = "flex"; l.style.gap = "8px"; l.style.alignItems = "center"; l.style.cursor = "pointer";
+        var c = document.createElement("input"); c.type = "checkbox"; c.checked = !!vals[i];
+        c.addEventListener("change", function () { vals[i] = c.checked ? 1 : 0; out(); });
+        l.appendChild(c); l.appendChild(document.createTextNode(b)); box.appendChild(l);
+      });
+      out();
+    }
+    function out() { var r = TT[cur].f(vals); document.getElementById("ttout").textContent = r[0]; document.getElementById("ttwhy").textContent = r[1]; document.getElementById("ttsrc").innerHTML = "<span class=\"sl\">Spec</span>" + esc(TT[cur].src); }
+    TT.forEach(function (t, i) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = t.name;
+      b.addEventListener("click", function () { cur = i; vals = t.init.slice(); Array.prototype.forEach.call(sel.children, function (c, k) { c.setAttribute("aria-pressed", k === i ? "true" : "false"); }); render(); });
+      sel.appendChild(b);
+    });
+    sel.children[0].setAttribute("aria-pressed", "true"); vals = TT[0].init.slice(); render();
+  })();
+
+  window.PAGE = {
+    CW: 56,
+    dirName: { both: "both Adapters", dp: "DP Adapter", up: "UP Adapter", tx: "parity sender", rx: "parity receiver", any: "Retimer or device die" },
+    dirCls: { both: "sbc", dp: "sbc", up: "sbc", tx: "sbc", rx: "sbc", any: "sbc" },
+    groups: [["all", "All"], ["neg", "Negotiation"], ["lsm", "Adapter LSM"], ["par", "Parity"], ["err", "Errors & credits"]],
+    sigs: [
+      ["neg", "{AdvCap.Adapter}", "both", "64-bit data", "Advertise capabilities (Table 3-1 bits 0–31)", "PCIe/CXL: DP first, UP after reading it. MsgInfo FFFFh = Stall.", "§3.2.1.2, p.65 · p.283"],
+      ["neg", "{FinCap.Adapter}", "dp", "64-bit data", "Finalized Adapter configuration", "Msgcode 02h / 00h. Not sent for Streaming or Management-only.", "§3.2.1.2, p.65 · p.283"],
+      ["neg", "{AdvCap.CXL}", "both", "64-bit data", "CXL/PCIe details (Flexbus-mode bits)", "Msgcode 01h / 01h. MsgInfo 0000h Stack 0, 0001h Stack 1, FFFFh Stall.", "§3.2.1.2, p.65 · p.284"],
+      ["neg", "{FinCap.CXL}", "dp", "64-bit data", "Finalized CXL/PCIe details", "Msgcode 02h / 01h. Exactly one of CXL.io or PCIe set.", "§3.2.1.2, p.65 · §3.4 note, p.87 · p.284"],
+      ["neg", "{MultiProtAdvCap.Adapter} / {MultiProtFinCap.Adapter}", "both", "data", "Stack 1 protocol with Enhanced Multi-Protocol", "Same DP-first rule as Stack 0.", "§3.2.1.2, p.67"],
+      ["lsm", "{LinkMgmt.Adapter0.Req.*}", "both", "no data", "Stack 0 Adapter LSM state request", "Msgcode 03h; subcode 01h Active, 04h L1, 08h L2, 09h LinkReset, 0Ch Disable. Req.Active MsgInfo FFFFh = Stall.", "Table 7-8, p.276"],
+      ["lsm", "{LinkMgmt.Adapter0.Rsp.*}", "both", "no data", "Stack 0 Adapter LSM response", "Msgcode 04h; subcode 01h Active, 02h PMNAK, 04h L1, 08h L2, 09h LinkReset, 0Ch Disable.", "Table 7-8, p.276"],
+      ["lsm", "{LinkMgmt.Adapter1.Req.*} / {…Rsp.*}", "both", "no data", "Stack 1 Adapter LSM request / response", "Msgcode 05h (Req) / 06h (Rsp); same subcodes as Stack 0.", "Table 7-8, p.276–277"],
+      ["par", "{ParityFeature.Req}", "tx", "no data", "Ask to start inserting parity bytes", "Msgcode 07h / 00h. Sent in Retrain or L1.", "Table 7-8, p.277 · §3.9, p.95"],
+      ["par", "{ParityFeature.Ack} / {ParityFeature.Nak}", "rx", "no data", "Receiver ready / not ready", "Msgcode 08h; subcode 00h Ack, 01h Nak. Nak is logged by the requester.", "Table 7-8, p.277 · §3.9, p.96"],
+      ["err", "{ErrMsg}", "any", "no data", "Error reporting toward the host", "Msgcode 09h; subcode 00h correctable, 01h non-fatal, 02h fatal. Destination is the D2D Adapter.", "Table 7-8, p.275, 277"],
+      ["err", "{Nop.Crd}", "both", "no data", "Explicit end-to-end credit return", "Msgcode 00h / 00h; MsgInfo 1–4 credits. Destination is the D2D Adapter.", "Table 7-8, p.275"]
+    ],
+    wgroups: [["all", "All"], ["neg", "Negotiation"], ["fmt", "Flit formats"], ["crc", "CRC & Retry"], ["mux", "Stack mux"], ["pm", "States & PM"], ["par", "Runtime parity"]],
+    scenarios: [
+      {
+        id: "param", tab: "Parameter exchange", unit: "steps", title: "Stage 3 for a CXL link: DP and UP negotiate",
+        desc: "Sideband traffic between the two Adapters after RDI has reached Active. Each column is one step, not a fixed time.",
+        ref: "§3.2.1, p.62–70 · Figure 3-4, p.66 · §10.2.8, p.553",
+        n: 18, gaps: [],
+        sig: [
+          { name: "RDI pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 18]]) },
+          { name: "DP → UP (sideband)", d: "sb", t: "note", v: seq([["", 1], ["AdvCap.Adapter", 2], ["", 2], ["FinCap.Adapter", 2], ["AdvCap.CXL", 2], ["", 2], ["FinCap.CXL", 2], ["", 1], ["Adapter0.Req.Active", 2], ["Rsp.Active", 1], ["", 1]]) },
+          { name: "UP → DP (sideband)", d: "sb", t: "note", v: seq([["", 3], ["AdvCap.Adapter", 2], ["", 4], ["AdvCap.CXL", 2], ["", 3], ["Adapter0.Req.Active", 2], ["Rsp.Active", 1], ["", 1]]) },
+          { name: "exchange timer (8 ms)", d: "note", t: "note", v: seq([["counting: RDI Active, no Stall", 13], ["stopped", 5]]) },
+          { name: "FDI pl_inband_pres", d: "pl", t: "bit", v: bits(18, [[13, 17]]) },
+          { name: "FDI pl_state_sts", d: "pl", t: "bus", v: seq([["Reset", 17], ["Active", 1]]) },
+          { name: "mainband", d: "note", t: "note", v: seq([["", 17], ["SNH", 1]]) }
+        ],
+        steps: [
+          { r: [0, 2], t: "The Downstream Port advertises first", x: "Stage 2 is complete: RDI is Active and the 8 ms parameter-exchange timer starts. The DP Adapter sends {AdvCap.Adapter} with its capability bits: protocols, Retry, stack enables, Latency-Optimized options, DP role.", s: "§3.2.1, p.62 · §3.2.1.2, p.65 · p.283" },
+          { r: [3, 4], t: "The Upstream Port reviews and answers", x: "The UP waited for the DP's message, read it, and may adjust its own advertisement before sending {AdvCap.Adapter}.", w: "Only one side decides, so the two dies can never finalize different configurations.", s: "§3.2.1.2, p.65" },
+          { r: [5, 6], t: "The DP finalizes", x: "The DP sends {FinCap.Adapter}. A bit is set where both sides advertised it, subject to the stack and Retry rules: Retry is on only if both advertised it and Raw Format was not negotiated.", s: "§3.2.1.2, p.65–67" },
+          { r: [7, 12], t: "CXL details", x: "Because FinCap.Adapter set CXL 256B Flit Mode (or 68B Flit Mode), a second round runs: {AdvCap.CXL} both ways, then the DP's {FinCap.CXL}. Its CXL.io and PCIe bits decide CXL vs PCIe; Tables 3-8 and 3-9 then give the protocol and flit format.", s: "§3.2.1.2, p.65 · Tables 3-8, 3-9, p.86–88 · Table 9-42" },
+          { r: [13, 13], t: "Report to the Protocol Layer", x: "Parameter exchange finished well inside 8 ms, so the timer stops. The Adapter drives pl_protocol, pl_protocol_flitfmt and pl_protocol_vld on FDI and raises pl_inband_pres.", s: "§3.2.1.3, p.70 · Table 10-3, p.542–544" },
+          { r: [14, 17], t: "FDI bring-up, then the Sequence Number Handshake", x: "Each Protocol Layer requests Active; the Adapters exchange {LinkMgmt.Adapter0.Req.Active} and Rsp.Active; FDI goes Active. The first flits on the mainband complete the Sequence Number Handshake, using NOP flits if there is no payload.", s: "§3.2.1.3, p.70 · §10.2.8, p.553–555 · §3.8, p.94" }
+        ]
+      },
+      {
+        id: "retry", tab: "CRC error and replay", unit: "flit slots", title: "Retry: a CRC error on #12, Nak, replay, and an idle timeout",
+        desc: "256B flits on a link where each slot is one Flit Time (2 ns at x64 16 GT/s). S = flit carries its own sequence number; Ack, A n = flit carries an Ack (up to n); N n = Nak (replay from n+1).",
+        ref: "§3.8, p.93–94 · Table 3-5, p.80–81",
+        n: 20, gaps: [18],
+        sig: [
+          { name: "Die 0 → Die 1", d: "lp", t: "bus", v: ["#10·S", "#11·Ack", "#12·S", "#13·Ack", "#14·S", "#15·Ack", "#16·S", "#12·S", "#13·Ack", "#14·S", "#15·Ack", "#16·S", "#17·Ack", "#18·S", "", "", "", "", "", "#18·S"] },
+          { name: "Die 1 CRC / seq check", d: "note", t: "note", v: ["ok 10", "ok 11", "✗ 12", "drop 13", "drop 14", "drop 15", "drop 16", "ok 12", "ok 13", "ok 14", "ok 15", "ok 16", "ok 17", "ok 18", "", "", "", "", "", "dup 18"] },
+          { name: "Die 1 → FDI", d: "note", t: "note", v: ["#10", "#11", "#12", "cancel", "", "", "", "#12", "#13", "#14", "#15", "#16", "#17", "#18", "", "", "", "", "", ""] },
+          { name: "Die 1 → Die 0", d: "pl", t: "bus", v: ["#40·S", "#41·A10", "#42·S", "#43·N11", "#44·S", "#45·S", "#46·S", "#47·S", "#48·S", "#49·A13", "#50·S", "#51·A15", "#52·S", "#53·A17", "", "", "", "", "", "#54·A18"] },
+          { name: "Die 0 retry buffer", d: "note", t: "note", v: ["10", "10–11", "10–12", "10–13", "11–14", "11–15", "12–16", "12–16", "12–16", "12–16", "12–16", "14–16", "14–17", "16–18", "16–18", "18", "18", "18", "18", "18"] },
+          { name: "replay timer", d: "note", t: "note", v: seq([["", 14], ["idle: +1 per Flit Time", 4], ["", 1], ["≥ 375", 1]]) }
+        ],
+        steps: [
+          { r: [0, 1], t: "Explicit and Ack flits alternate", x: "Die 0's flit headers alternate between the flit's own sequence number (S) and an Ack for Die 1's traffic. PCIe would send three explicit-sequence flits first; UCIe alternates so Acks flow back sooner.", s: "§3.8, p.93 · Table 3-5, p.80–81" },
+          { r: [2, 3], t: "CRC fails on #12", x: "#12 is corrupted on the wire. Die 1's Adapter had already started passing it up FDI, so it cancels it with pl_flit_cancel. It sends a Nak whose header carries S = 11 (N−1, for N = 12).", s: "§3.7, p.92 · Table 3-5 Ack/Nak encoding, p.81 · Table 10-3 (pl_flit_cancel), p.542" },
+          { r: [3, 6], t: "Drop everything until the replay", x: "Die 1 drops #13–#16 even though they are good: UCIe has no receive retry buffer and no selective Nak. With nothing to acknowledge, Die 1 may send consecutive explicit-sequence flits.", w: "Go-back-N keeps every receiver simple; at BER 1e-15 or better replays are rare.", s: "§3.8, p.93" },
+          { r: [6, 7], t: "Purge, then replay from #12", x: "Die 0 processes Nak 11: flits up to #11 are acknowledged and purged, and #12–#16 are replayed, starting with an explicit sequence number so Die 1 can line up. In 68B format a PDS would come first so the replay starts 256B-aligned.", s: "§3.8, p.93 · §3.3.2.1, p.73" },
+          { r: [7, 13], t: "Back in order; the buffer drains", x: "Die 1 accepts #12 onward and forwards them; its Acks free Die 0's retry buffer. Die 0 can now send new flits #17 and #18.", s: "§3.8, p.93–94" },
+          { r: [14, 19], t: "Idle with #18 unacknowledged", x: "Die 1 goes quiet after Ack 17, so #18 is never acknowledged. No NOPs are being sent, but REPLAY_TIMEOUT_FLIT_COUNT still adds one per idle Flit Time. At ≥ 375 Die 0 replays #18; Die 1 sees a duplicate, drops it, and sends Ack 18.", w: "This is the spec's Implementation Note case. Sending a second Ack before going quiet avoids the 750 ns wait.", s: "§3.8 and Implementation Note, p.93–94" }
+        ]
+      },
+      {
+        id: "mux", tab: "Two stacks (Multi_Protocol)", unit: "flit slots", title: "Multi_Protocol_Enable: alternate stacks, fill with NOPs",
+        desc: "Two identical stacks share the link. Stack 0 always has data; stack 1 has three flits. Each slot is one flit on the link.",
+        ref: "§3.1, p.59",
+        n: 16, gaps: [],
+        sig: [
+          { name: "stack 0 has data", d: "lp", t: "bit", v: bits(16, [[0, 15]]) },
+          { name: "stack 1 has data", d: "lp", t: "bit", v: bits(16, [[3, 7]]) },
+          { name: "link flit", d: "pl", t: "bus", v: ["S0·a", "NOP", "S0·b", "S1·x", "S0·c", "S1·y", "S0·d", "S1·z", "S0·e", "NOP", "S0·f", "NOP", "S0·e", "NOP", "S0·f", "NOP"] },
+          { name: "header stack bit", d: "note", t: "note", v: ["0", "—", "0", "1", "0", "1", "0", "1", "0", "—", "0", "—", "0", "—", "0", "—"] },
+          { name: "receiver delivers to", d: "note", t: "note", v: ["stack 0", "drop", "stack 0", "stack 1", "stack 0", "stack 1", "stack 0", "stack 1", "stack 0", "drop", "stack 0", "drop", "stack 0", "drop", "stack 0", "drop"] },
+          { name: "event", d: "note", t: "note", v: seq([["", 11], ["Nak for S0·e", 1], ["replay keeps alternating", 4]]) }
+        ],
+        steps: [
+          { r: [0, 2], t: "One busy stack still alternates", x: "Only stack 0 has traffic. With Multi_Protocol_Enable each stack gets at most half the link, so the Adapter never sends two stack-0 flits in a row. It fills the gap with a NOP flit: Protocol ID 00b, all-zero body, not stored in the retry buffer, dropped by the receiver.", s: "§3.1, p.59" },
+          { r: [3, 7], t: "Both stacks interleave", x: "Stack 1 has three flits, so the link alternates 0, 1, 0, 1. The stack ID bit in each flit header tells the receiving Adapter which FDI to deliver to.", s: "§3.1, p.59 · Table 3-5 (Byte 0 bit 5), p.80" },
+          { r: [8, 11], t: "Back to NOP padding", x: "No fixed pattern is required: stack 0, NOP, stack 0 is as valid as stack 0, stack 1, stack 0.", s: "§3.1, p.59" },
+          { r: [12, 15], t: "Replays must alternate too", x: "A Nak causes S0·e and S0·f to be replayed from the shared retry buffer. The Adapter must still insert NOPs between them.", w: "The receiving stack was built for half the link rate; back-to-back replayed flits would overrun it.", s: "§3.1, p.59 · §3.8, p.93" }
+        ]
+      },
+      {
+        id: "pm", tab: "PM entry (CXL)", unit: "steps", title: "Hierarchical PM entry for a CXL stack",
+        desc: "From the vLSMs down to the PHY. Each column is one step, not a fixed time.",
+        ref: "§3.6 and Figure 3-28, p.90–91",
+        n: 14, gaps: [],
+        sig: [
+          { name: "mainband", d: "note", t: "note", v: seq([["ALMP PM req/rsp", 3], ["Acks drain", 2], ["", 9]]) },
+          { name: "vLSM CXL.io", d: "lp", t: "bus", v: seq([["Active", 1], ["L1", 13]]) },
+          { name: "vLSM CXL.cachemem", d: "lp", t: "bus", v: seq([["Active", 2], ["L1", 12]]) },
+          { name: "retry buffer", d: "note", t: "note", v: seq([["holding ALMPs", 4], ["empty", 10]]) },
+          { name: "Adapter LSM (stack 0)", d: "pl", t: "bus", v: seq([["Active", 7], ["L1", 7]]) },
+          { name: "sideband", d: "sb", t: "note", v: seq([["", 5], ["Adapter0 Req/Rsp.L1", 2], ["", 1], ["RDI Req/Rsp.L1", 3], ["", 3]]) },
+          { name: "RDI pl_state_sts", d: "pl", t: "bus", v: seq([["Active", 11], ["L1", 3]]) },
+          { name: "PHY", d: "note", t: "note", v: seq([["", 11], ["mainband off, sideband on", 3]]) }
+        ],
+        steps: [
+          { r: [0, 2], t: "vLSMs first, on the mainband", x: "Both CXL vLSMs negotiate L1 with ALMPs. ALMPs travel as flits through the retry buffer, so they are protected by CRC and replay. CXL 68B over UCIe uses the 256B-mode ALMP formats and flows.", s: "§3.6, p.90–91 · Figure 3-28, p.91" },
+          { r: [3, 4], t: "Empty the retry buffer", x: "The Adapter LSM may start its PM handshake only when both vLSMs are in PM and the retry buffer is empty: every ALMP acknowledged.", s: "Figure 3-28, p.91 · §10.1.7, p.535" },
+          { r: [5, 7], t: "Adapter LSM on sideband", x: "The Adapters coordinate the Adapter LSM's L1 entry with {LinkMgmt.Adapter0.Req/Rsp.L1}. With two stacks, each Adapter LSM does this on its own.", s: "§3.6 step 2, p.91 · Table 7-8, p.276" },
+          { r: [8, 11], t: "RDI last", x: "With every Adapter LSM in PM, the Adapter requests L1 on RDI and the PHYs exchange {LinkMgmt.RDI.Req/Rsp.L1}.", s: "§3.6 step 3, p.91 · §10.1.7, p.535" },
+          { r: [11, 13], t: "PHY powers down; the sideband stays", x: "The PHY may enter a deeper power state; the sideband must stay up because PM exit starts there. Exit runs in reverse: PHY retrain, RDI Active, Adapter LSM Active, then ALMPs for the vLSMs.", s: "§3.6, p.91" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      waveEl.innerHTML = renderWave(s, st.r, false);
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+</script>
+</body>
+</html>
