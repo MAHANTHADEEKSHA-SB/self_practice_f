@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe Link Training (LTSM) Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the UCIe field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="fdi.html">FDI</a><a href="rdi.html">RDI</a><a href="d2d-adapter.html">D2D Adapter</a><span class="here">Link Training</span><a href="logical-phy.html">Logical PHY</a><a href="electrical-ucie-3d.html">Electrical &amp; UCIe-3D</a></div>
+    <div class="eyebrow">UCIe 3.0 · Chapter 4.4 to 4.6 · Physical Layer link training</div>
+    <h1>UCIe Link Training (LTSM) Field Guide</h1>
+    <p class="lede">The Link Training State Machine takes a UCIe link from power-on to ACTIVE: bring up the sideband, check and repair clock, valid and data lanes at 4 GT/s, switch to the target speed, calibrate and center, verify, and hand over to the Adapter. It also runs retrains, power states and error recovery. This guide walks every state in order, explains why each step exists, and shows the sideband handshakes that drive it.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw" style="background:var(--lp)"></i>Die 0 / UCIe Module</span>
+      <span><i class="sw" style="background:var(--pl)"></i>Die 1 / Module Partner, RDI status</span>
+      <span><i class="sw" style="background:var(--sb)"></i>sideband messages</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a>
+    <a href="#ltsm">2 · The state machine</a>
+    <a href="#reset">3 · Triggers, RESET</a>
+    <a href="#sbinit">4 · SBINIT</a>
+    <a href="#mbinit">5 · MBINIT</a>
+    <a href="#mbtrain">6 · MBTRAIN</a>
+    <a href="#tests">7 · Test primitives</a>
+    <a href="#retrain">8 · Retrain, errors, PM</a>
+    <a href="#recal">9 · Runtime recal</a>
+    <a href="#rationale">10 · Why each rule</a>
+    <a href="#live">11 · Live scenarios</a>
+    <a href="#silicon">12 · Real silicon</a>
+    <a href="#verify">13 · Verification</a>
+    <a href="#quiz">14 · Test yourself</a>
+    <a href="#refs">15 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why link training exists</h2>
+    <p class="sub">Four problems the LTSM solves. Every state maps to at least one of them.</p>
+    <div class="grid g2">
+      <div class="card"><div class="tagline">Two independent dies</div><h3>Agree on everything, step by step</h3><p>The dies come out of reset at different times, from different vendors, maybe at different maximum speeds. Every sub-state ends with a request/response pair on sideband, so neither die moves on until the other is ready.</p><p class="src"><span class="sl">Spec</span>§4.5.3.4 intro, p.155 · §4.5.3, p.131</p></div>
+      <div class="card"><div class="tagline">Manufacturing defects</div><h3>Find and route around bad bumps</h3><p>Micro-bumps open or short. Training checks clock, track, valid and every data lane with known patterns, then repairs (Advanced Package, using redundant lanes) or narrows the link (Standard Package).</p><p class="src"><span class="sl">Spec</span>§4.5.3.3.3–4.5.3.3.6, p.146–155 · §4.5.3.4.13, p.167</p></div>
+      <div class="card"><div class="tagline">Signal integrity at speed</div><h3>Set Vref, center the clock, deskew</h3><p>Margins shrink as speed rises. The LTSM first gets a working link at 4 GT/s, then moves to the target speed and calibrates: Tx self-cal, Rx clock cal, valid and data centering, Vref, per-lane deskew, then a final link check.</p><p class="src"><span class="sl">Spec</span>§4.5.3.4, p.155–167</p></div>
+      <div class="card"><div class="tagline">Change over time</div><h3>Retrain, recalibrate, degrade</h3><p>Temperature and voltage drift. PHYRETRAIN re-runs training on errors or request, LINKSPEED can degrade speed or width, and Runtime Recalibration uses the Track lane to adjust while data keeps flowing.</p><p class="src"><span class="sl">Spec</span>§4.5.3.7, p.168 · §4.6, p.173</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="ltsm">
+  <div class="wrap">
+    <h2>2 · The state machine</h2>
+    <p class="sub">Top-level states and their arcs. MBINIT and MBTRAIN have sub-states (sections 5 and 6). Every state except RESET, ACTIVE, L1/L2 and TRAINERROR has an 8 ms residency timeout, per sub-state.</p>
+    <figure>
+      <svg viewBox="0 0 820 330" role="img" aria-label="LTSM: RESET to SBINIT to MBINIT to MBTRAIN to LINKINIT to ACTIVE. ACTIVE to PHYRETRAIN, which goes back into MBTRAIN. ACTIVE to L1 and L2; L1 exits to MBTRAIN.SPEEDIDLE, L2 exits to RESET. Any state to TRAINERROR, which goes to RESET.">
+        <defs><marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g style="color:var(--ink)" font-family="var(--font-body)" font-size="13">
+          <g fill="var(--surface)" stroke="currentColor" stroke-width="1.4">
+            <rect x="14" y="60" width="96" height="40" rx="20"/><rect x="140" y="60" width="96" height="40" rx="20"/><rect x="266" y="60" width="96" height="40" rx="20"/><rect x="392" y="60" width="110" height="40" rx="20"/><rect x="532" y="60" width="104" height="40" rx="20"/>
+          </g>
+          <rect x="666" y="56" width="130" height="48" rx="12" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.8"/>
+          <g text-anchor="middle" font-weight="600">
+            <text x="62" y="85">RESET</text><text x="188" y="85">SBINIT</text><text x="314" y="85">MBINIT</text><text x="447" y="85">MBTRAIN</text><text x="584" y="85">LINKINIT</text><text x="731" y="85">ACTIVE</text>
+          </g>
+          <g stroke="currentColor" stroke-width="1.3" fill="none">
+            <line x1="110" y1="80" x2="138" y2="80" marker-end="url(#m2)"/><line x1="236" y1="80" x2="264" y2="80" marker-end="url(#m2)"/><line x1="362" y1="80" x2="390" y2="80" marker-end="url(#m2)"/><line x1="502" y1="80" x2="530" y2="80" marker-end="url(#m2)"/><line x1="636" y1="80" x2="664" y2="80" marker-end="url(#m2)"/>
+          </g>
+          <g fill="var(--surface)" stroke="currentColor" stroke-width="1.4"><rect x="560" y="170" width="120" height="40" rx="20"/><rect x="700" y="170" width="60" height="40" rx="20"/><rect x="770" y="170" width="44" height="40" rx="20"/></g>
+          <g text-anchor="middle" font-weight="600"><text x="620" y="195">PHYRETRAIN</text><text x="730" y="195">L1</text><text x="792" y="195">L2</text></g>
+          <g stroke="currentColor" stroke-width="1.2" fill="none">
+            <line x1="700" y1="104" x2="640" y2="168" marker-end="url(#m2)"/>
+            <line x1="730" y1="104" x2="730" y2="168" marker-end="url(#m2)"/>
+            <line x1="770" y1="104" x2="790" y2="168" marker-end="url(#m2)"/>
+            <path d="M560,190 C500,190 470,150 455,104" marker-end="url(#m2)"/>
+            <path d="M720,212 C700,260 480,250 440,104" marker-end="url(#m2)"/>
+            <path d="M792,212 C792,300 62,300 62,104" marker-end="url(#m2)"/>
+          </g>
+          <g fill="var(--muted)" font-size="11.5" text-anchor="end"><text x="432" y="124">PHYRETRAIN exit to</text><text x="432" y="138">TXSELFCAL, REPAIR</text><text x="432" y="152">or SPEEDIDLE</text></g>
+          <text x="676" y="258" fill="var(--muted)" font-size="11.5" text-anchor="end">L1 exit → MBTRAIN.SPEEDIDLE</text>
+          <text x="300" y="292" fill="var(--muted)" font-size="11.5">L2 exit → RESET (full training)</text>
+          <rect x="140" y="170" width="140" height="40" rx="8" fill="var(--surface)" stroke="var(--bad)" stroke-width="1.6"/>
+          <text x="210" y="195" text-anchor="middle" font-weight="600">TRAINERROR</text>
+          <text x="210" y="162" text-anchor="middle" fill="var(--muted)" font-size="11.5">from any state (8 ms timeout, fatal error)</text>
+          <path d="M140,190 C80,190 62,150 62,104" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#m2)"/>
+          <text x="20" y="40" fill="var(--muted)" font-size="11.5">≥ 4 ms</text>
+          <text x="140" y="40" fill="var(--muted)" font-size="11.5">800 MT/s SB</text>
+          <text x="266" y="40" fill="var(--muted)" font-size="11.5">4 GT/s, repair</text>
+          <text x="392" y="40" fill="var(--muted)" font-size="11.5">target speed</text>
+          <text x="532" y="40" fill="var(--muted)" font-size="11.5">RDI → Active</text>
+          <text x="666" y="40" fill="var(--muted)" font-size="11.5">scrambled data</text>
+        </g>
+      </svg>
+      <figcaption>Each exit in MBINIT and MBTRAIN is a sideband request/response; a die moves on only after it has <em>sent and received</em> the response. A PHYRETRAIN exit lands in MBTRAIN.TXSELFCAL, MBTRAIN.REPAIR or MBTRAIN.SPEEDIDLE depending on the resolved retrain encoding.<span class="ref">Spec: Figure 4-33 and Table 4-6, p.131 · §4.5, p.124 · §4.5.3.7, p.168–171 · §4.5.3.9, p.172</span></figcaption>
+    </figure>
+    <div class="tbl-wrap" style="margin-top:14px">
+      <table>
+        <thead><tr><th>State</th><th>Job</th><th>RDI shows</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">RESET</td><td>Wait ≥ 4 ms for PLLs and supplies; wait for a training trigger</td><td class="mono">Reset</td><td class="ref">§4.5.3.1, p.132</td></tr>
+          <tr><td class="mono">SBINIT</td><td>Detect (and on Advanced, repair) the sideband; exchange Out of Reset</td><td class="mono">Reset</td><td class="ref">§4.5.3.2, p.133</td></tr>
+          <tr><td class="mono">MBINIT</td><td>Exchange parameters; calibrate; check/repair clock, valid, data lanes at 4 GT/s; detect lane reversal</td><td class="mono">Reset</td><td class="ref">§4.5.3.3, p.136</td></tr>
+          <tr><td class="mono">MBTRAIN</td><td>Vref at 4 GT/s; switch to target speed; calibrate, center, deskew; check link; repair or degrade</td><td class="mono">Reset or Retrain</td><td class="ref">§4.5.3.4, p.155</td></tr>
+          <tr><td class="mono">LINKINIT</td><td>Adapter link management: RDI Active handshake. Scrambler reset on entry</td><td class="mono">Reset/Retrain → Active</td><td class="ref">§4.5.3.5, p.168</td></tr>
+          <tr><td class="mono">ACTIVE</td><td>Traffic, scrambled</td><td class="mono">Active</td><td class="ref">§4.5.3.6, p.168</td></tr>
+          <tr><td class="mono">PHYRETRAIN</td><td>Agree a retrain type, then re-enter MBTRAIN</td><td class="mono">Retrain</td><td class="ref">§4.5.3.7, p.168</td></tr>
+          <tr><td class="mono">L1 / L2</td><td>Power management, transmitters tri-stated</td><td class="mono">L1 / L2</td><td class="ref">§4.5.3.9, p.172</td></tr>
+          <tr><td class="mono">TRAINERROR</td><td>Transitional state back to RESET after a fatal or non-fatal event</td><td class="mono">LinkError or Reset</td><td class="ref">§4.5.3.8, p.171</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="reset">
+  <div class="wrap">
+    <h2>3 · Training triggers and RESET</h2>
+    <div class="twocol">
+      <div class="card">
+        <h3>What starts mainband training</h3>
+        <ul class="tight" style="font-size:15px">
+          <li>Software writes 1 to <strong>Start UCIe Link Training</strong> in the UCIe Link Control register.</li>
+          <li>The Adapter makes a <strong>NOP → Active</strong> transition on RDI while status is Reset.</li>
+          <li>The <strong>SBINIT pattern</strong> (two iterations of 64-UI clock pattern + 32-UI low) is seen on any sideband receiver pair (when management transport is not up).</li>
+          <li>With management transport up: <code>{SBINIT done req}</code> from the partner, or software Retrain Link in a Management Port structure.</li>
+        </ul>
+        <p style="font-size:15px">Hardware may retry training an implementation-specific number of times, then waits in RESET for a new trigger. If software- or RDI-triggered training fails, or the link drops from up to down on a PHY timeout, the PHY must raise a fatal error to the Adapter on RDI.</p>
+        <p class="src"><span class="sl">Spec</span>§4.5, p.124–125</p>
+      </div>
+      <div class="card">
+        <h3>RESET: at least 4 ms, every time</h3>
+        <ul class="tight" style="font-size:15px">
+          <li>Minimum 4 ms on every entry, for PLLs and other initialization.</li>
+          <li>Exit needs stable supplies, an 800 MHz sideband clock, stable PHY and Adapter clocks, mainband clock at the slowest rate (2 GHz for 4 GT/s), SoC not holding reset, and a training trigger.</li>
+          <li>All mainband transmitters tri-stated; receivers may be off; sideband receivers enabled.</li>
+          <li>Without management transport up, sideband register accesses arriving in RESET may be completed as Unsupported Requests, with credits returned.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§4.5.3.1, p.132–133</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sbinit">
+  <div class="wrap">
+    <h2>4 · SBINIT: bring up the control channel</h2>
+    <p class="sub">Everything after this point is coordinated over the sideband, so it comes first. It runs at 800 MT/s with the 800 MHz sideband clock.</p>
+    <div class="twocol">
+      <div class="flow">
+        <div><span class="n">1</span><p>Send repeating <strong>64-UI clock pattern (1010…) + 32-UI low</strong> on sideband data, with the sideband clock strobing during the 64 UI. Advanced Package drives both <code>TXDATASB</code> and <code>TXDATASBRD</code>, and both clocks.</p></div>
+        <div><span class="n">2</span><p>The partner samples every data/clock combination (4 on Advanced). Detection = 128 UI of clock pattern seen.</p></div>
+        <div><span class="n">3</span><p>On detection, send <strong>four more iterations</strong>, then stop and enable the sideband for messages. If nothing is detected, alternate 1 ms sending / 1 ms quiet; at 8 ms, TRAINERROR.</p></div>
+        <div><span class="n">4</span><p>Send <code class="sbc">{SBINIT Out of Reset}</code> until the same message is received (8 ms timeout). On Advanced it carries the chosen data/clock assignment; both sides then use that "functional sideband".</p></div>
+        <div><span class="n">5</span><p><code class="sbc">{SBINIT done req}</code> / <code class="sbc">resp</code>. When sent and received, go to MBINIT.</p></div>
+      </div>
+      <div class="card">
+        <div class="tagline">Advanced Package sideband choice</div>
+        <h3>Four combinations, fixed priority</h3>
+        <div class="tbl-wrap" style="border:0"><table>
+          <thead><tr><th>Result bit</th><th>Clock samples data</th><th>Chosen if</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px">
+            <tr><td>[0]</td><td>CKSB × DATASB</td><td>xxx1</td></tr>
+            <tr><td>[1]</td><td>CKSBRD × DATASB</td><td>xx10</td></tr>
+            <tr><td>[2]</td><td>CKSB × DATASBRD</td><td>x100</td></tr>
+            <tr><td>[3]</td><td>CKSBRD × DATASBRD</td><td>1000</td></tr>
+          </tbody>
+        </table></div>
+        <p style="font-size:15px">0000: sideband not functional. Standard Package has no redundant sideband lanes, so it has only one combination.</p>
+        <p class="src"><span class="sl">Spec</span>§4.5.3.2, p.133–135 (pseudocode)</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="mbinit">
+  <div class="wrap">
+    <h2>5 · MBINIT: get the mainband working at 4 GT/s</h2>
+    <p class="sub">Six sub-states, in order. Everything runs at the lowest rate (4 GT/s) where margin is largest. Clock and valid are proven before data, because data is sampled with the clock and framed by valid.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Sub-state</th><th>What happens</th><th>Pattern / pass rule</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">PARAM</td><td>Exchange voltage swing, max data rate (partner replies with the max common rate), clock mode (strobe/continuous), clock phase, Module ID, UCIe-A x32 / UCIe-S x8, sideband feature extensions, TARR. Management transport negotiation may run here.</td><td>{MBINIT.PARAM configuration req/resp}. All parameters except Module ID must match across modules.</td><td class="ref">§4.5.3.3.1, p.137–139</td></tr>
+          <tr><td class="mono">CAL</td><td>Implementation-specific Tx/Rx calibration (duty cycle, Rx offset, Vref). Transmitters tri-stated.</td><td>{MBINIT.CAL Done req/resp}</td><td class="ref">§4.5.3.3.2, p.146</td></tr>
+          <tr><td class="mono">REPAIRCLK</td><td>Check clock, track and redundant clock lanes for opens and shorts; repair on Advanced, functional check on Standard.</td><td>128 × (16 clock cycles + 8 low); pass = ≥ 16 consecutive iterations</td><td class="ref">§4.5.3.3.3, p.146–149</td></tr>
+          <tr><td class="mono">REPAIRVAL</td><td>Clock at data-UI center; partner samples Valid with forwarded clock. Repair Valid on Advanced.</td><td>VALTRAIN (four 1s, four 0s)</td><td class="ref">§4.5.3.3.4, p.149–151</td></tr>
+          <tr><td class="mono">REVERSALMB</td><td>Detect whether data lanes are wired reversed. If most lanes fail, apply reversal on the Tx and test again.</td><td>128 × "Per Lane ID" (16-bit, unscrambled) on all N lanes; pass = ≥ 16 consecutive. N = 68 for x64 Advanced (64 + 4 RD)</td><td class="ref">§4.5.3.3.5, p.151–153</td></tr>
+          <tr><td class="mono">REPAIRMB</td><td>Test every data lane (incl. redundant). Advanced: repair if resources allow, re-test, else TRAINERROR. Standard: width degrade to a functional half.</td><td>Tx-initiated point test, Per Lane ID</td><td class="ref">§4.5.3.3.6, p.153–155</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note-s" style="margin-top:8px">Lane reversal and repair mappings are covered in the Logical PHY guide (§4.2–4.3). If interoperable parameters cannot be agreed in PARAM, the spec strongly recommends logging an Internal Error, taking the LTSM to TRAINERROR, RDI to LinkError, and asserting <code>pl_trainerror</code>.<span class="ref" style="display:block">Spec: §4.5.3.3.1, p.139</span></p>
+  </div>
+</section>
+
+<section id="mbtrain">
+  <div class="wrap">
+    <h2>6 · MBTRAIN: go to speed and center</h2>
+    <p class="sub">Thirteen sub-states. A module enters each one; if it has nothing to do there, it still exits through the sideband handshake.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Sub-state</th><th>Rate</th><th>Purpose</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="mono">VALVREF</td><td>4 GT/s</td><td>Optimize Valid receiver Vref (VALTRAIN pattern, not scrambled)</td><td class="ref">§4.5.3.4.1, p.156</td></tr>
+          <tr><td class="num">2</td><td class="mono">DATAVREF</td><td>4 GT/s</td><td>Optimize data receiver Vref (4K UI LFSR with valid framing)</td><td class="ref">§4.5.3.4.2, p.157</td></tr>
+          <tr><td class="num">3</td><td class="mono">SPEEDIDLE</td><td>change</td><td>Electrical idle while frequency changes: to max common rate, or last ACTIVE rate (from L1), or next lower rate (speed degrade). At 4 GT/s with nothing lower: TRAINERROR</td><td class="ref">§4.5.3.4.3, p.158</td></tr>
+          <tr><td class="num">4</td><td class="mono">TXSELFCAL</td><td>target</td><td>Transmitter calibration, independent of the partner</td><td class="ref">§4.5.3.4.4, p.158</td></tr>
+          <tr><td class="num">5</td><td class="mono">RXCLKCAL</td><td>target</td><td>Receiver clock calibration (incl. I/Q correction). Free-running clock enforced from here if continuous mode</td><td class="ref">§4.5.3.4.5, p.158–159</td></tr>
+          <tr><td class="num">6</td><td class="mono">VALTRAINCENTER</td><td>target</td><td>Center Valid against clock, before data</td><td class="ref">§4.5.3.4.6, p.159</td></tr>
+          <tr><td class="num">7</td><td class="mono">VALTRAINVREF</td><td>target</td><td>Optional Valid Vref at speed</td><td class="ref">§4.5.3.4.7, p.160</td></tr>
+          <tr><td class="num">8</td><td class="mono">DATATRAINCENTER1</td><td>target</td><td>Data-to-clock centering with LFSR</td><td class="ref">§4.5.3.4.8, p.161</td></tr>
+          <tr><td class="num">9</td><td class="mono">DATATRAINVREF</td><td>target</td><td>Optional data Vref at speed</td><td class="ref">§4.5.3.4.9, p.161</td></tr>
+          <tr><td class="num">10</td><td class="mono">RXDESKEW</td><td>target</td><td>Optional per-lane receiver deskew</td><td class="ref">§4.5.3.4.10, p.162</td></tr>
+          <tr><td class="num">11</td><td class="mono">DATATRAINCENTER2</td><td>target</td><td>Re-center clock to the aggregate data after the partner's deskew</td><td class="ref">§4.5.3.4.11, p.164</td></tr>
+          <tr><td class="num">12</td><td class="mono">LINKSPEED</td><td>target</td><td>Check stability: 4K UI LFSR point test at the final phase. Pass → LINKINIT; fail → REPAIR, SPEEDIDLE (degrade) or PHYRETRAIN</td><td class="ref">§4.5.3.4.12, p.164–167</td></tr>
+          <tr><td class="num">13</td><td class="mono">REPAIR</td><td>—</td><td>Advanced: apply lane repair if resources ≥ failing lanes. Standard: degrade x16→x8 or x8→x4 if failures fit in one half. Exit to TXSELFCAL</td><td class="ref">§4.5.3.4.13, p.167–168</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px"><p><strong>Strobe vs continuous clock.</strong> At ≤ 32 GT/s each side requests strobe (clock only with data) or continuous clock in MBINIT.PARAM. Above 32 GT/s the clock is always continuous. MBINIT and early MBTRAIN run in strobe mode so clock and valid lanes are checked in a structured way; a requested free-running clock starts at RXCLKCAL and stays through ACTIVE.</p><p class="src"><span class="sl">Spec</span>§4.5.3.3.1 "Clock Mode" and Implementation Note, p.137–138</p></div>
+  </div>
+</section>
+
+<section id="tests">
+  <div class="wrap">
+    <h2>7 · The test primitives everything is built from</h2>
+    <p class="sub">MBINIT and MBTRAIN reuse four operations. They differ in who drives the sweep and who logs results.</p>
+    <div class="grid g2">
+      <div class="card"><div class="tagline">Tx-initiated point test (§4.5.1.1)</div><ol class="tight" style="font-size:14.5px;padding-left:20px;margin:0"><li>{Start Tx Init D to C point test req} with pattern, mode and compare setup; partner arms comparators, responds.</li><li>{LFSR clear error req/resp}: both reset LFSRs and results.</li><li>Tx sends the pattern for the set number of cycles; Rx compares every UI.</li><li>{Tx Init D to C results req/resp}: Tx reads the partner's log.</li><li>{End Tx Init D to C point test req/resp}.</li></ol><p class="src"><span class="sl">Spec</span>§4.5.1.1, p.125–126</p></div>
+      <div class="card"><div class="tagline">Eye width sweep and Rx-initiated variants</div><p style="font-size:15px">An eye width sweep repeats the point test across PI (clock phase) settings to find the passing range. Rx-initiated versions let the receiver drive the test and keep its own results, then share them, used where the receiver is optimizing (Vref, deskew).</p><p class="src"><span class="sl">Spec</span>§4.5.1.2–4.5.1.4, p.127–130</p></div>
+      <div class="card"><div class="tagline">Patterns</div><ul class="tight" style="font-size:15px"><li>LFSR: G(X) = X<sup>23</sup>+X<sup>21</sup>+X<sup>16</sup>+X<sup>8</sup>+X<sup>5</sup>+X<sup>2</sup>+1 (same as PCIe), lane-dependent seed (lane mod 8).</li><li>VALTRAIN: four 1s, four 0s.</li><li>Per Lane ID: 16-bit pattern carrying the lane number; never scrambled.</li><li>Burst mode (burst/idle/iteration counts) or continuous mode.</li></ul><p class="src"><span class="sl">Spec</span>§4.4.1, p.120 · Table 4-5, p.126 · Table 4-7, p.151</p></div>
+      <div class="card"><div class="tagline">Two comparison modes</div><p style="font-size:15px"><strong>Per-lane:</strong> a sticky error bit per lane once errors exceed the threshold; used to find which lanes to repair (N = 68 for x64 Advanced, 34 for x32, 16 or 8 for Standard). <strong>Aggregate:</strong> any-lane errors per UI counted in a 16-bit counter; used for module-level margining.</p><p class="src"><span class="sl">Spec</span>§4.4, p.119–120</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="retrain">
+  <div class="wrap">
+    <h2>8 · PHYRETRAIN, TRAINERROR and PM</h2>
+    <div class="twocol">
+      <div class="card">
+        <h3>Retrain: four ways in, one negotiation</h3>
+        <ul class="tight" style="font-size:15px">
+          <li><strong>Adapter-directed</strong>: RDI request Retrain → stall handshake → {LinkMgmt.RDI.Req.Retrain}.</li>
+          <li><strong>PHY-initiated</strong>: Valid framing error → <code>pl_error</code> with the bad data → stall → Req.Retrain.</li>
+          <li><strong>Remote request</strong>: partner's Req.Retrain → stall → Rsp.Retrain.</li>
+          <li><strong>From LINKSPEED</strong>: Runtime Link Test Control changed.</li>
+        </ul>
+        <p style="font-size:15px">Then both send <code class="sbc">{PHYRETRAIN.retrain start req}</code> with a retrain encoding; mismatches resolve to the more severe one (try it on the right). All modules of a link must resolve the same way.</p>
+        <p class="src"><span class="sl">Spec</span>§4.5.3.7, p.168–171 · Tables 4-10 to 4-12, p.169</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Retrain resolver (Table 4-12)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:14px">
+          <label>Die 0<br><select id="rt0" style="width:100%;font:inherit;padding:4px"><option value="1">No lane errors (001b)</option><option value="4">Repair (100b)</option><option value="2">Speed degrade (010b)</option></select></label>
+          <label>Die 1<br><select id="rt1" style="width:100%;font:inherit;padding:4px"><option value="1">No lane errors (001b)</option><option value="4">Repair (100b)</option><option value="2">Speed degrade (010b)</option></select></label>
+        </div>
+        <h3 id="rtout" style="margin-top:12px"></h3>
+        <p id="rtwhy" style="font-size:15px;margin:0"></p>
+        <p class="src"><span class="sl">Spec</span>Tables 4-11 and 4-12, p.169</p>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><h3>TRAINERROR</h3><p style="font-size:15px">Transmitters tri-stated. If sideband works, enter via {TRAINERROR Entry req/resp} (8 ms timeout). Exit to RESET is implementation-specific: quickly if RDI is not in LinkError, but held as long as RDI is in LinkError. In-flight sideband packets finish first.</p><p class="src"><span class="sl">Spec</span>§4.5.3.8, p.171–172</p></div>
+      <div class="card"><h3>L1 and L2</h3><p style="font-size:15px">Entered when RDI reaches PM. Transmitters tri-stated. L1 exit → MBTRAIN.SPEEDIDLE (restores the last ACTIVE speed). L2 exit → RESET and full training. Exits are coordinated with RDI's PM exit flow.</p><p class="src"><span class="sl">Spec</span>§4.5.3.9, p.172 · §4.5.3.4.3, p.158</p></div>
+      <div class="card"><h3>L2 Sideband Power Down</h3><p style="font-size:15px">Optional, negotiated via Sideband Feature Extensions; all modules must agree. Most sideband logic may power off in L2. Wake: sideband clock = 1, data = 0 for ≥ 100 ns on both sides, then RESET, SBINIT and full training.</p><p class="src"><span class="sl">Spec</span>§4.5.3.9.1, p.172 · Figure 4-42, p.173</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="recal">
+  <div class="wrap">
+    <h2>9 · Runtime Recalibration</h2>
+    <div class="twocol">
+      <div class="flow">
+        <div><span class="n">1</span><p>Receiver enables its Track buffers and sends <code class="sbc">{RECAL.track pattern init req}</code>.</p></div>
+        <div><span class="n">2</span><p>Partner responds and starts the Track pattern with the forwarded clock (re-enabling a gated clock if needed).</p></div>
+        <div><span class="n">3</span><p>Receiver recalibrates and sends <code class="sbc">{RECAL.track pattern done req}</code>, or, if TARR was negotiated and it wants help, sends <code class="sbc">{RECAL.track tx adjust req}</code> with a delay correction in 1/64 UI steps.</p></div>
+        <div><span class="n">4</span><p>Partner may adjust its Tx and answers; it must avoid the 8 ms timeout (Stall every 4 ms recommended).</p></div>
+      </div>
+      <div class="card"><p style="font-size:15px">Data keeps flowing: mainband data with correct valid framing must still be sampled and processed during recalibration. TARR (Tx Adjustment during Runtime Recalibration) lets the transmitter absorb drift, so receivers need less margin and less power. On unterminated links the idle Track alternates low and high across iterations to limit aging.</p><p class="src"><span class="sl">Spec</span>§4.6, p.173–175 · §4.5.3.3.1 (TARR), p.138</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="rationale">
+  <div class="wrap">
+    <h2>10 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives a training rule, the reason behind it, a worked example, and what breaks without it.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="flow">
+        <div class="meta"><span>Flow control</span><span>§4.5 p.124</span></div>
+        <h3>8 ms per state, reset by Stall</h3>
+        <p class="rule">Every state except RESET, ACTIVE, L1/L2 and TRAINERROR times out after 8 ms (per sub-state), going to TRAINERROR and then RESET. RDI sideband handshakes also time out at 8 ms. A Stall-encoded message resets the timer. Tolerance is −0%/+50%.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A die that died or hung must not leave its partner waiting forever. Per sub-state keeps the bound tight even though MBTRAIN has 13 sub-states. Stall lets a slow but healthy partner (typically a Retimer waiting on its far link) keep the link alive.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 1 stops answering in MBTRAIN.RXDESKEW because its firmware crashed. Die 0 times out between 8 and 12 ms later, enters TRAINERROR, then RESET, and waits for a new trigger.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A timer that spans all of MBTRAIN allows 13 × 8 ms ≈ 100 ms of hang before recovery; a timer that ignores Stall kills every Retimer link.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Timeout rule, Stall reset, tolerance <span class="ref">§4.5, p.124</span></li><li><span class="kind derived">Derived</span>8 ms × 1.5 = 12 ms maximum</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="flow">
+        <div class="meta"><span>Flow control</span><span>§4.5.3.4 p.155</span></div>
+        <h3>Every sub-state ends with "sent and received"</h3>
+        <p class="rule">A module leaves a sub-state only after it has sent its done/end request <em>and</em> received the partner's response. Modules enter every MBTRAIN sub-state, even ones with nothing to do.</p>
+        <div class="part"><span class="l l-why">Why</span><p>This keeps both dies in lock-step through 20-plus sub-states without any shared timing. Visiting every sub-state means the two state machines can never skip to different places.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 needs no deskew; Die 1 does. Die 0 enters RXDESKEW, sends its end request at once, and waits there until Die 1 has finished and responded. Both exit to DATATRAINCENTER2 together.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that skips RXDESKEW when it has nothing to do sends a DATATRAINCENTER2 message that the partner, still in RXDESKEW, does not expect; one side times out.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Enter each sub-state; exit through the handshake <span class="ref">§4.5.3.4, p.155</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="flow">
+        <div class="meta"><span>Flow control</span><span>§4.5.3.1 p.132</span></div>
+        <h3>RESET lasts at least 4 ms</h3>
+        <p class="rule">On every entry to RESET the PHY stays at least 4 ms, so PLLs stabilize and initialization completes, before any exit conditions are considered.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Mainband and sideband clocks must be stable before training patterns mean anything. A fixed floor also makes the two dies' timing predictable after a TRAINERROR, so retries do not race.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An L2 exit or a TRAINERROR recovery always costs at least 4 ms before SBINIT. This is why L2 exit is far slower than L1 exit, which never visits RESET.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Leaving RESET at 1 ms: SBINIT patterns are sent from an unlocked PLL and the partner fails detection.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>4 ms minimum; exit conditions <span class="ref">§4.5.3.1, p.132</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="sb">
+        <div class="meta"><span>Sideband</span><span>§4.5.3.2 p.133–134</span></div>
+        <h3>Keep sending after detection</h3>
+        <p class="rule">After a module detects the partner's SBINIT pattern, it sends four more iterations before stopping. If it sees nothing, it alternates 1 ms sending and 1 ms quiet, for up to 8 ms.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The two dies leave RESET at different times. If one stopped as soon as it detected the other, the late die might never see a pattern. The extra iterations cover that. The 1 ms on/off cycle is so a die that started early keeps re-offering the pattern while the other wakes up.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 leaves RESET 2.5 ms before Die 1. Its patterns in the first two windows go unheard; in its third sending window Die 1 is listening and detects it. Die 1 sends four more iterations; Die 0 detects those, and both stop.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Stopping immediately after detection leaves the late die sending into silence until its 8 ms timeout.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Steps 3–5 <span class="ref">§4.5.3.2, p.134</span></li><li><span class="kind illus">Illustrative</span>2.5 ms skew</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="sb">
+        <div class="meta"><span>Sideband</span><span>§4.5.3.2 p.134–135</span></div>
+        <h3>Advanced: four ways to make the sideband work</h3>
+        <p class="rule">Advanced Package has redundant sideband data and clock. The receiver tries all four data × clock combinations and picks by fixed priority: DATASB/CKSB, then DATASB/CKSBRD, then DATASBRD/CKSB, then DATASBRD/CKSBRD. The choice travels in {SBINIT Out of Reset} and both sides use it.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Without a sideband nothing else can be trained or repaired, so it needs its own redundancy. Any one good data lane plus any one good clock lane is enough. A fixed priority makes both sides' choices predictable.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>CKSB has an open bump. Results: [0]=0, [1]=1, [2]=0, [3]=1 → pattern xx10 → use DATASB with CKSBRD.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that picks the first combination it happened to detect, instead of the priority order, can disagree with what its own Out of Reset message advertised.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Pseudocode and assignment <span class="ref">§4.5.3.2, p.134–135</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3 p.136–155</span></div>
+        <h3>Prove it at 4 GT/s first</h3>
+        <p class="rule">All of MBINIT, plus VALVREF and DATAVREF in MBTRAIN, run at the lowest rate, 4 GT/s. Only then does SPEEDIDLE switch to the negotiated speed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>At 4 GT/s the eye is wide enough that an untrained link works. That makes it the right place to find opens, shorts and reversed wiring, and to get Vref close, before tighter calibration at speed. A failure at 4 GT/s is a real defect, not a tuning problem.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>At 4 GT/s a UI is 250 ps; at 32 GT/s it is 31 ps. A lane with a marginal bump can pass at 4 GT/s and still fail LINKSPEED at 32 GT/s; that is what REPAIR and speed degrade are for.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Training repair at full speed: a marginal but intact lane and an open lane look the same, so the PHY wastes redundant lanes on lanes that just needed centering.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>MBINIT at lowest speed; Vref states at 4 GT/s <span class="ref">Table 4-6, p.131 · §4.5.3.4.1–2, p.156–157</span></li><li><span class="kind derived">Derived</span>UI times</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3.1 p.137–139</span></div>
+        <h3>Partner picks the common maximum rate</h3>
+        <p class="rule">Each module sends its maximum supported data rate in {MBINIT.PARAM configuration req}; the partner answers with the highest rate both support. The value must account for everything needed at that rate (BER, CRC/Retry, clock phase support). All parameters except Module ID must match across modules.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A die must not advertise a rate it can only reach electrically but not reliably, for example a rate whose BER needs Retry when its Adapter has none. Matching parameters across modules is required because one RDI cannot run modules at different speeds.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0 supports 32 GT/s, Die 1 supports 16 GT/s. Die 1 answers 16 GT/s. <code>pl_max_speedmode</code> = 0 (≤ 32 GT/s), so the Adapter may later advertise 68B Flit Mode.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Two modules of one link answering different rates: the recommended action is an Internal Error, TRAINERROR, LinkError and <code>pl_trainerror</code>.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Parameters, max-rate rule, multi-module rule <span class="ref">§4.5.3.3.1, p.137–139</span></li><li><span class="kind spec">Spec</span>Retry requirement by BER <span class="ref">§3.8, p.93</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3.3–4.5.3.3.5</span></div>
+        <h3>Clock and valid before data</h3>
+        <p class="rule">REPAIRCLK checks clock and track lanes, REPAIRVAL checks valid, and only then does REVERSALMB test data lanes. REVERSALMB is entered only if clock and valid are functional.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Data is sampled with the forwarded clock and framed by valid. If the clock is broken, every data lane would appear to fail and the PHY would wrongly try to repair all of them. Fixing dependencies first gives clean per-lane results.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>RCKP has an open. REPAIRCLK sees no pattern on it, repairs the clock onto the redundant clock lane; then REVERSALMB sees 68 lanes of correct Per Lane ID patterns.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Testing data first with a broken clock: 68 out of 68 lanes fail and the module goes to TRAINERROR, though only one bump was bad.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Order and entry condition <span class="ref">§4.5.3.3.5, p.151</span></li><li><span class="kind spec">Spec</span>Clock repair result interpretation <span class="ref">§4.5.3.3.3, p.147</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mb">
+        <div class="meta"><span>Mainband init</span><span>§4.5.3.3.5 p.151–153</span></div>
+        <h3>Lane reversal is detected by majority</h3>
+        <p class="rule">The Tx sends 128 iterations of the unscrambled Per Lane ID pattern on all N lanes. A lane passes with ≥ 16 consecutive good iterations. If most lanes pass, no reversal. Otherwise the Tx applies reversal and tests again; if most now pass, reversal stays for the life of the link; if not, TRAINERROR.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Package routing sometimes has to cross lanes over (die rotation). Per Lane ID patterns make each lane self-identifying. Majority voting tolerates a few lanes that are simply broken and will be repaired next.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 Advanced with the lanes crossed over: almost every receiver lane k sees the ID of transmitter lane 63−k, so most lanes fail. The Tx applies reversal and retests: 67 of 68 pass. Reversal is kept; the one failing lane goes to REPAIRMB.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Scrambling the Per Lane ID pattern destroys its lane identity; reversal detection becomes random.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Sequence, majority, 16 of 128, not scrambled <span class="ref">§4.5.3.3.5, p.151–153</span></li><li><span class="kind illus">Illustrative</span>The lane counts</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.3 p.158</span></div>
+        <h3>SPEEDIDLE picks the rate from where you came</h3>
+        <p class="rule">From DATAVREF: the highest common rate. From L1: the speed of the last ACTIVE. From LINKSPEED or PHYRETRAIN (degrade): the next lower rate, unless already at 4 GT/s, then TRAINERROR. Width is whatever MBINIT.REPAIRMB or MBTRAIN.REPAIR last set.</p>
+        <div class="part"><span class="l l-why">Why</span><p>One idle state handles every frequency change, so the calibration that follows (TXSELFCAL onward) is the same path for first training, L1 exit and degrade. L1 exit restores the old speed, so a short power-saving trip does not cost bandwidth.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32 GT/s link fails LINKSPEED and has no repair resources: exit to speed degrade → SPEEDIDLE picks 24 GT/s → TXSELFCAL … LINKSPEED again.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Restoring the maximum rate on L1 exit after an earlier degrade re-enters a speed already known to fail.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Rate rules and width rule <span class="ref">§4.5.3.4.3, p.158</span></li><li><span class="kind spec">Spec</span>Speed encodings 4–64 GT/s <span class="ref">Table 10-1 (pl_speedmode), p.525</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.5–4.5.3.4.11</span></div>
+        <h3>Valid before data, deskew before final centering</h3>
+        <p class="rule">At speed the order is: Rx clock calibration, Valid centering (and optional Vref), data centering (and optional Vref), optional per-lane deskew, then DATATRAINCENTER2 to recenter on the aggregate data.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Valid frames data, so it must be right first. Deskew moves each lane's sampling point, which shifts the aggregate eye, so the clock has to be recentered afterwards; that is the only purpose of DATATRAINCENTER2.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 1 deskews lanes 40–47 by +3/64 UI. Die 0's recentering in DATATRAINCENTER2 then moves its Tx clock phase by about +1/64 UI to sit in the middle of the new combined eye.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Skipping recentering after deskew leaves the link at the edge of the eye; it passes LINKSPEED but fails after a few degrees of temperature drift.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Sub-state purposes <span class="ref">§4.5.3.4.5–4.5.3.4.11, p.158–164</span></li><li><span class="kind illus">Illustrative</span>The deskew amounts</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.12–13 p.164–168</span></div>
+        <h3>LINKSPEED: repair, narrow, or slow down</h3>
+        <p class="rule">LINKSPEED runs a 4K UI LFSR point test at the final phase. On errors: repair if Advanced and redundant lanes suffice; width-degrade if Standard and the failures fit in one half; otherwise degrade speed. A speed-degrade request overrides an outstanding repair request.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The order keeps as much bandwidth as possible: a repair loses nothing, a width degrade halves bandwidth, a speed step loses less on Advanced (32 → 24 GT/s is 25%) but affects every lane. Letting speed degrade win avoids two dies taking different paths.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x16 Standard at 32 GT/s: lanes 10 and 13 fail. Both are in lanes 8–15, so the link degrades to x8 on lanes 0–7 (lane map 001b) and goes back through TXSELFCAL.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Lanes 3 and 12 fail on x16 Standard: they are in different halves, so width degrade is impossible; the link must drop speed instead.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>LINKSPEED steps 3–5 <span class="ref">§4.5.3.4.12, p.164–167</span></li><li><span class="kind spec">Spec</span>REPAIR rules and lane map codes <span class="ref">§4.5.3.4.13, p.167 · Table 4-9, p.155</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mt">
+        <div class="meta"><span>Training at speed</span><span>§4.5.3.4.12 p.165–167</span></div>
+        <h3>Multi-module: MMPL decides for everyone</h3>
+        <p class="rule">In a multi-module link each module reports done, error or degrade to the Multi-module PHY Logic, which resolves one outcome and tells every module which response to send. A mismatch between expected and received response sends all modules to TRAINERROR.</p>
+        <div class="part"><span class="l l-why">Why</span><p>All modules must run at the same speed and width under one RDI. Letting each module decide alone could leave one at 32 GT/s and another at 24 GT/s.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Four modules at 32 GT/s; module 2 has unrepairable errors. MMPL may resolve to speed degrade for all four, or (per the Section 4.7 flowchart) disable module 2 and run the other three.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A module that exits to LINKINIT on its own "done" while the others go to SPEEDIDLE: the Adapter sees an RDI that never reaches Active.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>MMPL resolution, mismatch rule, Retimer stall 4 ms <span class="ref">§4.5.3.4.12 step 5, p.165–167</span></li><li><span class="kind spec">Spec</span>Resolution flowchart <span class="ref">§4.7</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>Tables 4-10 to 4-12 p.169</span></div>
+        <h3>The worse problem wins</h3>
+        <p class="rule">In PHYRETRAIN both modules send a retrain encoding: 001b no lane errors (→ TXSELFCAL), 100b repairable (→ REPAIR), 010b unrepairable (→ SPEEDIDLE). If they differ, both resolve to the more severe: speed degrade over repair over none.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Each die only sees its own receive errors. Taking the more severe request fixes whichever direction is worse, and because the rule is symmetric, both dies compute the same result.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die 0's receivers are clean (001b); Die 1 sees errors it can repair (100b). Both resolve to 100b and go to MBTRAIN.REPAIR. Die 0's transmitter applies the repair Die 1 asked for.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Resolving to the less severe (001b) would retrain without repair, and Die 1 would see the same errors again.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Encodings and resolution <span class="ref">Tables 4-11 and 4-12, p.169</span></li><li><span class="kind spec">Spec</span>Runtime Link Test Status mapping <span class="ref">Table 4-10, p.169</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.5.3.7.2 p.170</span></div>
+        <h3>PHY retrain starts with pl_error</h3>
+        <p class="rule">On a Valid framing error the PHY asserts <code>pl_error</code> with the bad flit or chunk on RDI, completes the stall handshake, then sends {LinkMgmt.RDI.Req.Retrain}. RDI goes to Retrain when the response arrives.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The Adapter must discard the damaged bytes before they reach CRC checks or the Protocol Layer, and the transmitter must be quiet at a flit boundary before training patterns replace data.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>See the RDI guide's "Retrain (framing error)" scenario for the cycle-level waveform.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Retraining without the stall handshake cuts a flit in half on the wire; with 68B flits the remote shifter loses alignment.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Steps 1–6 <span class="ref">§4.5.3.7.2, p.170</span></li><li><span class="kind spec">Spec</span>pl_error rules <span class="ref">Table 10-1, p.524</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.5.3.8 p.171–172</span></div>
+        <h3>TRAINERROR holds while RDI is in LinkError</h3>
+        <p class="rule">TRAINERROR tri-states the transmitters. Entry uses a sideband handshake when the sideband works. Exit to RESET is quick if there is no error escalation, but the PHY must stay in TRAINERROR as long as RDI is in LinkError. In-progress sideband packets finish before RESET.</p>
+        <div class="part"><span class="l l-why">Why</span><p>LinkError means software has to look at the error first. Retraining underneath it would bring the link back up before software is ready. Finishing sideband packets avoids sending half a packet into a partner that is about to reset.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An unrepairable REPAIRMB failure goes to TRAINERROR; RDI is not in LinkError, so the LTSM returns to RESET and may retry. A viral error from CXL holds RDI in LinkError; the LTSM sits in TRAINERROR until software releases it.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Leaving TRAINERROR while RDI is in LinkError: the PHY retrains and the remote die sees training patterns from a link that is officially down.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Entry handshake, exit rules <span class="ref">§4.5.3.8, p.171–172</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.4.1 p.120 · §4.5.3.5 p.168</span></div>
+        <h3>Scramble with a known LFSR, reset in LINKINIT</h3>
+        <p class="rule">Data in ACTIVE is scrambled with the PCIe LFSR polynomial (X<sup>23</sup>+X<sup>21</sup>+X<sup>16</sup>+X<sup>8</sup>+X<sup>5</sup>+X<sup>2</sup>+1), with a lane-dependent seed. The LFSR is reset on entry to LINKINIT.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Scrambling spreads the spectrum and avoids long runs of identical bits, which helps clock recovery margins and EMI. Different seeds per lane avoid identical patterns on neighbouring lanes (crosstalk). Resetting in LINKINIT gives both dies a common starting point before the first scrambled flit.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>After a Retrain, both dies pass through LINKINIT again, reset their LFSRs, and the first post-retrain flit descrambles correctly without any sync pattern.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Resetting the scrambler on RDI Active instead of LINKINIT entry: if the two dies see Active a few cycles apart, the first flits descramble to garbage.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>LFSR and seeds <span class="ref">§4.4.1, p.120 · Table 4-4</span></li><li><span class="kind spec">Spec</span>Reset in LINKINIT; scrambled in ACTIVE <span class="ref">§4.5.3.5–4.5.3.6, p.168</span></li><li><span class="kind bg">Background</span>Spectrum and crosstalk reasons</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rt">
+        <div class="meta"><span>Retrain &amp; errors</span><span>§4.6 p.173–175</span></div>
+        <h3>Recalibrate without stopping traffic</h3>
+        <p class="rule">Runtime Recalibration uses the Track lane while ACTIVE; mainband data with correct valid framing must still be processed. With TARR, the receiver can ask the partner's transmitter to shift by n/64 UI.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A full retrain stops traffic for microseconds or more. Drift is slow and small, so a side-channel measurement plus a small Tx adjustment keeps the eye centered with no interruption. TARR moves the work to the transmitter, which already did most adjustments in training, so receivers need less built-in margin.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die temperature rises 30 °C under load. Every few milliseconds Die 0 requests a Track pattern, measures a 2/64 UI drift, and sends {RECAL.track tx adjust req}; Die 1 shifts its Tx clock. No flit is delayed.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Pausing data during Track recalibration violates the spec and adds latency spikes every recalibration period.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Track sequence, TARR, data continues <span class="ref">§4.6, p.173–175</span></li><li><span class="kind illus">Illustrative</span>Temperature, period, drift amount</li></ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<section id="live">
+  <div class="wrap">
+    <h2>11 · Live scenarios</h2>
+    <p class="sub">Each column is one step (one state or one handshake), not a fixed time. Step through; shaded columns are what the step describes.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="silicon">
+  <div class="wrap">
+    <h2>12 · Real silicon: what the theory turns into</h2>
+    <div class="twocol">
+      <div>
+        <h3 style="margin-bottom:8px">How long the pieces take</h3>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Item</th><th class="num">Time</th><th>From</th></tr></thead>
+          <tbody>
+            <tr><td>RESET residency</td><td class="num">≥ 4 ms</td><td class="ref">§4.5.3.1</td></tr>
+            <tr><td>SBINIT search window</td><td class="num">≤ 8 ms</td><td class="ref">§4.5.3.2</td></tr>
+            <tr><td>One sideband message (64 UI at 800 MT/s) + ≥ 32 UI gap</td><td class="num">80 + 40 ns</td><td class="ref">§4.1.5 · §5.13</td></tr>
+            <tr><td>Req/resp handshake, wire time only</td><td class="num">≈ 240 ns</td><td class="ref">derived</td></tr>
+            <tr><td>4K UI LFSR test at 4 GT/s / 32 GT/s</td><td class="num">1.02 µs / 128 ns</td><td class="ref">derived</td></tr>
+            <tr><td>128 × Per Lane ID (16 UI) at 4 GT/s</td><td class="num">512 ns</td><td class="ref">derived</td></tr>
+            <tr><td>128 × clock repair (16 + 8 clock cycles) at 2 GHz clock</td><td class="num">1.54 µs</td><td class="ref">derived</td></tr>
+            <tr><td>Any sub-state, worst case before timeout</td><td class="num">8–12 ms</td><td class="ref">§4.5</td></tr>
+          </tbody>
+        </table></div>
+        <p style="font-size:14px;color:var(--muted)">Pattern and message times are tiny next to RESET and implementation-specific calibration; total bring-up time is dominated by those and by how many PI or Vref steps an implementation sweeps. <span class="kind illus">Illustrative</span>Real designs commonly land in single-digit to tens of milliseconds.</p>
+      </div>
+      <div class="grid" style="gap:12px">
+        <div class="callout"><p><strong>Sideband traffic is the long pole.</strong> MBINIT and MBTRAIN together involve dozens of request/response pairs, each at least 240 ns of serial time. Sideband Performant Mode (PMO) removes the 32-UI gap between packets, cutting that by about a third.</p><p class="src"><span class="sl">Spec</span>§4.1.5.1, p.102 · <span class="kind derived">Derived</span>40 of 120 ns</p></div>
+        <div class="callout" style="border-left-color:var(--lp)"><p><strong>Degrade costs.</strong> Advanced x64: repair costs nothing if redundant lanes remain. Standard x16 → x8 halves bandwidth. A speed step 32 → 24 GT/s costs 25%, 16 → 12 GT/s also 25%, 8 → 4 GT/s 50%.</p><p class="src"><span class="sl">Derived</span>from the speed list in Table 10-1, p.525</p></div>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Link never trains after power-on, sideband looks idle</td><td>No training trigger: software never set Start UCIe Link Training and the Adapter never made NOP→Active.</td><td class="ref">§4.5, p.125</td></tr>
+        <tr><td>SBINIT works only if both dies are released together</td><td>Stops sending immediately after detection, or no 1 ms on/off retry.</td><td class="ref">§4.5.3.2, p.134</td></tr>
+        <tr><td>Retimer link times out in MBTRAIN.LINKSPEED</td><td>Retimer does not send done-resp with Stall every 4 ms while matching the far link.</td><td class="ref">§4.5.3.4.12, p.167</td></tr>
+        <tr><td>All lanes "fail" in REVERSALMB</td><td>Per Lane ID pattern scrambled, or valid framing missing.</td><td class="ref">§4.5.3.3.5, p.151–152</td></tr>
+        <tr><td>Training passes, errors appear minutes later</td><td>No recentering after deskew, or Runtime Recalibration not enabled.</td><td class="ref">§4.5.3.4.11 · §4.6</td></tr>
+        <tr><td>Two modules end at different speeds</td><td>Per-module LINKSPEED decisions without MMPL resolution.</td><td class="ref">§4.5.3.4.12, p.165–166</td></tr>
+        <tr><td>L1 exit returns at lower speed than before</td><td>SPEEDIDLE treated L1 entry as a degrade instead of restoring the last ACTIVE speed.</td><td class="ref">§4.5.3.4.3, p.158</td></tr>
+        <tr><td>Link retrains while software is still handling a fatal error</td><td>LTSM left TRAINERROR while RDI was in LinkError.</td><td class="ref">§4.5.3.8, p.171</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <h2>13 · Verification</h2>
+    <p class="sub">Model the remote die as a PHY BFM that speaks the full sideband message set and can inject channel faults per lane. Scale the 4 ms and 8 ms timers in simulation but keep their ratios.</p>
+    <div class="twocol">
+      <div class="card"><h3>Checkers</h3><ul class="tight">
+        <li>State sequence follows Figure 4-33 and the sub-state order; no skipped sub-state. <span class="ref">§4.5.3, p.131 · §4.5.3.4</span></li>
+        <li>Exit only after sent and received response for that sub-state. <span class="ref">§4.5.3.3–4.5.3.4</span></li>
+        <li>RESET residency ≥ 4 ms; timeouts at 8 ms (−0/+50%), reset by Stall. <span class="ref">§4.5, p.124 · §4.5.3.1</span></li>
+        <li>Transmitter states per sub-state (tri-state, low, clock gated or free-running). <span class="ref">each sub-state</span></li>
+        <li>Data rate 4 GT/s until SPEEDIDLE; SPEEDIDLE rate rules. <span class="ref">§4.5.3.4.3</span></li>
+        <li>Per Lane ID never scrambled; LFSR reset in LINKINIT. <span class="ref">§4.5.3.3.5 · §4.5.3.5</span></li>
+        <li>Retrain resolution matches Table 4-12; same across modules. <span class="ref">p.169</span></li>
+        <li>TRAINERROR held while RDI in LinkError. <span class="ref">§4.5.3.8</span></li>
+      </ul></div>
+      <div class="grid" style="gap:12px">
+        <div class="card"><h3>Fault scenarios</h3><ul class="tight">
+          <li>Each sideband data/clock bump open (all 15 non-zero Result patterns). <span class="ref">§4.5.3.2</span></li>
+          <li>Reset skew from 0 to 7 ms between dies. <span class="ref">§4.5.3.2</span></li>
+          <li>Clock-lane open vs short; valid open. <span class="ref">§4.5.3.3.3–4</span></li>
+          <li>Reversed wiring plus one broken lane. <span class="ref">§4.5.3.3.5</span></li>
+          <li>Failures exceeding repair resources (TRAINERROR) and exactly at the limit. <span class="ref">§4.5.3.3.6 · §4.3</span></li>
+          <li>Standard x16 failures in one half vs both halves. <span class="ref">§4.5.3.4.13</span></li>
+          <li>LINKSPEED error at every speed down to 4 GT/s. <span class="ref">§4.5.3.4.3</span></li>
+          <li>Partner silent mid-MBTRAIN; partner Stalling for 20 ms. <span class="ref">§4.5</span></li>
+        </ul></div>
+        <div class="card"><h3>Coverage</h3><ul class="tight">
+          <li>Every LTSM arc, every sub-state entry and exit message.</li>
+          <li>All 9 cells of Table 4-12; all rows of Table 4-10.</li>
+          <li>Each training trigger type; L1 and L2 exit; L2SPD wake.</li>
+          <li>Strobe vs continuous clock at each speed; Clock Phase on/off.</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <h2>14 · Test yourself</h2>
+    <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>List the top-level LTSM states in bring-up order. <span class="lvl">Basic</span></summary><div><p>RESET → SBINIT → MBINIT → MBTRAIN → LINKINIT → ACTIVE. Plus PHYRETRAIN, L1/L2 and TRAINERROR off the main path.</p><p class="src"><span class="sl">Spec</span>Figure 4-33, p.131</p></div></details>
+    <details><summary>Which states have no 8 ms timeout? <span class="lvl">Basic</span></summary><div><p>RESET, ACTIVE, L1/L2 and TRAINERROR. All others time out after 8 ms, counted per sub-state, and the timer resets on a Stall message.</p><p class="src"><span class="sl">Spec</span>§4.5, p.124</p></div></details>
+    <details><summary>Why is MBINIT done at 4 GT/s? <span class="lvl">Basic</span></summary><div><p>Lowest speed, widest eye: an untrained link works, so clock, valid and data lanes can be checked for opens, shorts and reversal, and Vref set, before the harder calibration at the target speed.</p><p class="src"><span class="sl">Spec</span>Table 4-6, p.131</p></div></details>
+    <details><summary>How does SBINIT cope with two dies leaving reset at different times? <span class="lvl">Intermediate</span></summary><div><p>A die that detects the pattern sends four more iterations before stopping; a die that detects nothing alternates 1 ms sending and 1 ms quiet for up to 8 ms. Then both exchange {SBINIT Out of Reset} until each has received it.</p><p class="src"><span class="sl">Spec</span>§4.5.3.2, p.134</p></div></details>
+    <details><summary>Why are clock and valid repaired before data lanes? <span class="lvl">Intermediate</span></summary><div><p>Data is sampled with the forwarded clock and framed by valid. With a broken clock every data lane would look broken. REVERSALMB is only entered if clock and valid work.</p><p class="src"><span class="sl">Spec</span>§4.5.3.3.5, p.151</p></div></details>
+    <details><summary>What does DATATRAINCENTER2 do that DATATRAINCENTER1 didn't? <span class="lvl">Intermediate</span></summary><div><p>Recenters the clock on the aggregate data after the partner performed per-lane deskew in RXDESKEW, which shifted the combined eye.</p><p class="src"><span class="sl">Spec</span>§4.5.3.4.11, p.164</p></div></details>
+    <details><summary>LINKSPEED finds errors. What are the three outcomes and their order of preference? <span class="lvl">Advanced</span></summary><div><p>Repair (Advanced, if redundant lanes are enough) or width degrade (Standard, if failures are in one half) → MBTRAIN.REPAIR; otherwise speed degrade → SPEEDIDLE at the next lower rate (TRAINERROR if already 4 GT/s). A speed-degrade request overrides an outstanding repair request. A Runtime Link Test Control change instead sends it to PHYRETRAIN.</p><p class="src"><span class="sl">Spec</span>§4.5.3.4.12, p.164–167</p></div></details>
+    <details><summary>Die 0 sends retrain encoding 001b, Die 1 sends 100b. Where do they go? <span class="lvl">Advanced</span></summary><div><p>Both resolve to 100b and go to MBTRAIN.REPAIR. The more severe request always wins: 010b (speed degrade) over 100b (repair) over 001b.</p><p class="src"><span class="sl">Spec</span>Table 4-12, p.169</p></div></details>
+    <details><summary>Where does each of L1 exit and L2 exit land, and why the difference? <span class="lvl">Advanced</span></summary><div><p>L1 → MBTRAIN.SPEEDIDLE, restoring the last ACTIVE speed: settings survive, so only speed-dependent calibration repeats. L2 → RESET: deeper power-down may lose state, so full training (≥ 4 ms RESET included) and a fresh Adapter parameter exchange follow.</p><p class="src"><span class="sl">Spec</span>§4.5.3.9, p.172 · §4.5.3.4.3, p.158</p></div></details>
+    <details><summary>Why must the LTSM stay in TRAINERROR while RDI is in LinkError? <span class="lvl">Advanced</span></summary><div><p>LinkError means software has to handle the error first (for example DPC). Retraining underneath would bring the link up before software allows it. Once RDI leaves LinkError, the LTSM may go to RESET.</p><p class="src"><span class="sl">Spec</span>§4.5.3.8, p.171</p></div></details>
+  </div>
+</section>
+
+<section id="refs">
+  <div class="wrap">
+    <h2>15 · Spec reference index</h2>
+    <div class="tbl-wrap refidx"><table>
+      <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+      <tbody>
+        <tr><td>§3.8</td><td>Retry Rules (BER and Retry requirement)</td><td class="num">93</td></tr>
+        <tr><td>§4.1.5, §4.1.5.1</td><td>Sideband transmission; Performant Mode Operation</td><td class="num">102</td></tr>
+        <tr><td>§4.4, Figures 4-27 to 4-29</td><td>Data to Clock Training and Test Modes</td><td class="num">119–120</td></tr>
+        <tr><td>§4.4.1, Table 4-4</td><td>Scrambling and training pattern generation</td><td class="num">120–123</td></tr>
+        <tr><td>§4.5</td><td>Link Initialization and Training (timeouts, triggers)</td><td class="num">124–125</td></tr>
+        <tr><td>§4.5.1.1–4.5.1.4, Table 4-5</td><td>Point tests and eye width sweeps</td><td class="num">125–130</td></tr>
+        <tr><td>§4.5.2</td><td>Link Training with Retimer</td><td class="num">130</td></tr>
+        <tr><td>§4.5.3, Figure 4-33, Table 4-6</td><td>Link Training State Machine</td><td class="num">131</td></tr>
+        <tr><td>§4.5.3.1</td><td>RESET</td><td class="num">132–133</td></tr>
+        <tr><td>§4.5.3.2</td><td>Sideband Initialization (SBINIT)</td><td class="num">133–136</td></tr>
+        <tr><td>§4.5.3.3.1</td><td>MBINIT.PARAM (incl. TARR, Clock Mode)</td><td class="num">137–139</td></tr>
+        <tr><td>§4.5.3.3.2–4.5.3.3.4</td><td>MBINIT.CAL, REPAIRCLK, REPAIRVAL</td><td class="num">146–151</td></tr>
+        <tr><td>§4.5.3.3.5, Table 4-7</td><td>MBINIT.REVERSALMB; Per Lane ID pattern</td><td class="num">151–153</td></tr>
+        <tr><td>§4.5.3.3.6, Table 4-9</td><td>MBINIT.REPAIRMB; Standard Package lane map</td><td class="num">153–155</td></tr>
+        <tr><td>§4.5.3.4.1–4.5.3.4.11</td><td>MBTRAIN sub-states VALVREF … DATATRAINCENTER2</td><td class="num">156–164</td></tr>
+        <tr><td>§4.5.3.4.12</td><td>MBTRAIN.LINKSPEED</td><td class="num">164–167</td></tr>
+        <tr><td>§4.5.3.4.13</td><td>MBTRAIN.REPAIR</td><td class="num">167–168</td></tr>
+        <tr><td>§4.5.3.5, §4.5.3.6</td><td>LINKINIT, ACTIVE</td><td class="num">168</td></tr>
+        <tr><td>§4.5.3.7, Tables 4-10 to 4-12</td><td>PHYRETRAIN; retrain encodings</td><td class="num">168–171</td></tr>
+        <tr><td>§4.5.3.8</td><td>TRAINERROR</td><td class="num">171–172</td></tr>
+        <tr><td>§4.5.3.9, §4.5.3.9.1, Figure 4-42</td><td>L1/L2; L2 Sideband Power Down</td><td class="num">172–173</td></tr>
+        <tr><td>§4.6</td><td>Runtime Recalibration</td><td class="num">173–175</td></tr>
+        <tr><td>§5.13</td><td>Sideband signaling (800 MT/s SDR)</td><td class="num">254</td></tr>
+        <tr><td>Table 10-1</td><td>RDI signal list (pl_speedmode, pl_error)</td><td class="num">522–526</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapters 4.4 to 4.6, with Chapters 3.8, 4.1.5, 5.13 and 10.1 for context.</div></footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+
+  /* retrain resolver (Tables 4-11, 4-12) */
+  (function () {
+    var a = document.getElementById("rt0"), b = document.getElementById("rt1");
+    if (!a) return;
+    var SEV = { "1": 0, "4": 1, "2": 2 }, NAME = { "1": "001b · no lane errors", "4": "100b · repair", "2": "010b · speed degrade" };
+    var EXIT = { "1": "MBTRAIN.TXSELFCAL", "4": "MBTRAIN.REPAIR", "2": "MBTRAIN.SPEEDIDLE" };
+    function upd() {
+      var r = SEV[a.value] >= SEV[b.value] ? a.value : b.value;
+      document.getElementById("rtout").textContent = "Both dies → " + EXIT[r];
+      document.getElementById("rtwhy").textContent = "Resolved encoding " + NAME[r] + ". " +
+        (a.value === b.value ? "Encodings match, so the partner simply responds with the same value." :
+         "Encodings differ; both resolve to the more severe one and send it in {PHYRETRAIN.retrain start resp}.");
+    }
+    a.addEventListener("change", upd); b.addEventListener("change", upd); upd();
+  })();
+
+  window.PAGE = {
+    CW: 70,
+    wgroups: [["all", "All"], ["flow", "Flow control"], ["sb", "Sideband"], ["mb", "Mainband init"], ["mt", "Training at speed"], ["rt", "Retrain & errors"]],
+    scenarios: [
+      {
+        id: "bringup", tab: "Full bring-up", unit: "steps", title: "From RESET to ACTIVE on one module",
+        desc: "Die 0's view of a clean first training (no faults). One column per state or sub-state.",
+        ref: "§4.5.3, p.131–168",
+        n: 20, gaps: [],
+        sig: [
+          { name: "phase", d: "note", t: "note", v: seq([["RESET", 1], ["SBINIT", 3], ["MBINIT", 6], ["MBTRAIN", 8], ["LINKINIT", 1], ["ACTIVE", 1]]) },
+          { name: "LTSM sub-state", d: "lp", t: "bus", v: ["RESET", "pattern", "OOR", "done", "PARAM", "CAL", "REPAIRCLK", "REPAIRVAL", "REVERSAL", "REPAIRMB", "VALVREF", "DATAVREF", "SPEEDIDLE", "TXSELFCAL", "RXCLKCAL", "VALTRAIN…", "DATATRAIN…", "LINKSPEED", "LINKINIT", "ACTIVE"] },
+          { name: "sideband", d: "sb", t: "note", v: ["", "64UI clk", "Out of Reset", "done", "PARAM", "CAL done", "clk test", "valid test", "lane ID", "D2C test", "Vref", "Vref", "speed", "cal done", "clk cal", "centering", "centering", "check", "RDI Active", ""] },
+          { name: "mainband", d: "note", t: "note", v: ["tri-state", "tri-state", "tri-state", "tri-state", "tri-state", "tri-state", "clock lanes", "valid lane", "Per Lane ID", "Per Lane ID", "VALTRAIN", "LFSR", "idle", "tri-state", "clock", "valid", "LFSR", "LFSR 4K UI", "quiet", "flits"] },
+          { name: "data rate", d: "note", t: "note", v: seq([["—", 4], ["4 GT/s", 8], ["→ target", 1], ["target speed", 7]]) },
+          { name: "pl_phyinrecenter", d: "pl", t: "bit", v: bits(20, [[1, 17]]) },
+          { name: "RDI pl_state_sts", d: "pl", t: "bus", v: seq([["Reset", 19], ["Active", 1]]) }
+        ],
+        steps: [
+          { r: [0, 0], t: "RESET: wait and settle", x: "At least 4 ms after entry, with supplies, an 800 MHz sideband clock and stable PLLs, and a training trigger such as software's Start UCIe Link Training bit or the Adapter's NOP→Active on RDI. All mainband transmitters are tri-stated.", s: "§4.5.3.1, p.132 · §4.5, p.125" },
+          { r: [1, 3], t: "SBINIT: wake the control channel", x: "Send 64-UI clock pattern + 32-UI low until the partner's pattern is detected; four more iterations; exchange {SBINIT Out of Reset} (on Advanced it carries the chosen sideband pair); then {SBINIT done req/resp}.", s: "§4.5.3.2, p.133–135" },
+          { r: [4, 4], t: "MBINIT.PARAM: agree the basics", x: "Swap voltage swing, maximum data rate (partner answers with the common maximum), clock mode, clock phase, Module ID and feature bits.", s: "§4.5.3.3.1, p.137–139" },
+          { r: [5, 9], t: "MBINIT: calibrate, then check every lane at 4 GT/s", x: "CAL, then clock and track lanes (REPAIRCLK), the valid lane (REPAIRVAL), lane reversal with Per Lane ID patterns (REVERSALMB), and every data lane including redundant lanes (REPAIRMB), repairing or degrading as needed.", w: "Clock and valid come before data because data is sampled with one and framed by the other.", s: "§4.5.3.3.2–4.5.3.3.6, p.146–155" },
+          { r: [10, 11], t: "Set receiver Vref at 4 GT/s", x: "MBTRAIN.VALVREF and DATAVREF optimize receiver reference voltage for valid and data while still at the lowest rate.", s: "§4.5.3.4.1–4.5.3.4.2, p.156–157" },
+          { r: [12, 14], t: "Change speed, calibrate", x: "SPEEDIDLE switches to the negotiated rate. TXSELFCAL calibrates transmitters on their own; RXCLKCAL calibrates the receive clock (a requested free-running clock starts here).", s: "§4.5.3.4.3–4.5.3.4.5, p.158–159" },
+          { r: [15, 16], t: "Center at speed", x: "Valid centering and optional Vref, then data centering, optional Vref, optional per-lane deskew, and final recentering (DATATRAINCENTER2).", s: "§4.5.3.4.6–4.5.3.4.11, p.159–164" },
+          { r: [17, 17], t: "LINKSPEED: prove it", x: "A 4K UI LFSR point test at the final phase. No errors and single module: proceed to LINKINIT.", s: "§4.5.3.4.12, p.164" },
+          { r: [18, 19], t: "LINKINIT, then ACTIVE", x: "The scrambler resets on LINKINIT entry; the Adapter and PHY complete the RDI Active Entry handshake; the PHY clears its copy of Start UCIe Link Training. In ACTIVE, data is scrambled.", s: "§4.5.3.5–4.5.3.6, p.168 · §10.1.6, p.534" }
+        ]
+      },
+      {
+        id: "sbinit", tab: "SBINIT with a bad bump", unit: "steps", title: "SBINIT on Advanced Package with an open CKSB",
+        desc: "Die 0 leaves RESET first. Die 0's sideband clock CKSB toward Die 1 has an open bump, so Die 1 must use the redundant clock.",
+        ref: "§4.5.3.2, p.133–135",
+        n: 8, gaps: [],
+        sig: [
+          { name: "Die 0 LTSM", d: "lp", t: "bus", v: seq([["SBINIT", 7], ["MBINIT", 1]]) },
+          { name: "Die 1 LTSM", d: "pl", t: "bus", v: seq([["RESET", 3], ["SBINIT", 4], ["MBINIT", 1]]) },
+          { name: "Die 0 → Die 1", d: "sb", t: "note", v: ["pattern", "quiet 1 ms", "pattern", "pattern", "+4 iterations", "Out of Reset", "", "done req/resp"] },
+          { name: "Die 1 → Die 0", d: "sb", t: "note", v: ["", "", "", "pattern", "+4 iterations", "Out of Reset", "", "done req/resp"] },
+          { name: "Die 1 Rx: CKSB×DATASB", d: "pl", t: "bit", v: bits(8, []) },
+          { name: "CKSBRD×DATASB", d: "pl", t: "bit", v: bits(8, [[3, 7]]) },
+          { name: "CKSB×DATASBRD", d: "pl", t: "bit", v: bits(8, []) },
+          { name: "CKSBRD×DATASBRD", d: "pl", t: "bit", v: bits(8, [[3, 7]]) },
+          { name: "Die 1 sideband choice", d: "note", t: "note", v: seq([["", 4], ["Result 1010 → DATASB + CKSBRD", 4]]) }
+        ],
+        steps: [
+          { r: [0, 2], t: "The early die keeps offering", x: "Die 0 is out of RESET; Die 1 is not. Die 0 sends 64-UI clock pattern + 32-UI low on both data lanes with both clocks, alternating 1 ms sending and 1 ms quiet. Nothing is detected yet.", s: "§4.5.3.2 steps 1 and 5, p.134" },
+          { r: [3, 3], t: "Die 1 listens on four combinations", x: "Die 1 enters SBINIT and samples both incoming data lanes with both incoming clocks. With CKSB open, only the two combinations clocked by CKSBRD see 128 UI of clock pattern.", s: "§4.5.3.2 steps 2–3, p.134" },
+          { r: [4, 4], t: "Detected: four more iterations, then choose", x: "Each die that detects sends four more iterations so the other side is sure to see them, then stops. Die 1's Result[3:0] = 1010b, which the priority pseudocode maps to DATASB sampled by CKSBRD.", s: "§4.5.3.2 steps 4 and 6, p.134–135" },
+          { r: [5, 6], t: "Out of Reset carries the choice", x: "Both send {SBINIT Out of Reset} until they receive it. The message carries each side's chosen data/clock assignment; from now on all messages use the functional sideband.", s: "§4.5.3.2 steps 7–9, p.135" },
+          { r: [7, 7], t: "Done: on to MBINIT", x: "{SBINIT done req/resp}; once a die has sent and received the response it exits to MBINIT.", s: "§4.5.3.2 step 10, p.135" }
+        ]
+      },
+      {
+        id: "linkspeed", tab: "LINKSPEED → repair", unit: "steps", title: "LINKSPEED finds a bad lane; repair and retry",
+        desc: "x64 Advanced at the target speed. Lane 17 fails the final check; a redundant lane is available.",
+        ref: "§4.5.3.4.12–4.5.3.4.13, p.164–168 · §4.3.1",
+        n: 12, gaps: [9],
+        sig: [
+          { name: "LTSM", d: "lp", t: "bus", v: seq([["LINKSPEED", 5], ["REPAIR", 3], ["TXSELFCAL", 1], ["", 1], ["LINKSPEED", 1], ["LINKINIT", 1]]) },
+          { name: "sideband", d: "sb", t: "note", v: ["start req/resp", "", "results", "error req/resp", "exit to repair", "init", "apply repair", "end", "done", "", "done", "RDI Active"] },
+          { name: "mainband", d: "note", t: "note", v: ["", "LFSR 4K UI", "", "electrical idle", "", "", "", "", "", "", "LFSR 4K UI", ""] },
+          { name: "failing lanes", d: "note", t: "note", v: ["", "lane 17", "lane 17", "lane 17", "lane 17", "lane 17", "repaired", "", "", "", "none", ""] },
+          { name: "redundant lanes used", d: "note", t: "note", v: seq([["0 of 4", 6], ["1 of 4", 6]]) }
+        ],
+        steps: [
+          { r: [0, 2], t: "Final check at speed", x: "LINKSPEED start handshake, then a Tx-initiated point test with 4K UI of LFSR at the final clock phase. The results show errors on lane 17 only.", s: "§4.5.3.4.12 steps 1–2, p.164" },
+          { r: [3, 4], t: "Report and pick a fix", x: "The module idles its transmitters and sends {MBTRAIN.LINKSPEED error req}; the partner answers. One failing lane and redundant lanes available, so it sends {MBTRAIN.LINKSPEED exit to repair req}; the partner (not degrading speed) answers and both go to REPAIR.", s: "§4.5.3.4.12 step 3, p.164–165" },
+          { r: [5, 7], t: "Apply repair", x: "REPAIR init, apply repair (lane 17 mapped onto a redundant lane per §4.3.1 on the transmitter; the partner applies the matching receive mapping), then REPAIR end.", s: "§4.5.3.4.13, p.167" },
+          { r: [8, 9], t: "Recalibrate the repaired configuration", x: "Exit to TXSELFCAL, then RXCLKCAL through DATATRAINCENTER2 again (compressed column), because the lane mapping changed.", s: "§4.5.3.4.13 step 3, p.167" },
+          { r: [10, 11], t: "Pass, then LINKINIT", x: "LINKSPEED passes with no failing lanes; the module proceeds to LINKINIT and the RDI Active handshake.", s: "§4.5.3.4.12 steps 4 and 6, p.165–166" }
+        ]
+      },
+      {
+        id: "phyretrain", tab: "PHYRETRAIN", unit: "steps", title: "Runtime retrain with different encodings",
+        desc: "Both dies are in ACTIVE. Die 1's PHY detects a Valid framing error; its Runtime Link Test status says a repair is needed. Die 0's receivers are clean.",
+        ref: "§4.5.3.7, p.168–171 · Tables 4-10 to 4-12, p.169",
+        n: 10, gaps: [6],
+        sig: [
+          { name: "Die 0 RDI status", d: "pl", t: "bus", v: seq([["Active", 2], ["Retrain", 7], ["Active", 1]]) },
+          { name: "Die 0 LTSM", d: "lp", t: "bus", v: seq([["ACTIVE", 2], ["PHYRETRAIN", 3], ["REPAIR", 1], ["", 1], ["LINKSPEED", 1], ["LINKINIT", 1], ["ACTIVE", 1]]) },
+          { name: "Die 1 → Die 0", d: "sb", t: "note", v: ["", "Req.Retrain", "", "start req 100b", "start resp 100b", "repair msgs", "", "done", "Req/Rsp.Active", ""] },
+          { name: "Die 0 → Die 1", d: "sb", t: "note", v: ["", "", "Rsp.Retrain", "start req 001b", "start resp 100b", "repair msgs", "", "done", "Req/Rsp.Active", ""] },
+          { name: "encoding", d: "note", t: "note", v: ["", "", "", "001b vs 100b", "resolved 100b", "", "", "", "", ""] }
+        ],
+        steps: [
+          { r: [0, 1], t: "Die 1 asks for a retrain", x: "Die 1's PHY sees a framing error, flags it with pl_error, stalls its Adapter and sends {LinkMgmt.RDI.Req.Retrain}.", s: "§4.5.3.7.2, p.170" },
+          { r: [2, 2], t: "Die 0 joins", x: "Die 0 stalls its own Adapter, moves RDI to Retrain and replies Rsp.Retrain. Both LTSMs are in PHYRETRAIN.", s: "§4.5.3.7.3, p.171" },
+          { r: [3, 4], t: "Agree the retrain type", x: "Each side sends {PHYRETRAIN.retrain start req} with its encoding. Die 0 has no lane errors (001b); Die 1 needs repair (100b). They differ, so both resolve to the more severe, 100b, and send it in the response.", w: "Each die only knows its own receive errors; taking the worse request fixes whichever direction is bad.", s: "§4.5.3.7, p.169–171 · Table 4-12, p.169" },
+          { r: [5, 7], t: "REPAIR, retrain, check", x: "Both exit to MBTRAIN.REPAIR, apply repair, then run TXSELFCAL through LINKSPEED (compressed column).", s: "§4.5.3.4.13, p.167 · §4.5.3.4.12" },
+          { r: [8, 9], t: "Back to Active", x: "LINKINIT and the RDI Active Entry handshake (the Adapter gives NOP→Active because Retrain was entered from Active). RDI returns to Active and Retry replays anything lost.", s: "§10.1.6, p.534 · §10.3.3.4, p.567" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      waveEl.innerHTML = renderWave(s, st.r, false);
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+</script>
+</body>
+</html>

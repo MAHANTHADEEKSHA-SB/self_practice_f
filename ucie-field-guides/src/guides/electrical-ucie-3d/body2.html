@@ -1,0 +1,161 @@
+
+<section id="rationale"><div class="wrap">
+  <h2>12 · Why each rule exists</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="clk">
+      <div class="meta"><span>Interop</span><span>§5.1.1 p.184</span></div>
+      <h3>Support every rate from 4 GT/s up to your maximum</h3>
+      <p class="rule">A device supporting 16 GT/s must also run 4, 8 and 12 GT/s.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Two dies from different vendors always share 4 GT/s, and training can step down through every rate when a channel cannot hold the top one (speed degrade in LINKSPEED).</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32 GT/s die meets a 16 GT/s die: they train at 16. Later the channel degrades and the link falls back to 12 GT/s.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A die that skips 12 GT/s strands its partner at 8 GT/s when 16 fails.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Data rates <span class="ref">§5.1.1, p.184</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="clk">
+      <div class="meta"><span>Clocking</span><span>§5.1.1 p.184</span></div>
+      <h3>One REFCLK, under 5 ns of transport delay difference</h3>
+      <p class="rule">Transmitter and partner receiver share a reference clock from one source, with Tx-to-Rx transport delay difference under 5 ns.</p>
+      <div class="part"><span class="l l-why">Why</span><p>With the same reference, both ends run at exactly the same frequency, so the receive FIFO only absorbs phase, not frequency drift. Limiting the delay difference keeps that FIFO shallow and its latency low.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 100 MHz package clock pin feeds both chiplets' PLLs; SSC is applied at the source, so both follow it.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Separate clocks drift by ppm; the FIFO eventually over- or under-runs.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>REFCLK rules <span class="ref">§5.1.1–5.1.2, p.184–185</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="clk">
+      <div class="meta"><span>Clocking</span><span>§5.5 p.202</span></div>
+      <h3>Differential clock at 16 GT/s and below, always</h3>
+      <p class="rule">Quadrature clocking is an option only at 24 and 32 GT/s; at 16 GT/s and below the differential clock is mandatory.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A design that tops out at 16 GT/s only knows differential clocking. If a faster die used quadrature at 16 GT/s, the slower die could not receive it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32 GT/s die with a quarter-rate receiver uses quadrature at 32 GT/s, but switches to differential when the link trains at 16.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>No link with lower-rate partners below 24 GT/s.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Clock phase rule <span class="ref">§5.5, p.202 · Table 5-12, p.203</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="idle">
+      <div class="meta"><span>Idle</span><span>§4.1.3 p.101</span></div>
+      <h3>Postamble before the clock stops</h3>
+      <p class="rule">After Valid drops, the clock keeps toggling for 8 cycles (16 UI half-rate, 32 UI quarter-rate) before it may be gated.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The receiver's data path is clocked by the forwarded clock itself. Extra edges after the last data push that data through the receiver's samplers and FIFO before the clock disappears.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A burst ends at UI 15; the clock runs to UI 31, then parks.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The last bytes of the burst stay stuck in the receive pipeline until the next burst.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Postamble <span class="ref">§4.1.3, p.101 · §5.11, p.251</span></li><li><span class="kind derived">Derived</span>pipeline reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="idle">
+      <div class="meta"><span>Idle</span><span>§5.11 p.251–253</span></div>
+      <h3>Continuous clock at 48 and 64 GT/s</h3>
+      <p class="rule">At 48/64 GT/s the forwarded clock must run continuously; clock gating is not used.</p>
+      <div class="part"><span class="l l-why">Why</span><p>At these speeds the clock receiver and I/Q-corrected phases need time to settle; restarting a gated clock would disturb the trained timing. The cost is higher idle power, which the spec accepts (20–25% idle-power target instead of 15%).</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64 GT/s link sits idle between bursts: Valid low, data preconditioned, clock still at 16 GHz.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Timing errors on the first data after idle, causing Valid framing errors and retrains.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Continuous mode <span class="ref">§5.11, p.253 · Table 5-3 note b, p.189</span></li><li><span class="kind derived">Derived</span>settling reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="txrx">
+      <div class="meta"><span>Tx/Rx</span><span>§5.4.3 p.197</span></div>
+      <h3>Advanced Package Rx: unterminated up to 32 GT/s</h3>
+      <p class="rule">Advanced Package receivers are unterminated up to 32 GT/s and ground-terminated for 48/64 GT/s.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A 2 mm interposer trace has little loss or reflection at lower rates, so skipping termination saves the static current it would draw. At 48/64 GT/s reflections matter and termination pays for itself.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A die-to-die link on a silicon interposer at 16 GT/s runs unterminated; a 64 GT/s die-to-die link on the same interposer terminates to 50 Ω.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Terminating at low rate wastes power; leaving 64 GT/s unterminated closes the eye.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Rx termination <span class="ref">§5.4.3, p.197</span></li><li><span class="kind derived">Derived</span>power/SI reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="txrx">
+      <div class="meta"><span>Tx/Rx</span><span>§5.3.4 p.194</span></div>
+      <h3>Among equal eyes, pick the largest C0</h3>
+      <p class="rule">At 48/64 GT/s the Tx preset with the largest eye opening wins; if presets tie, choose the one with the largest C0.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A larger main-cursor coefficient means less de-emphasis, so more signal swing at low frequencies and more margin against noise for the same eye.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>P2 (C0 0.90) and P4 (C0 0.80) give equal eyes: choose P2.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Not wrong electrically, but less margin than necessary.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Preset selection <span class="ref">§5.3.4, Table 5-7, p.194</span></li><li><span class="kind derived">Derived</span>margin reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="idle">
+      <div class="meta"><span>BER</span><span>§5.10 p.251</span></div>
+      <h3>Raw BER decides whether CRC and retry are needed</h3>
+      <p class="rule">At 1E-15 or worse, CRC and retry are required; at 1E-27, parity or CRC with error reporting suffices.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The target is far below 1 failure per 10⁹ device-hours. At 1E-15 and tens of Gb/s, a single lane sees an error every few hours and a wide link every few minutes, so errors must be caught and replayed. At 1E-27 they essentially never happen.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A x64 link at 32 GT/s carries about 2×10¹² bits per second: at 1E-15 that is an error roughly every 8 minutes, each needing a replay.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Running Raw Format at 1E-15 without protocol-level protection lets errors through.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>BER and FIT <span class="ref">§5.10, Table 5-32, p.251</span></li><li><span class="kind derived">Derived</span>error interval arithmetic</li></ul></div>
+    </article>
+    <article class="wcard" data-g="sb">
+      <div class="meta"><span>Sideband</span><span>§5.13 p.254</span></div>
+      <h3>Sideband on an always-on supply and clock</h3>
+      <p class="rule">The sideband should run from always-on power (VCCAON) and the auxiliary clock.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The sideband trains the mainband, wakes it from low power, and carries management traffic. It has to work while the mainband supply and REFCLK may be off.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>While the mainband sits in L1 with its clock stopped, the sideband stays up to carry the exit handshake.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A sideband on a switched rail cannot wake the link.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>VCCAON, AUXCLK <span class="ref">§5.13, p.254 · §5.6 note, p.205</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="red">
+      <div class="meta"><span>Degrade</span><span>§5.7.3.4.1 p.246–247</span></div>
+      <h3>Standard Package degrades to 1 or 2 modules, never 3</h3>
+      <p class="rule">If module pairs fail, the link runs on 1 or 2 modules; one failure on a 4-module link also disables the other pair in the same half.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Power-of-two module counts keep data striping across modules simple and symmetric. Disabling the neighbour in the same half keeps the two surviving modules in a supported pairing.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>On a x4 unstacked link, pair M0–M2 fails; M1–M3 next to it is disabled too, and the link runs on the other half as 2 modules.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A 3-module link is not a legal configuration.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Degrade rules, Table 5-29 <span class="ref">§5.7.3.4.1, p.246–247</span></li><li><span class="kind derived">Derived</span>striping reason</li></ul></div>
+    </article>
+    <article class="wcard" data-g="d3">
+      <div class="meta"><span>UCIe-3D</span><span>§6.2 p.258</span></div>
+      <h3>No Adapter, no CRC, no replay</h3>
+      <p class="rule">UCIe-3D has no D2D Adapter and needs no CRC or replay; the SoC logic connects straight to a minimal PHY.</p>
+      <div class="part"><span class="l l-why">Why</span><p>At ≤ 4 GT/s over a near-zero-length vertical bond the BER is below 1E-27, so retry would add area, power and latency for no benefit. At 1 µm pitch the whole lane budget is under 1 µm², with no room for an Adapter.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A cache die bonded on a compute die: SoC logic launches data on a clock edge; the other die samples it half a UI later, 0.125 ns in all.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Adding retry to UCIe-3D makes the PHY larger than its bump area.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Objectives <span class="ref">§6.2, p.258–259</span></li><li><span class="kind spec">Spec</span>KPIs <span class="ref">Table 6-1, p.259–260</span></li></ul></div>
+    </article>
+    <article class="wcard" data-g="d3">
+      <div class="meta"><span>UCIe-3D</span><span>§6.4.4 p.265</span></div>
+      <h3>Repair whole bundles, not lanes</h3>
+      <p class="rule">UCIe-3D reserves spare modules (bundles) and reroutes around a failed one; dense arrays reserve two full modules per single failure.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Defect size varies with process, pitch and SoC size. At micron pitch one defect can wipe out many adjacent bumps, so per-lane spares, sized for one defect size, would not cover them.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A particle under the stack kills a Tx bundle; SoC logic remaps traffic to a reserved module.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Lane-level spares sized for small defects leave yield loss from large ones.</p></div>
+      <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Repair strategy <span class="ref">§6.4.4, p.265–267</span></li></ul></div>
+    </article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>13 · Live waveforms</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+    <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>14 · Test yourself</h2>
+  <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>Which signals make up one Advanced Package x64 module in one direction? <span class="lvl">Basic</span></summary><div><p>64 data lanes plus 4 redundant, Valid plus 1 redundant, two clock phases, Track, a redundant lane for clock/Track, and sideband data and clock with a redundant pair.</p><p class="src"><span class="sl">Spec</span>Table 5-18, p.209–210 · §5.9.1, p.249</p></div></details>
+  <details><summary>What is the forwarded clock frequency at 64 GT/s, and can it be gated? <span class="lvl">Basic</span></summary><div><p>16 GHz, quarter-rate, quadrature phases. It cannot be gated: at 48/64 GT/s the clock runs continuously.</p><p class="src"><span class="sl">Spec</span>Table 5-12, p.203 · §5.11, p.253</p></div></details>
+  <details><summary>How long is the clock postamble with half-rate clocking, and why count it in UI? <span class="lvl">Intermediate</span></summary><div><p>8 clock cycles = 16 UI at half rate (32 UI at quarter rate). Valid framing and gated periods are counted in 8-UI blocks, so UI is the natural unit.</p><p class="src"><span class="sl">Spec</span>§4.1.3, p.101 · §5.11, p.251</p></div></details>
+  <details><summary>When must a Standard Package receiver be terminated? <span class="lvl">Intermediate</span></summary><div><p>Whenever the rate and channel length fall outside Table 5-10 (0.4 V swing) or Table 5-11 (0.85 V): for example 16 GT/s needs termination at 0.4 V swing at any length, but at 0.85 V can stay unterminated up to 5 mm.</p><p class="src"><span class="sl">Spec</span>§5.4.3, Tables 5-10, 5-11, p.197–199</p></div></details>
+  <details><summary>Why does 64 GT/s need CRC and retry on both package types? <span class="lvl">Intermediate</span></summary><div><p>Its raw BER requirement is 1E-12; anything at 1E-15 or worse needs CRC and retry to reach FIT ≪ 1.</p><p class="src"><span class="sl">Spec</span>§5.10, Table 5-32, p.251</p></div></details>
+  <details><summary>Name three things UCIe-3D removes compared with UCIe-A. <span class="lvl">Advanced</span></summary><div><p>The D2D Adapter, CRC/replay, and the required sideband (initialization). The PHY becomes a near-inverter connected to SoC logic, and lane repair becomes bundle repair.</p><p class="src"><span class="sl">Spec</span>§6.2, p.258–259 · §6.4.3, p.265</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>15 · Spec reference index</h2>
+  <div class="tbl-wrap refidx"><table>
+    <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+    <tbody>
+      <tr><td>Tables 1-1, 1-2</td><td>Characteristics of UCIe on Standard and Advanced Package</td><td class="num">40</td></tr>
+      <tr><td>§5.0–5.1</td><td>Electrical Layer; Interoperability; REFCLK</td><td class="num">184–186</td></tr>
+      <tr><td>§5.2</td><td>Overview; Electrical Summary (Tables 5-2, 5-3)</td><td class="num">186–189</td></tr>
+      <tr><td>§5.3</td><td>Transmitter; Tx EQ (Tables 5-4 to 5-7)</td><td class="num">190–194</td></tr>
+      <tr><td>§5.4</td><td>Receiver; termination; Rx EQ (Tables 5-8 to 5-11)</td><td class="num">195–201</td></tr>
+      <tr><td>§5.5–5.6</td><td>Clocking; Track; supply noise and clock skew</td><td class="num">201–205</td></tr>
+      <tr><td>§5.7</td><td>Ball-out and channel; eye masks; VTF; bump maps</td><td class="num">205–248</td></tr>
+      <tr><td>§5.7.3.4.1</td><td>Module Degrade Rules (Standard Package)</td><td class="num">246–247</td></tr>
+      <tr><td>§5.8–5.9</td><td>Tightly Coupled Mode; lane remapping</td><td class="num">249–250</td></tr>
+      <tr><td>§5.10–5.12</td><td>BER, CRC and Retry; Valid and clock gating; electrical idle</td><td class="num">250–253</td></tr>
+      <tr><td>§5.13–5.14</td><td>Sideband signaling; AUXCLK; Open Drain</td><td class="num">254–257</td></tr>
+      <tr><td>§6.1–6.3</td><td>UCIe-3D introduction, features, Tx/Rx and clocking</td><td class="num">258–260</td></tr>
+      <tr><td>§6.4</td><td>UCIe-3D timing budget, ESD, bump map, repair, channel extension</td><td class="num">261–267</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapters 5 and 6, with §4.1 and Chapter 1 for context. Bump maps and module naming tables are summarized only; use the spec figures for layout work.</div></footer>

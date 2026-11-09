@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UCIe Logical PHY Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* Layout idea: a lab notebook for one interface. Theory sections read top to bottom; the
+   waveform viewer is the instrument. Color encodes signal direction: amber = driven by the
+   Protocol Layer (lp_*), teal = driven by the Adapter (pl_*), violet = sideband messages. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the UCIe field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>UCIe 3.0 Field Guides:</span><a href="fdi.html">FDI</a><a href="rdi.html">RDI</a><a href="d2d-adapter.html">D2D Adapter</a><a href="link-training.html">Link Training</a><span class="here">Logical PHY</span><a href="electrical-ucie-3d.html">Electrical &amp; UCIe-3D</a></div>
+    <div class="eyebrow">UCIe 3.0 · Chapter 4.1 to 4.3, 4.7, 4.8 · Logical Physical Layer data path</div>
+    <h1>UCIe Logical PHY Field Guide</h1>
+    <p class="lede">How bytes from RDI become bits on bumps and back: byte-to-lane striping, Valid framing, clock gating, the sideband serial format, lane reversal, lane repair and width degrade, and how two or four modules act as one link. The LTSM guide covers <em>when</em> these are set up; this guide covers <em>what</em> they do to the data.</p>
+    <div class="legend" aria-label="Color legend">
+      <span><i class="sw" style="background:var(--lp)"></i>transmit side / logical lane</span>
+      <span><i class="sw" style="background:var(--pl)"></i>receive side / physical lane, Valid</span>
+      <span><i class="sw" style="background:var(--sb)"></i>sideband</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Tags: <span class="kind spec">Spec</span>, <span class="kind derived">Derived</span>, <span class="kind illus">Illustrative</span>, <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a><a href="#bytes">2 · Bytes to lanes</a><a href="#valid">3 · Valid and clock</a><a href="#sb">4 · Sideband format</a><a href="#reversal">5 · Lane reversal</a><a href="#repair">6 · Repair and degrade</a><a href="#mm">7 · Multi-module</a><a href="#rationale">8 · Why each rule</a><a href="#live">9 · Live scenarios</a><a href="#silicon">10 · Real silicon</a><a href="#verify">11 · Verification</a><a href="#quiz">12 · Test yourself</a><a href="#refs">13 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+<section id="why">
+  <div class="wrap">
+    <h2>1 · What the Logical PHY does</h2>
+    <p class="sub">The spec lists its jobs: link initialization and power states (the LTSM), byte-to-lane mapping, redundancy remapping, sideband messaging, scrambling and patterns, and width degrade. This page covers the data-path ones.</p>
+    <div class="grid g3">
+      <div class="card"><div class="tagline">Width</div><h3>One byte per lane</h3><p>Every lane carries one whole byte per 8 UI, bit 0 first. Wide RDI beats become parallel lanes, not serial bits on one lane.</p><p class="src"><span class="sl">Spec</span>§4.1.1, p.98</p></div>
+      <div class="card"><div class="tagline">Framing</div><h3>Valid marks the bytes</h3><p>A Valid lane, 4 UI high then 4 UI low per 8-UI block, says which 8 UI carry data. No headers or symbols on the wire.</p><p class="src"><span class="sl">Spec</span>§4.1.2, p.100</p></div>
+      <div class="card"><div class="tagline">Yield</div><h3>Route around bad bumps</h3><p>Advanced Package repairs up to two data lanes per 32 using redundant lanes, plus one clock/track lane and the Valid lane. Standard Package halves width instead.</p><p class="src"><span class="sl">Spec</span>§4.3, p.107–118</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="bytes">
+  <div class="wrap">
+    <h2>2 · Bytes to lanes</h2>
+    <p class="sub">Byte 0 goes on lane 0, byte 1 on lane 1, and so on; within a byte, bit 0 is sent first. When the width changes, the rule is the same: one byte per lane per 8 UI. Pick a width to see where a 256B flit's bytes go.</p>
+    <div class="chips" role="group" id="bmchips"></div>
+    <figure><div id="bmap" class="tbl-wrap" style="border:0"></div><figcaption id="bmcap"></figcaption></figure>
+    <div class="callout" style="margin-top:12px"><p><strong>RDI byte k = lane k.</strong> RDI byte order (flit byte 0 on RDI byte 0) and lane order line up, so the PHY needs no knowledge of flit formats: a 64B RDI beat on a x64 module is exactly one 8-UI Valid frame. Multi-module and degraded links keep "ascending bytes on ascending active lanes and module IDs".</p><p class="src"><span class="sl">Spec</span>§4.1.1, p.98 · §10.3.1, p.559–561 · §4.7.1, p.175</p></div>
+  </div>
+</section>
+
+<section id="valid">
+  <div class="wrap">
+    <h2>3 · Valid framing and clock gating</h2>
+    <div class="twocol">
+      <div class="card">
+        <h3>8-UI blocks, aligned forever</h3>
+        <ul class="tight" style="font-size:15px">
+          <li>For each 8-bit transfer, Valid is high for the first 4 UI and low for 4 UI.</li>
+          <li>In Active, every transfer starts an integer multiple of 8 UI after the rising edge of the first transfer's Valid. The receiver tracks this alignment.</li>
+          <li>An invalid Valid encoding is a framing error: the PHY raises <code>pl_error</code> and retrains.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§4.1.2, p.100 · Table 10-1 (pl_error), p.524</p>
+      </div>
+      <div class="card">
+        <h3>Retimers return credits on Valid</h3>
+        <div class="tbl-wrap" style="border:0"><table><thead><tr><th>Valid bits (bit 0 first, right to left)</th><th>Meaning</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px"><tr><td>0000 0000</td><td>no data, no credit</td></tr><tr><td>0000 1111</td><td>data, no credit</td></tr><tr><td>1111 0000</td><td>no data, 1 credit</td></tr><tr><td>1111 1111</td><td>data, 1 credit</td></tr></tbody></table></div>
+        <p style="font-size:14.5px">Each credit = 256B. The encodings guarantee detection of 3 bit flips. At ≤ 48 GT/s a receiver may retrain on any bit error or correct single-bit errors; above 48 GT/s it must correct single-bit errors.</p>
+        <p class="src"><span class="sl">Spec</span>§4.1.2.1 and Table 4-1, p.101</p>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card"><h3>Clock gating with a postamble</h3><p style="font-size:15px">When Valid goes low, the forwarded clock keeps toggling for a fixed postamble, then stops: 16 UI (8 cycles) at half-rate clocking, 32 UI (8 cycles) at quarter-rate. Not gated if free-running clock was negotiated or the partner requested Runtime Recalibration.</p><p class="src"><span class="sl">Spec</span>§4.1.3, p.101 · §5.11</p></div>
+      <div class="card"><h3>Free-running clock mode</h3><p style="font-size:15px">The forwarded clock keeps toggling even with Valid low. Must be supported (to turn off dynamic clock gating for normal operation or debug) and negotiated before mainband training. Always used above 32 GT/s.</p><p class="src"><span class="sl">Spec</span>§4.1.4, p.101 · §4.5.3.3.1, p.137</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="sb">
+  <div class="wrap">
+    <h2>4 · Sideband serial format</h2>
+    <div class="twocol">
+      <div class="card"><ul class="tight" style="font-size:15px">
+        <li>One serial data + clock pair per direction per module, 800 MT/s single data rate.</li>
+        <li>Messages are a 64-bit header, optionally with 32 or 64 bits of data. Every serial packet is 64 UI; 32-bit data is padded with zeros in the MSBs.</li>
+        <li>Packets are separated by at least 32 UI of low. A message with data = header, 32 UI low, data, 32 UI low.</li>
+        <li><strong>PMO</strong> (Performant Mode, negotiated in MBINIT.PARAM SBFE): no 32-UI gap; packets back to back. Receivers must still accept gaps.</li>
+        <li><strong>PSPT</strong> (Priority Sideband Packet Transfer, needs PMO): a pending priority packet may interrupt a normal packet at an 8-UI boundary after 8 UI of idle. Opcode 11111b ends a priority chain and resumes the normal packet; 11110b says another priority packet follows.</li>
+      </ul><p class="src"><span class="sl">Spec</span>§4.1.5–4.1.5.2.1, p.102–104 · §5.13, p.254</p></div>
+      <div class="card"><h3>Who shares the sideband</h3><p style="font-size:15px">Link management packets (training, RDI and Adapter state messages) and Management Port Messages (MPMs) share each sideband. Arbitration is implementation-specific but must not delay link management packets into timeouts; an MPM with data must finish within 512 UI (with PMO) or 768 UI (without).</p><p class="src"><span class="sl">Spec</span>§4.8, p.182 · §8.2.5.1.2</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="reversal">
+  <div class="wrap">
+    <h2>5 · Lane reversal and Lane ID</h2>
+    <div class="twocol">
+      <div class="card"><p style="font-size:15px">Every device must support data lane reversal within a module: local physical data lane 0 connects to remote lane N−1, lane 1 to N−2, and so on (N = 8, 16, 32 or 64). On Advanced Package the redundant lanes reverse too. Track, Valid, Clock and sideband are never reversed.</p><p style="font-size:15px">Every logical data and redundant lane has a unique Lane ID (x64 Advanced: 0–63 data, 64–67 redundant; x32: 0–31 and 64–65). MBINIT.REVERSALMB sends each lane's ID in an unscrambled 16-bit pattern so the receiver can see which transmitter lane it is connected to.</p><p class="src"><span class="sl">Spec</span>§4.2–4.2.1, p.104–107 · Table 4-7, p.151</p></div>
+      <div class="card"><div class="tagline">Why reversal exists</div><p style="font-size:15px">Two identical dies placed face to face on a package, or one die rotated 180°, see each other's lanes in mirror order. Supporting reversal in silicon means the package designer does not need crossing routes, which on Advanced Package interposers with 25–55 µm bump pitch would cost routing layers.</p><p class="src"><span class="kind bg">Background</span>routing reasoning · <span class="kind spec">Spec</span>bump pitch, Table 1-2, p.40</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="repair">
+  <div class="wrap">
+    <h2>6 · Lane repair (Advanced) and width degrade (Standard)</h2>
+    <p class="sub">Advanced Package: each group of 32 data lanes has two redundant lanes (TRD0/TRD1 for lanes 0–31, TRD2/TRD3 for 32–63). One failure shifts toward TRD0; two failures shift the lower one toward TRD0 and the upper one toward TRD1. Click up to two lanes below to see the mapping for lanes 0–31.</p>
+    <figure>
+      <div id="rpgrid" style="display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px"></div>
+      <div id="rpgrid2" style="display:grid;grid-template-columns:repeat(17,minmax(0,1fr));gap:3px;margin-top:3px"></div>
+      <figcaption id="rpcap"></figcaption>
+    </figure>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><h3>Limits</h3><p style="font-size:15px">Up to two data lanes per group of 32 (four per x64 module). If TRD0 (or TRD2) is itself faulty, no lane in that group can be repaired; if TRD1 (or TRD3) is faulty, one can. Unused redundant lanes are tri-stated and their receivers disabled.</p><p class="src"><span class="sl">Spec</span>§4.3, p.107–108</p></div>
+      <div class="card"><h3>Clock, Track, Valid</h3><p style="font-size:15px">One broken lane among clock (P/N) and track can be remapped onto the redundant clock/track lane (RDCK). Valid has its own redundant lane (RDVLD). Both are detected and repaired in MBINIT.</p><p class="src"><span class="sl">Spec</span>§4.3.4–4.3.6, p.115–118</p></div>
+      <div class="card"><h3>Standard: halve the width</h3><p style="font-size:15px">x16 → x8 using logical lanes 0–7 or 8–15, whichever half has no faults; x8 → x4 using 0–3 or 4–7. If faults are in both halves, width degrade cannot help. Disabled lanes are tri-stated.</p><p class="src"><span class="sl">Spec</span>§4.3.7, p.118 · Table 4-9, p.155</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="mm">
+  <div class="wrap">
+    <h2>7 · Multi-module links</h2>
+    <div class="twocol">
+      <div class="card"><ul class="tight" style="font-size:15px">
+        <li>Permitted configurations: one, two or four modules. Each has a Module ID, advertised in MBINIT.PARAM.</li>
+        <li>Each module trains on its own sideband through LINKSPEED step 2; the Multi-module PHY Logic (MMPL) then resolves one outcome for all.</li>
+        <li>All modules run at the same speed and width. If a module fails, MMPL degrades to the next permitted configuration (fewer modules, or lower speed), using the flowcharts in Figures 4-47 and 4-48.</li>
+        <li>The MMPL swizzles bytes so the remote receivers see bytes laid out from LSB to MSB in ascending Module ID and Lane ID across all active lanes, even if the partner's Module IDs differ.</li>
+      </ul><p class="src"><span class="sl">Spec</span>§4.7–4.7.1, p.175–178</p></div>
+      <div class="card"><h3>Which sideband carries what</h3><p style="font-size:15px">Training messages (Tables 7-9 and 7-11) go on each module's own sideband. Register accesses, RDI/Adapter link management and other non-vendor messages (Tables 7-8, 7-10) use one sideband: the lowest Module ID whose LTSM is past SBINIT. Retimer credits ride on the Valid of the lowest Module ID in Active. In both cases the receiver may see them arrive on a different module ID.</p><p class="src"><span class="sl">Spec</span>§4.7.1.1, p.178</p></div>
+    </div>
+    <div class="callout" style="margin-top:12px"><p><strong>Choosing between fewer modules and lower speed.</strong> For a speed difference, MMPL compares bandwidth: with CMLS = common maximum speed and HMLS = highest maximum speed of the next lower module count, if HMLS/2 &gt; CMLS it drops modules; otherwise all modules slow to CMLS. The "HMLS/2 &gt; CMLS" case also rescues a link where some modules fail even 4 GT/s (CMLS = 0): those are disabled instead of the whole link going to TRAINERROR.</p><p class="src"><span class="sl">Spec</span>§4.7.1, p.177 · Figures 4-47 and 4-48</p></div>
+  </div>
+</section>
+
+<section id="rationale">
+  <div class="wrap">
+    <h2>8 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives a data-path rule, the reason, an example, and what breaks without it.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="map">
+        <div class="meta"><span>Mapping</span><span>§4.1.1 p.98</span></div>
+        <h3>Whole bytes per lane, not bits striped across lanes</h3>
+        <p class="rule">Each byte travels on one lane over 8 UI, bit 0 first; byte k on lane k.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A whole byte per lane means the receiver deserializes each lane independently with a simple 1:8 shift register and no cross-lane bit reassembly. It also makes lane skew affect only byte position, which deskew handles per lane. And it lines up with the 8-UI Valid block exactly.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 at 16 GT/s: in each 8-UI block (0.5 ns) all 64 lanes deliver one byte: 64 bytes, one RDI beat at 2 GHz. A 256B flit takes four blocks, 2 ns.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PHY that sends MSB first reverses every byte at the far end; the CRC fails on every flit.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Bit and byte order <span class="ref">§4.1.1, Figures 4-1, 4-2, p.98–99</span></li><li><span class="kind bg">Background</span>Deserializer reasoning</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="map">
+        <div class="meta"><span>Mapping</span><span>§4.1.1 p.98 · §4.3.7 p.118</span></div>
+        <h3>Narrower links keep one byte per lane</h3>
+        <p class="rule">On x32, x16 or a degraded x8, bytes still go one per lane in ascending order; the flit just takes more 8-UI blocks.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The same serializer and deserializer work at every width. Width becomes a parameter of how many blocks a flit takes, not a different bit layout, which keeps width degrade a configuration change rather than new logic.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x16 Standard: a 256B flit takes 16 blocks. After degrade to x8 it takes 32 blocks, twice the time.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Leaving a disabled lane's slot in the byte order (skipping a byte) shifts every following byte after degrade.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Figures 4-3 to 4-5 <span class="ref">p.99–100</span></li><li><span class="kind derived">Derived</span>Block counts</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="frm">
+        <div class="meta"><span>Framing</span><span>§4.1.2 p.100</span></div>
+        <h3>Valid is 1111 0000, every 8 UI, on a fixed grid</h3>
+        <p class="rule">Valid is high for the first 4 UI and low for the next 4 of each data block, and in Active every transfer starts a multiple of 8 UI after the first one.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A fixed grid lets the receiver know where a byte boundary is without any symbol alignment. The half-high, half-low shape gives an edge in every block, and its fixed pattern makes corruption easy to detect: anything other than the allowed patterns is a framing error.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Valid for three back-to-back blocks reads 11110000 11110000 11110000. A noise hit that turns one block into 11010000 is caught as a framing error; the PHY raises <code>pl_error</code> and retrains.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A transmitter that starts a burst 4 UI off the grid after an idle gap: the receiver mis-frames every byte.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Valid shape and 8-UI grid <span class="ref">§4.1.2, p.100</span></li><li><span class="kind spec">Spec</span>Framing errors trigger retrain <span class="ref">§4.5.3.7.2, p.170</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="frm">
+        <div class="meta"><span>Framing</span><span>§4.1.2.1 p.101</span></div>
+        <h3>Retimer credits ride on Valid's spare half</h3>
+        <p class="rule">Toward its local die, a Retimer uses the upper 4 UI of Valid to return a 256B credit: 0000 1111 data only, 1111 0000 credit only, 1111 1111 both.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A Retimer must tell the die how much buffer space it has without stealing data bandwidth or sideband latency. Valid's low half is otherwise always 0, so it can carry one bit per block for free. The four codes are far enough apart to detect three bit flips.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>x64 at 16 GT/s: one credit can return every 0.5 ns block, far faster than flits (one per 2 ns) consume them, so credits never become the bottleneck.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>The first transfer after entering Active must not be "credit only" (1111 0000); it would break the receiver's 8-UI alignment start. The spec notes this is fine because credits are re-advertised on every Active entry.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Table 4-1 and error handling rules <span class="ref">p.101</span></li><li><span class="kind spec">Spec</span>First-transfer note <span class="ref">§4.1.2, p.100</span></li><li><span class="kind derived">Derived</span>Credit and flit rates</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="frm">
+        <div class="meta"><span>Framing</span><span>§4.1.2.1 p.101</span></div>
+        <h3>Above 48 GT/s, correct; at or below, you may just detect</h3>
+        <p class="rule">At ≤ 48 GT/s a Retimer-encoding receiver may retrain on any bit error or correct single-bit errors. Above 48 GT/s it must correct single-bit errors.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Above 48 GT/s the raw BER is 1e-12, a million times worse than 1e-15 below. Single-bit errors on Valid would become frequent, and retraining on each one would cost far more than correcting it.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>At 64 GT/s the Valid lane carries 6.4e10 bits per second; at BER 1e-12 that is one Valid bit error roughly every 16 seconds per direction, too often to retrain each time.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A detect-only receiver at 64 GT/s retrains several times a minute.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>The rule <span class="ref">§4.1.2.1, p.101</span></li><li><span class="kind spec">Spec</span>BER by speed <span class="ref">Tables 1-1, 1-2, p.40</span></li><li><span class="kind derived">Derived</span>Error interval</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="frm">
+        <div class="meta"><span>Framing</span><span>§4.1.3 p.101</span></div>
+        <h3>Gate the clock, but only after a postamble</h3>
+        <p class="rule">After Valid falls, the forwarded clock keeps running for 16 UI (half-rate) or 32 UI (quarter-rate), 8 clock cycles either way, then stops. Required whenever the clock must stop after toggling with Valid, in any LTSM state.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receiver's deserializer and FIFOs are clocked by the forwarded clock. Stopping it the moment Valid drops would strand the last bytes inside the receive pipeline. Eight extra cycles flush them.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>16 GT/s with an 8 GHz half-rate clock: the postamble costs 1 ns of clock activity after each burst, which is cheap compared with the power saved during idle.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Gating the clock on Valid's falling edge: the last byte of every burst never leaves the receiver's deserializer; the next burst pushes it out late, misaligned.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Postamble lengths and exceptions <span class="ref">§4.1.3, p.101</span></li><li><span class="kind bg">Background</span>Pipeline-flush reason</li><li><span class="kind derived">Derived</span>8 cycles at 8 GHz = 1 ns</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="sb">
+        <div class="meta"><span>Sideband</span><span>§4.1.5 p.102</span></div>
+        <h3>Every sideband packet is 64 UI, plus a 32 UI gap</h3>
+        <p class="rule">Header and data each go as 64-UI serial packets, with at least 32 UI low between packets (unless PMO is negotiated).</p>
+        <div class="part"><span class="l l-why">Why</span><p>A fixed packet size makes the serial receiver trivial: count 64 UI. The low gap gives an unambiguous start-of-packet edge without a preamble, which matters on a link that is also used during training before anything is calibrated.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A register write with 64-bit data: 64 UI header + 32 UI + 64 UI data + 32 UI = 192 UI = 240 ns at 800 MT/s. With PMO: 128 UI = 160 ns.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A PMO transmitter that starts back-to-back sends before it has sent and received the SBFE response with PMO = 1: the partner's receiver may not yet be in PMO mode.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Packet format and gaps; PMO entry rule <span class="ref">§4.1.5–4.1.5.1, p.102</span></li><li><span class="kind derived">Derived</span>Times</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="sb">
+        <div class="meta"><span>Sideband</span><span>§4.1.5.2.1 p.103–104</span></div>
+        <h3>Priority packets can cut in, at 8-UI boundaries</h3>
+        <p class="rule">With PSPT, a transmitter may interrupt a normal packet at an 8-UI multiple, insert 8 UI of idle, then a priority packet. Opcode 11111b resumes the normal packet next; 11110b chains another priority packet.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A long management message can occupy the sideband for hundreds of nanoseconds. Some packets must not wait behind it. The 8-UI idle marks the interruption so the receiver knows the next 64 UI are a priority packet, not the rest of the normal one.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64-UI normal packet is 32 UI in when a priority packet arrives. Sideband: 32 UI normal, 8 UI idle, 64 UI priority (opcode 11111b), then the remaining 32 UI of the normal packet.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A receiver that does not track "interrupted" state treats the resumed tail as a new packet header.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>PSPT rules; needs PMO; receiver tracking <span class="ref">§4.1.5.2–4.1.5.2.1, p.103–104</span></li><li><span class="kind spec">Spec</span>Priority packet format <span class="ref">§7.1.2.6</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rep">
+        <div class="meta"><span>Repair</span><span>§4.3.3 p.109–113</span></div>
+        <h3>Shift toward the spare, don't swap in the spare</h3>
+        <p class="rule">Repair shifts every logical lane between the fault and the redundant lane by one physical position (left toward TRD0 or right toward TRD1). Only the faulty physical lane is dropped.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A swap would need a long wire from any lane to the spare and a 32:1 mux. Shifting needs only a 2:1 or 3:1 mux per lane to its neighbours, and keeps each logical lane physically close to its normal bump: short routes, low skew.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Lane 29 fails: logical lanes 0–29 move one bump left (lane 0 onto TRD0), lanes 30 and 31 stay. Physical lane 29 is tri-stated.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Applying the shift on the transmitter but not the matching inverse on the receiver: logical lanes 0–29 arrive one lane off.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Pseudocode and Figures 4-12 to 4-15 <span class="ref">§4.3.1, §4.3.3.1, p.107–110</span></li><li><span class="kind bg">Background</span>Mux and routing reasoning</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rep">
+        <div class="meta"><span>Repair</span><span>§4.3 p.107–108</span></div>
+        <h3>Two spares per 32 lanes, and TRD0 matters most</h3>
+        <p class="rule">Each group of 32 data lanes can repair at most two lanes. One failure always uses TRD0; with two, the lower uses TRD0 and the upper TRD1. If TRD0 is bad, nothing in that group can be repaired.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Shift-left is the single-failure path, so TRD0 is the first spare used. Splitting a x64 module into two independent groups lets it survive two failures in each half, not just two in total.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Failures on lanes 5, 20 and 40: lanes 5 and 20 use group 0's two spares, lane 40 uses TRD2. A fourth failure on lane 10 would exceed group 0's two and send REPAIRMB to TRAINERROR.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Counting repair capacity per module (4) instead of per group (2 + 2) accepts three failures in lanes 0–31 that cannot be repaired.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Group limits and spare-failure note <span class="ref">§4.3, p.107–108</span></li><li><span class="kind spec">Spec</span>Unrepairable → TRAINERROR <span class="ref">§4.5.3.3.6, p.154</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rep">
+        <div class="meta"><span>Repair</span><span>§4.2 p.104</span></div>
+        <h3>Reverse data lanes only</h3>
+        <p class="rule">Data lanes (and redundant data lanes on Advanced) may be reversed. Clock, Track, Valid and sideband must never be reversed.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Reversal is detected by sending lane IDs over data lanes, which needs a working clock, valid and sideband first. If those could also be reversed, there would be nothing trustworthy to detect the reversal with.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A rotated die on a x32 Advanced link: data lanes 0–31 and redundant lanes reverse; the clock, Valid and sideband bumps sit in mirror-symmetric positions so they connect straight.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A package that swaps clock P and N as part of a reversal: REPAIRCLK sees a broken clock on a perfectly good link.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Reversal rule <span class="ref">§4.2, p.104</span></li><li><span class="kind derived">Derived</span>Dependency reasoning (from training order in §4.5.3.3)</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mm">
+        <div class="meta"><span>Multi-module</span><span>§4.7.1 p.175–177</span></div>
+        <h3>Bytes ascend by Module ID, whatever the partner's IDs are</h3>
+        <p class="rule">The transmitting MMPL arranges bytes so that the remote receivers see them from LSB to MSB in ascending Module ID and Lane ID across all active lanes.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Dies may be placed so that local module 0 faces remote module 1. If each side just used its own numbering, RDI bytes would arrive scrambled. Making the transmitter responsible (it knows the partner's IDs from MBINIT.PARAM) keeps RDI byte order identical on both dies.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Die A's M0 connects to Die B's M1 and vice versa. Die A's MMPL puts RDI bytes 0–15 on the module connected to Die B's M0, so Die B receives them on its M0 in the right order.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Swizzling at the receiver instead: both sides swizzle (or neither does), and bytes 0–15 swap with 16–31.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>MMPL swizzle rule, Figures 4-43 to 4-46 <span class="ref">§4.7.1, p.175–176</span></li><li><span class="kind spec">Spec</span>Byte mapping at RDI unchanged <span class="ref">§10.3.1, p.561</span></li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mm">
+        <div class="meta"><span>Multi-module</span><span>§4.7.1 p.177</span></div>
+        <h3>Fewer modules or lower speed: pick more bandwidth</h3>
+        <p class="rule">If modules differ in achievable speed, compare HMLS/2 (the next lower module count at its best speed) with CMLS (all modules at the common speed). Drop modules if HMLS/2 &gt; CMLS, else slow all modules to CMLS.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Both choices lose bandwidth; the rule keeps whichever loses less. It also handles modules that fail even at 4 GT/s: CMLS = 0, so they are disabled instead of the whole link failing.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Four modules: three pass 32 GT/s, one only 8 GT/s. CMLS = 8. Two modules at 32 GT/s give HMLS/2 = 16 &gt; 8, so drop to two modules at 32 GT/s: 2 × 32 = 64 units of bandwidth instead of 4 × 8 = 32.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Always slowing all modules to the weakest one leaves a four-module link at 8 GT/s, half the bandwidth it could have.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Pseudocode and flowcharts <span class="ref">§4.7.1, p.177 · Figures 4-47, 4-48</span></li><li><span class="kind derived">Derived</span>Bandwidth comparison</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="mm">
+        <div class="meta"><span>Multi-module</span><span>§4.7.1.1 p.178</span></div>
+        <h3>Shared traffic uses the lowest live module</h3>
+        <p class="rule">Register accesses and link-level messages use the sideband of the lowest Module ID whose LTSM is past SBINIT; Retimer credits use the Valid of the lowest Module ID in Active. Receivers must accept them on any module.</p>
+        <div class="part"><span class="l l-why">Why</span><p>One RDI and one Adapter sit above all modules, so a single message stream is needed for link-level traffic. "Lowest live" is a deterministic choice that survives a module being disabled. Because the two dies may number modules differently, the receiver cannot insist on a particular module.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Module 0 is disabled after training. Register traffic automatically moves to module 1's sideband; nothing in the Adapter changes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Hard-wiring register traffic to module 0's sideband makes the link unmanageable after module 0 is disabled.</p></div>
+        <div class="part checks"><span class="l l-src">Check it in the spec</span><ul><li><span class="kind spec">Spec</span>Assignment rules <span class="ref">§4.7.1.1, p.178</span></li></ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<section id="live">
+  <div class="wrap">
+    <h2>9 · Live scenarios</h2>
+    <p class="sub">UI-level and block-level views. The column unit is shown in each scenario.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="silicon">
+  <div class="wrap">
+    <h2>10 · Real silicon: what the theory turns into</h2>
+    <div class="twocol">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Quantity</th><th class="num">Value</th><th>Basis</th></tr></thead>
+        <tbody>
+          <tr><td>8-UI block at 16 / 32 / 64 GT/s</td><td class="num">0.5 / 0.25 / 0.125 ns</td><td class="ref">derived</td></tr>
+          <tr><td>256B flit on x64 / x32 / x16 / x8</td><td class="num">4 / 8 / 16 / 32 blocks</td><td class="ref">§4.1.1</td></tr>
+          <tr><td>Clock postamble</td><td class="num">8 clock cycles</td><td class="ref">§4.1.3</td></tr>
+          <tr><td>Sideband packet / gap</td><td class="num">64 UI / ≥ 32 UI (80 / 40 ns)</td><td class="ref">§4.1.5 · §5.13</td></tr>
+          <tr><td>MPM with data, max on the wire</td><td class="num">512 UI PMO / 768 UI</td><td class="ref">§4.8</td></tr>
+          <tr><td>Repairable data lanes, x64 / x32 Advanced</td><td class="num">4 (2 per 32) / 2</td><td class="ref">§4.3</td></tr>
+          <tr><td>Redundant lanes, x64 / x32 Advanced</td><td class="num">4 / 2 (+ RDCK, RDVLD)</td><td class="ref">§4.2.1 · §4.3.4–4.3.6</td></tr>
+          <tr><td>Standard Package degrade</td><td class="num">x16 → x8 → x4</td><td class="ref">§4.3.7</td></tr>
+        </tbody>
+      </table></div>
+      <div class="grid" style="gap:12px">
+        <div class="callout"><p><strong>Repair muxes sit in the critical path.</strong> Every data lane on Advanced Package has a neighbour mux on transmit and receive, so the shift can be applied. They are set once in training and are static after that, so timing is easy, but they add area and load to every lane.</p><p class="src"><span class="sl">Spec</span>Figures 4-13 and 4-15, p.108–110 · <span class="kind bg">Background</span>timing comment</p></div>
+        <div class="callout" style="border-left-color:var(--lp)"><p><strong>Clock gating saves real power.</strong> Between bursts, a gated forwarded clock stops toggling on every receiver's clock tree. With free-running clock (required above 32 GT/s) that saving is gone, which is part of why the high-speed modes cost more idle power.</p><p class="src"><span class="sl">Spec</span>§4.1.3–4.1.4, p.101 · <span class="kind bg">Background</span>power comment</p></div>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Every byte bit-reversed at the far end</td><td>MSB sent first.</td><td class="ref">§4.1.1, p.98</td></tr>
+        <tr><td>Framing errors right after idle gaps</td><td>New burst not on the 8-UI grid relative to the first Active transfer.</td><td class="ref">§4.1.2, p.100</td></tr>
+        <tr><td>Last byte of each burst arrives late or lost</td><td>Clock gated without the 8-cycle postamble.</td><td class="ref">§4.1.3, p.101</td></tr>
+        <tr><td>Data shifted by one lane after repair</td><td>Repair applied on Tx without matching Rx remap (or vice versa).</td><td class="ref">§4.3.3, p.109–113</td></tr>
+        <tr><td>Repair works without reversal, fails with it</td><td>Used non-reversed pseudocode on a reversed link.</td><td class="ref">§4.3.2, §4.3.3.3–4, p.109–115</td></tr>
+        <tr><td>Bytes 0–15 and 16–31 swapped on a 2-module link</td><td>Swizzle based on local Module IDs instead of the partner's.</td><td class="ref">§4.7.1, p.175</td></tr>
+        <tr><td>Register access lost after a module is disabled</td><td>Shared traffic hard-wired to module 0's sideband.</td><td class="ref">§4.7.1.1, p.178</td></tr>
+        <tr><td>Training timeouts under heavy management traffic</td><td>Long MPMs starve link management packets on the sideband.</td><td class="ref">§4.8, p.182</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <h2>11 · Verification</h2>
+    <div class="twocol">
+      <div class="card"><h3>Checkers</h3><ul class="tight">
+        <li>Lane k carries RDI byte k (per active-lane order), bit 0 first. <span class="ref">§4.1.1</span></li>
+        <li>Valid: 1111 0000 per data block; all transfers on the 8-UI grid. <span class="ref">§4.1.2</span></li>
+        <li>Retimer Valid codes only from Table 4-1; first Active transfer not "credit only". <span class="ref">§4.1.2–4.1.2.1</span></li>
+        <li>Clock stops exactly 8 cycles after Valid falls (unless free-running or recal). <span class="ref">§4.1.3</span></li>
+        <li>Sideband: 64-UI packets, ≥ 32 UI gaps unless PMO; PSPT interrupts on 8-UI boundary after 8 UI idle. <span class="ref">§4.1.5</span></li>
+        <li>Repair mapping matches pseudocode for 0, 1, 2 failures per group, with and without reversal. <span class="ref">§4.3.3</span></li>
+        <li>Unused redundant and failed lanes tri-stated / disabled. <span class="ref">§4.3</span></li>
+        <li>Multi-module: same speed and width on all modules; received byte order ascending. <span class="ref">§4.7.1</span></li>
+      </ul></div>
+      <div class="card"><h3>Scenarios</h3><ul class="tight">
+        <li>Exhaustive single-lane repair over 0–63; all pairs within each group; TRD0 / TRD1 faulty. <span class="ref">§4.3</span></li>
+        <li>Reversal × repair combinations for x64 and x32. <span class="ref">§4.3.3.3–4</span></li>
+        <li>x16 Standard faults in lower half, upper half, both halves. <span class="ref">§4.3.7</span></li>
+        <li>Two- and four-module links with mismatched Module IDs; module disable mid-life. <span class="ref">§4.7.1</span></li>
+        <li>Speed mismatch across modules hitting both branches of HMLS/2 &gt; CMLS. <span class="ref">§4.7.1</span></li>
+        <li>Single-bit Valid errors at 32 and 64 GT/s with a Retimer. <span class="ref">§4.1.2.1</span></li>
+        <li>PSPT chains (11110b … 11111b) interrupting a long MPM. <span class="ref">§4.1.5.2.1</span></li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <h2>12 · Test yourself</h2>
+    <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>Which bit of a byte goes on the wire first, and which lane carries byte 5? <span class="lvl">Basic</span></summary><div><p>Bit 0 first. Byte 5 goes on lane 5 (of the active lanes, in ascending order).</p><p class="src"><span class="sl">Spec</span>§4.1.1, p.98</p></div></details>
+    <details><summary>What does the Valid lane look like for one 8-UI data block? <span class="lvl">Basic</span></summary><div><p>High for 4 UI, low for 4 UI. Transfers stay on an 8-UI grid from the first transfer in Active.</p><p class="src"><span class="sl">Spec</span>§4.1.2, p.100</p></div></details>
+    <details><summary>Which signals may be lane-reversed? <span class="lvl">Basic</span></summary><div><p>Data lanes, and on Advanced the redundant data lanes. Never clock, track, valid or sideband.</p><p class="src"><span class="sl">Spec</span>§4.2, p.104</p></div></details>
+    <details><summary>Lanes 3 and 27 fail in a x64 Advanced module. Show the repair. <span class="lvl">Intermediate</span></summary><div><p>Both in group 0. Lower (3): logical lanes 0–3 shift left, lane 0 onto TRD0. Upper (27): logical lanes 27–31 shift right, lane 31 onto TRD1. Logical lanes 4–26 stay. Physical lanes 3 and 27 are tri-stated.</p><p class="src"><span class="sl">Spec</span>§4.3.3.2, p.111</p></div></details>
+    <details><summary>Why does the clock run for 8 more cycles after Valid falls? <span class="lvl">Intermediate</span></summary><div><p>To flush the receiver's deserializer pipeline, which runs on the forwarded clock. 16 UI at half-rate clocking, 32 UI at quarter-rate.</p><p class="src"><span class="sl">Spec</span>§4.1.3, p.101</p></div></details>
+    <details><summary>How does a Retimer return credits without using the sideband? <span class="lvl">Intermediate</span></summary><div><p>On the Valid lane's otherwise-unused second 4 UI: 1111 0000 = credit only, 1111 1111 = data plus credit, 0000 1111 = data only. Each credit is 256B.</p><p class="src"><span class="sl">Spec</span>Table 4-1, p.101</p></div></details>
+    <details><summary>Four modules: three reach 32 GT/s, one only 8 GT/s. What does the MMPL do? <span class="lvl">Advanced</span></summary><div><p>CMLS = 8, HMLS of the two-module configuration = 32, HMLS/2 = 16 &gt; 8, so it drops to two modules at 32 GT/s rather than running all four at 8 GT/s.</p><p class="src"><span class="sl">Spec</span>§4.7.1, p.177</p></div></details>
+    <details><summary>Why must the transmitter, not the receiver, swizzle bytes across modules? <span class="lvl">Advanced</span></summary><div><p>So that both RDIs see the same byte order with exactly one side doing the work. The transmitter knows the partner's Module IDs from MBINIT.PARAM and lays bytes out so the receiver sees ascending Module ID and Lane ID.</p><p class="src"><span class="sl">Spec</span>§4.7.1, p.175</p></div></details>
+    <details><summary>When can a priority sideband packet interrupt a normal one, and how does the receiver know? <span class="lvl">Advanced</span></summary><div><p>With PSPT (which requires PMO): at an 8-UI multiple of the normal packet, after inserting 8 UI of idle. The receiver tracks that the normal packet was interrupted; opcode 11111b means the normal packet resumes next, 11110b means another priority packet follows.</p><p class="src"><span class="sl">Spec</span>§4.1.5.2.1, p.103–104</p></div></details>
+  </div>
+</section>
+
+<section id="refs">
+  <div class="wrap">
+    <h2>13 · Spec reference index</h2>
+    <div class="tbl-wrap refidx"><table>
+      <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+      <tbody>
+        <tr><td>Tables 1-1, 1-2</td><td>Package characteristics (BER, bump pitch)</td><td class="num">40</td></tr>
+        <tr><td>§4.0</td><td>Logical Physical Layer</td><td class="num">98</td></tr>
+        <tr><td>§4.1.1, Figures 4-1 to 4-5</td><td>Byte to Lane Mapping</td><td class="num">98–100</td></tr>
+        <tr><td>§4.1.2, Figure 4-6</td><td>Valid Framing</td><td class="num">100</td></tr>
+        <tr><td>§4.1.2.1, Table 4-1</td><td>Valid Framing for Retimers</td><td class="num">101</td></tr>
+        <tr><td>§4.1.3, §4.1.4</td><td>Clock Gating; Free Running Clock Mode</td><td class="num">101</td></tr>
+        <tr><td>§4.1.5, §4.1.5.1</td><td>Sideband transmission; Performant Mode</td><td class="num">102</td></tr>
+        <tr><td>§4.1.5.2, §4.1.5.2.1</td><td>Priority Sideband Packet Transfer</td><td class="num">103–104</td></tr>
+        <tr><td>§4.2, §4.2.1, Tables 4-2, 4-3</td><td>Lane Reversal; Lane ID</td><td class="num">104–107</td></tr>
+        <tr><td>§4.3, §4.3.1</td><td>Interconnect redundancy remapping; Data Lane repair</td><td class="num">107–109</td></tr>
+        <tr><td>§4.3.2–4.3.3.4</td><td>Repair with reversal; single and two lane repair</td><td class="num">109–115</td></tr>
+        <tr><td>§4.3.4–4.3.6</td><td>Clock, Track and Valid repair</td><td class="num">115–118</td></tr>
+        <tr><td>§4.3.7</td><td>Width Degrade in Standard Package</td><td class="num">118</td></tr>
+        <tr><td>§4.5.3.3.5–4.5.3.3.6, Tables 4-7, 4-9</td><td>REVERSALMB, REPAIRMB</td><td class="num">151–155</td></tr>
+        <tr><td>§4.7, §4.7.1, Figures 4-43 to 4-48</td><td>Multi-module Link; initialization and degrade</td><td class="num">175–178</td></tr>
+        <tr><td>§4.7.1.1</td><td>Sideband Assignment and Retimer Credits for Multi-module</td><td class="num">178</td></tr>
+        <tr><td>§4.7.2</td><td>Multi-module interoperability between x64 and x32</td><td class="num">181</td></tr>
+        <tr><td>§4.8</td><td>Sideband PHY Arbitration between MPMs and Link Management</td><td class="num">182</td></tr>
+        <tr><td>§5.13</td><td>Sideband signaling</td><td class="num">254</td></tr>
+        <tr><td>§10.3.1</td><td>Byte Mapping for FDI and RDI</td><td class="num">559–561</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 4.0–4.3, 4.7 and 4.8, with Chapters 1, 4.5, 5.13 and 10.3 for context.</div></footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+
+  /* ---------- byte map ---------- */
+  (function () {
+    var chips = document.getElementById("bmchips"); if (!chips) return;
+    var W = [
+      { n: 64, name: "x64", cap: "x64: one x64 Advanced module, two x32 Advanced modules, or four x16 Standard modules. A 256B flit takes 4 blocks of 8 UI.", ref: "Figure 4-2, p.99" },
+      { n: 32, name: "x32", cap: "x32: a 256B flit takes 8 blocks. Still one byte per lane per 8 UI.", ref: "Figure 4-3, p.99" },
+      { n: 16, name: "x16 Standard", cap: "x16 Standard Package: 16 blocks per 256B flit.", ref: "Figure 4-4, p.99" },
+      { n: 8, name: "x8 (degraded x16)", cap: "A x16 Standard module degraded to x8: only the 8 active lanes carry bytes, in ascending order; 32 blocks per 256B flit.", ref: "Figure 4-5, p.100 · §4.3.7, p.118" }
+    ];
+    function cols(n) { return n <= 16 ? Array.apply(null, Array(n)).map(function (_, i) { return i; }) : [0, 1, 2, 3, -1, n - 4, n - 3, n - 2, n - 1]; }
+    function draw(w) {
+      var rows = 256 / w.n, cs = cols(w.n), rlist = rows <= 5 ? Array.apply(null, Array(rows)).map(function (_, i) { return i; }) : [0, 1, 2, -1, rows - 1];
+      var h = "<table class=\"mono\" style=\"font-size:12px\"><thead><tr><th>UI block</th>";
+      cs.forEach(function (c) { h += "<th class=\"num\">" + (c < 0 ? "…" : (w.n === 8 ? "active " + c : "lane " + c)) + "</th>"; });
+      h += "</tr></thead><tbody>";
+      rlist.forEach(function (r) {
+        h += "<tr><td>" + (r < 0 ? "…" : (r * 8) + "–" + (r * 8 + 7)) + "</td>";
+        cs.forEach(function (c) { h += "<td class=\"num\">" + (r < 0 || c < 0 ? "…" : "B" + (r * w.n + c)) + "</td>"; });
+        h += "</tr>";
+      });
+      document.getElementById("bmap").innerHTML = h + "</tbody></table>";
+      document.getElementById("bmcap").innerHTML = w.cap + "<span class=\"ref\">Spec: " + w.ref + "</span>";
+    }
+    W.forEach(function (w, i) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = w.name;
+      b.addEventListener("click", function () { Array.prototype.forEach.call(chips.children, function (c, k) { c.setAttribute("aria-pressed", k === i ? "true" : "false"); }); draw(w); });
+      chips.appendChild(b);
+    });
+    chips.children[0].setAttribute("aria-pressed", "true"); draw(W[0]);
+  })();
+
+  /* ---------- lane repair visualizer (group 0) ---------- */
+  (function () {
+    var g1 = document.getElementById("rpgrid"), g2 = document.getElementById("rpgrid2"); if (!g1) return;
+    var fails = [];
+    function mapping() {
+      var m = {}; var f = fails.slice().sort(function (a, b) { return a - b; });
+      for (var k = 0; k < 32; k++) m["P" + k] = "L" + k;
+      m.TRD0 = "—"; m.TRD1 = "—";
+      if (f.length >= 1) { var a = f[0]; for (var k2 = 0; k2 <= a; k2++) { if (k2 === 0) m.TRD0 = "L0"; else m["P" + (k2 - 1)] = "L" + k2; } m["P" + a] = "✕"; }
+      if (f.length === 2) { var b = f[1]; for (var k3 = b; k3 <= 31; k3++) { if (k3 === 31) m.TRD1 = "L31"; else m["P" + (k3 + 1)] = "L" + k3; } m["P" + b] = "✕"; }
+      return m;
+    }
+    function cell(name, logical, clickable, idx) {
+      var bad = logical === "✕", spare = name.indexOf("TRD") === 0, moved = !spare && logical !== "L" + name.slice(1) && !bad, used = spare && logical !== "—";
+      var bg = bad ? "color-mix(in srgb, var(--bad) 18%, var(--surface))" : (moved || used) ? "color-mix(in srgb, var(--lp) 18%, var(--surface))" : spare ? "var(--bg)" : "var(--surface)";
+      var el = document.createElement(clickable ? "button" : "div");
+      if (clickable) { el.type = "button"; el.setAttribute("aria-pressed", bad ? "true" : "false"); el.addEventListener("click", function () { toggle(idx); }); el.title = "Toggle a failure on physical lane " + idx; }
+      el.style.cssText = "border:1px solid " + (spare ? "var(--pl)" : "var(--line)") + ";border-radius:6px;padding:4px 2px;text-align:center;background:" + bg + ";font-family:var(--font-mono);color:var(--ink);cursor:" + (clickable ? "pointer" : "default") + ";min-width:0";
+      el.innerHTML = "<div style=\"font-size:9.5px;color:var(--muted)\">" + name.replace("P", "TD_P") + "</div><div style=\"font-size:12px;font-weight:500\">" + logical + "</div>";
+      return el;
+    }
+    function toggle(i) {
+      var at = fails.indexOf(i);
+      if (at >= 0) fails.splice(at, 1); else { if (fails.length === 2) fails.shift(); fails.push(i); }
+      draw();
+    }
+    function draw() {
+      var m = mapping(); g1.innerHTML = ""; g2.innerHTML = "";
+      g1.appendChild(cell("TRD0", m.TRD0, false));
+      for (var k = 0; k < 16; k++) g1.appendChild(cell("P" + k, m["P" + k], true, k));
+      for (var k2 = 16; k2 < 32; k2++) g2.appendChild(cell("P" + k2, m["P" + k2], true, k2));
+      g2.appendChild(cell("TRD1", m.TRD1, false));
+      var f = fails.slice().sort(function (a, b) { return a - b; }), t;
+      if (!f.length) t = "No failures: logical lane n on physical lane n; TRD0 and TRD1 unused (tri-stated). Click physical lanes to fail them.";
+      else if (f.length === 1) t = "One failure on TD_P" + f[0] + ": logical lanes 0–" + f[0] + " shift left by one bump, L0 lands on TRD0. Lanes above " + f[0] + " are untouched; TRD1 stays unused.";
+      else t = "Two failures, TD_P" + f[0] + " and TD_P" + f[1] + ": lanes 0–" + f[0] + " shift left (L0 onto TRD0); lanes " + f[1] + "–31 shift right (L31 onto TRD1); lanes " + (f[0] + 1) + "–" + (f[1] - 1) + " stay. A third failure in this group cannot be repaired.";
+      document.getElementById("rpcap").innerHTML = t + "<span class=\"ref\">Spec: §4.3.1, §4.3.3.1–4.3.3.2 pseudocode, p.107–112 (lanes 32–63 use TRD2/TRD3 the same way)</span>";
+    }
+    draw();
+  })();
+
+  window.PAGE = {
+    CW: 22,
+    wgroups: [["all", "All"], ["map", "Mapping"], ["frm", "Framing & clock"], ["sb", "Sideband"], ["rep", "Repair & reversal"], ["mm", "Multi-module"]],
+    scenarios: [
+      {
+        id: "valid", tab: "Valid framing + postamble", unit: "UI", title: "Two data blocks on lane 0, then clock gating",
+        desc: "Half-rate forwarded clock (one clock edge per UI). Strobe mode: the clock runs with data and stops after the postamble.",
+        ref: "§4.1.1–4.1.3, p.98–101",
+        n: 40, gaps: [],
+        sig: [
+          { name: "forwarded clock", d: "pl", t: "bit", v: "0000" + "10101010101010101010101010101010" + "0000" },
+          { name: "Valid", d: "pl", t: "bit", v: bits(40, [[4, 7], [12, 15]]) },
+          { name: "lane 0 bit index", d: "lp", t: "bus", v: seq([["", 4]]).concat(["0", "1", "2", "3", "4", "5", "6", "7", "0", "1", "2", "3", "4", "5", "6", "7"], seq([["", 20]])) },
+          { name: "lane 0 byte", d: "note", t: "note", v: seq([["", 4], ["B0", 8], ["B64", 8], ["", 20]]) },
+          { name: "clock state", d: "note", t: "note", v: seq([["gated", 4], ["data", 16], ["postamble: 8 cycles = 16 UI", 16], ["gated", 4]]) }
+        ],
+        steps: [
+          { r: [4, 11], t: "One byte per lane per 8 UI", x: "Valid rises with the first bit. Lane 0 sends B0 bit 0 first through bit 7 last, while lanes 1–63 send B1–B63 in parallel. Valid is high for 4 UI and low for 4 UI.", s: "§4.1.1, p.98 · §4.1.2, p.100" },
+          { r: [12, 19], t: "The next block on the 8-UI grid", x: "The next transfer starts exactly 8 UI later. On a x64 module lane 0 now carries B64, the first byte of the next 64-byte beat.", s: "§4.1.2 note, p.100 · Figure 4-2, p.99" },
+          { r: [20, 35], t: "Postamble flushes the receiver", x: "Valid stays low, but the clock keeps toggling for 8 cycles (16 UI at half-rate clocking) so the receiver's deserializer can empty, then it stops.", s: "§4.1.3, p.101" },
+          { r: [36, 39], t: "Gated", x: "Clock and data are parked (levels per §5.11). The next burst must start on the same 8-UI grid. With free-running clock negotiated, the clock would keep toggling here.", s: "§4.1.3–4.1.4, p.101 · §5.11" }
+        ]
+      },
+      {
+        id: "credit", tab: "Retimer credits on Valid", unit: "UI", title: "A Retimer returns 256B credits on Valid",
+        desc: "Four 8-UI blocks from a Retimer to its local UCIe die. Codes are written bit 7…0; bit 0 is sent first, so read the waveform right to left within a code.",
+        ref: "§4.1.2.1 and Table 4-1, p.101",
+        n: 32, gaps: [],
+        sig: [
+          { name: "Valid", d: "pl", t: "bit", v: "11110000" + "11111111" + "00001111" + "00000000" },
+          { name: "code (bit 7…0)", d: "note", t: "note", v: seq([["00001111b", 8], ["11111111b", 8], ["11110000b", 8], ["00000000b", 8]]) },
+          { name: "meaning", d: "note", t: "note", v: seq([["data, no credit", 8], ["data + 1 credit", 8], ["1 credit, no data", 8], ["nothing", 8]]) },
+          { name: "data lanes", d: "lp", t: "bus", v: seq([["B0–B63", 8], ["B64–B127", 8], ["", 16]]) }
+        ],
+        steps: [
+          { r: [0, 7], t: "Data, no credit", x: "The normal data pattern: Valid high for the first 4 UI, low for the last 4.", s: "Table 4-1, p.101" },
+          { r: [8, 15], t: "Data plus a credit", x: "The last 4 UI are also high: one 256B Retimer buffer credit is returned along with the data, at no bandwidth cost.", s: "Table 4-1, p.101" },
+          { r: [16, 31], t: "Credit only, then idle", x: "First 4 UI low (no data), last 4 high: a credit with no data. Then a fully idle block. The four codes differ enough to detect 3 bit flips; above 48 GT/s receivers must correct single-bit errors instead.", s: "§4.1.2.1, p.101" }
+        ]
+      },
+      {
+        id: "pspt", tab: "Priority sideband packet", unit: "8-UI chunks", title: "PSPT: a priority packet interrupts a normal one",
+        desc: "Sideband with Performant Mode and PSPT negotiated. Each column is 8 UI (10 ns at 800 MT/s). A packet is 64 UI = 8 chunks.",
+        ref: "§4.1.5.1–4.1.5.2.1, p.102–104",
+        n: 22, gaps: [],
+        sig: [
+          { name: "sideband data", d: "sb", t: "bus", v: ["A0", "A1", "A2", "A3", "", "P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "A4", "A5", "A6", "A7", "B0", "B1", "B2", "B3", "B4"] },
+          { name: "what", d: "note", t: "note", v: seq([["normal packet A", 4], ["idle", 1], ["priority packet, opcode 11111b", 8], ["A resumes", 4], ["next packet B, no gap (PMO)", 5]]) }
+        ],
+        steps: [
+          { r: [0, 3], t: "Normal packet A starts", x: "A normal 64-UI packet (for example a management message) begins.", s: "§4.1.5, p.102" },
+          { r: [4, 4], t: "Interrupt on an 8-UI boundary", x: "A priority packet is waiting. At an 8-UI multiple of packet A the transmitter inserts 8 UI of idle (clock and data both 0) to mark the interruption.", s: "§4.1.5.2.1 rules 1–2, p.103" },
+          { r: [5, 12], t: "Priority packet", x: "The full 64-UI priority packet follows. Its opcode 11111b says it is the last priority packet, so packet A resumes immediately after it. Opcode 11110b would have chained another priority packet.", s: "§4.1.5.2.1 rule 3, p.103" },
+          { r: [13, 16], t: "Packet A resumes", x: "The remaining 32 UI of packet A follow with no idle. The receiver tracked that A was interrupted and reassembles it.", s: "§4.1.5.2.1, p.104" },
+          { r: [17, 21], t: "Back to back with PMO", x: "Performant Mode removes the 32-UI gap between packets, so packet B starts right away. Without PMO there would be at least 32 UI of low first.", s: "§4.1.5.1, p.102" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = compact ? 150 : LW;
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      waveEl.innerHTML = renderWave(s, st.r, false);
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+</script>
+</body>
+</html>

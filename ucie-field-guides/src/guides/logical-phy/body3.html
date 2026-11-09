@@ -1,0 +1,131 @@
+
+<section id="live">
+  <div class="wrap">
+    <h2>9 · Live scenarios</h2>
+    <p class="sub">UI-level and block-level views. The column unit is shown in each scenario.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="silicon">
+  <div class="wrap">
+    <h2>10 · Real silicon: what the theory turns into</h2>
+    <div class="twocol">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Quantity</th><th class="num">Value</th><th>Basis</th></tr></thead>
+        <tbody>
+          <tr><td>8-UI block at 16 / 32 / 64 GT/s</td><td class="num">0.5 / 0.25 / 0.125 ns</td><td class="ref">derived</td></tr>
+          <tr><td>256B flit on x64 / x32 / x16 / x8</td><td class="num">4 / 8 / 16 / 32 blocks</td><td class="ref">§4.1.1</td></tr>
+          <tr><td>Clock postamble</td><td class="num">8 clock cycles</td><td class="ref">§4.1.3</td></tr>
+          <tr><td>Sideband packet / gap</td><td class="num">64 UI / ≥ 32 UI (80 / 40 ns)</td><td class="ref">§4.1.5 · §5.13</td></tr>
+          <tr><td>MPM with data, max on the wire</td><td class="num">512 UI PMO / 768 UI</td><td class="ref">§4.8</td></tr>
+          <tr><td>Repairable data lanes, x64 / x32 Advanced</td><td class="num">4 (2 per 32) / 2</td><td class="ref">§4.3</td></tr>
+          <tr><td>Redundant lanes, x64 / x32 Advanced</td><td class="num">4 / 2 (+ RDCK, RDVLD)</td><td class="ref">§4.2.1 · §4.3.4–4.3.6</td></tr>
+          <tr><td>Standard Package degrade</td><td class="num">x16 → x8 → x4</td><td class="ref">§4.3.7</td></tr>
+        </tbody>
+      </table></div>
+      <div class="grid" style="gap:12px">
+        <div class="callout"><p><strong>Repair muxes sit in the critical path.</strong> Every data lane on Advanced Package has a neighbour mux on transmit and receive, so the shift can be applied. They are set once in training and are static after that, so timing is easy, but they add area and load to every lane.</p><p class="src"><span class="sl">Spec</span>Figures 4-13 and 4-15, p.108–110 · <span class="kind bg">Background</span>timing comment</p></div>
+        <div class="callout" style="border-left-color:var(--lp)"><p><strong>Clock gating saves real power.</strong> Between bursts, a gated forwarded clock stops toggling on every receiver's clock tree. With free-running clock (required above 32 GT/s) that saving is gone, which is part of why the high-speed modes cost more idle power.</p><p class="src"><span class="sl">Spec</span>§4.1.3–4.1.4, p.101 · <span class="kind bg">Background</span>power comment</p></div>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 8px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule</th></tr></thead>
+      <tbody>
+        <tr><td>Every byte bit-reversed at the far end</td><td>MSB sent first.</td><td class="ref">§4.1.1, p.98</td></tr>
+        <tr><td>Framing errors right after idle gaps</td><td>New burst not on the 8-UI grid relative to the first Active transfer.</td><td class="ref">§4.1.2, p.100</td></tr>
+        <tr><td>Last byte of each burst arrives late or lost</td><td>Clock gated without the 8-cycle postamble.</td><td class="ref">§4.1.3, p.101</td></tr>
+        <tr><td>Data shifted by one lane after repair</td><td>Repair applied on Tx without matching Rx remap (or vice versa).</td><td class="ref">§4.3.3, p.109–113</td></tr>
+        <tr><td>Repair works without reversal, fails with it</td><td>Used non-reversed pseudocode on a reversed link.</td><td class="ref">§4.3.2, §4.3.3.3–4, p.109–115</td></tr>
+        <tr><td>Bytes 0–15 and 16–31 swapped on a 2-module link</td><td>Swizzle based on local Module IDs instead of the partner's.</td><td class="ref">§4.7.1, p.175</td></tr>
+        <tr><td>Register access lost after a module is disabled</td><td>Shared traffic hard-wired to module 0's sideband.</td><td class="ref">§4.7.1.1, p.178</td></tr>
+        <tr><td>Training timeouts under heavy management traffic</td><td>Long MPMs starve link management packets on the sideband.</td><td class="ref">§4.8, p.182</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <h2>11 · Verification</h2>
+    <div class="twocol">
+      <div class="card"><h3>Checkers</h3><ul class="tight">
+        <li>Lane k carries RDI byte k (per active-lane order), bit 0 first. <span class="ref">§4.1.1</span></li>
+        <li>Valid: 1111 0000 per data block; all transfers on the 8-UI grid. <span class="ref">§4.1.2</span></li>
+        <li>Retimer Valid codes only from Table 4-1; first Active transfer not "credit only". <span class="ref">§4.1.2–4.1.2.1</span></li>
+        <li>Clock stops exactly 8 cycles after Valid falls (unless free-running or recal). <span class="ref">§4.1.3</span></li>
+        <li>Sideband: 64-UI packets, ≥ 32 UI gaps unless PMO; PSPT interrupts on 8-UI boundary after 8 UI idle. <span class="ref">§4.1.5</span></li>
+        <li>Repair mapping matches pseudocode for 0, 1, 2 failures per group, with and without reversal. <span class="ref">§4.3.3</span></li>
+        <li>Unused redundant and failed lanes tri-stated / disabled. <span class="ref">§4.3</span></li>
+        <li>Multi-module: same speed and width on all modules; received byte order ascending. <span class="ref">§4.7.1</span></li>
+      </ul></div>
+      <div class="card"><h3>Scenarios</h3><ul class="tight">
+        <li>Exhaustive single-lane repair over 0–63; all pairs within each group; TRD0 / TRD1 faulty. <span class="ref">§4.3</span></li>
+        <li>Reversal × repair combinations for x64 and x32. <span class="ref">§4.3.3.3–4</span></li>
+        <li>x16 Standard faults in lower half, upper half, both halves. <span class="ref">§4.3.7</span></li>
+        <li>Two- and four-module links with mismatched Module IDs; module disable mid-life. <span class="ref">§4.7.1</span></li>
+        <li>Speed mismatch across modules hitting both branches of HMLS/2 &gt; CMLS. <span class="ref">§4.7.1</span></li>
+        <li>Single-bit Valid errors at 32 and 64 GT/s with a Retimer. <span class="ref">§4.1.2.1</span></li>
+        <li>PSPT chains (11110b … 11111b) interrupting a long MPM. <span class="ref">§4.1.5.2.1</span></li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <h2>12 · Test yourself</h2>
+    <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>Which bit of a byte goes on the wire first, and which lane carries byte 5? <span class="lvl">Basic</span></summary><div><p>Bit 0 first. Byte 5 goes on lane 5 (of the active lanes, in ascending order).</p><p class="src"><span class="sl">Spec</span>§4.1.1, p.98</p></div></details>
+    <details><summary>What does the Valid lane look like for one 8-UI data block? <span class="lvl">Basic</span></summary><div><p>High for 4 UI, low for 4 UI. Transfers stay on an 8-UI grid from the first transfer in Active.</p><p class="src"><span class="sl">Spec</span>§4.1.2, p.100</p></div></details>
+    <details><summary>Which signals may be lane-reversed? <span class="lvl">Basic</span></summary><div><p>Data lanes, and on Advanced the redundant data lanes. Never clock, track, valid or sideband.</p><p class="src"><span class="sl">Spec</span>§4.2, p.104</p></div></details>
+    <details><summary>Lanes 3 and 27 fail in a x64 Advanced module. Show the repair. <span class="lvl">Intermediate</span></summary><div><p>Both in group 0. Lower (3): logical lanes 0–3 shift left, lane 0 onto TRD0. Upper (27): logical lanes 27–31 shift right, lane 31 onto TRD1. Logical lanes 4–26 stay. Physical lanes 3 and 27 are tri-stated.</p><p class="src"><span class="sl">Spec</span>§4.3.3.2, p.111</p></div></details>
+    <details><summary>Why does the clock run for 8 more cycles after Valid falls? <span class="lvl">Intermediate</span></summary><div><p>To flush the receiver's deserializer pipeline, which runs on the forwarded clock. 16 UI at half-rate clocking, 32 UI at quarter-rate.</p><p class="src"><span class="sl">Spec</span>§4.1.3, p.101</p></div></details>
+    <details><summary>How does a Retimer return credits without using the sideband? <span class="lvl">Intermediate</span></summary><div><p>On the Valid lane's otherwise-unused second 4 UI: 1111 0000 = credit only, 1111 1111 = data plus credit, 0000 1111 = data only. Each credit is 256B.</p><p class="src"><span class="sl">Spec</span>Table 4-1, p.101</p></div></details>
+    <details><summary>Four modules: three reach 32 GT/s, one only 8 GT/s. What does the MMPL do? <span class="lvl">Advanced</span></summary><div><p>CMLS = 8, HMLS of the two-module configuration = 32, HMLS/2 = 16 &gt; 8, so it drops to two modules at 32 GT/s rather than running all four at 8 GT/s.</p><p class="src"><span class="sl">Spec</span>§4.7.1, p.177</p></div></details>
+    <details><summary>Why must the transmitter, not the receiver, swizzle bytes across modules? <span class="lvl">Advanced</span></summary><div><p>So that both RDIs see the same byte order with exactly one side doing the work. The transmitter knows the partner's Module IDs from MBINIT.PARAM and lays bytes out so the receiver sees ascending Module ID and Lane ID.</p><p class="src"><span class="sl">Spec</span>§4.7.1, p.175</p></div></details>
+    <details><summary>When can a priority sideband packet interrupt a normal one, and how does the receiver know? <span class="lvl">Advanced</span></summary><div><p>With PSPT (which requires PMO): at an 8-UI multiple of the normal packet, after inserting 8 UI of idle. The receiver tracks that the normal packet was interrupted; opcode 11111b means the normal packet resumes next, 11110b means another priority packet follows.</p><p class="src"><span class="sl">Spec</span>§4.1.5.2.1, p.103–104</p></div></details>
+  </div>
+</section>
+
+<section id="refs">
+  <div class="wrap">
+    <h2>13 · Spec reference index</h2>
+    <div class="tbl-wrap refidx"><table>
+      <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th></tr></thead>
+      <tbody>
+        <tr><td>Tables 1-1, 1-2</td><td>Package characteristics (BER, bump pitch)</td><td class="num">40</td></tr>
+        <tr><td>§4.0</td><td>Logical Physical Layer</td><td class="num">98</td></tr>
+        <tr><td>§4.1.1, Figures 4-1 to 4-5</td><td>Byte to Lane Mapping</td><td class="num">98–100</td></tr>
+        <tr><td>§4.1.2, Figure 4-6</td><td>Valid Framing</td><td class="num">100</td></tr>
+        <tr><td>§4.1.2.1, Table 4-1</td><td>Valid Framing for Retimers</td><td class="num">101</td></tr>
+        <tr><td>§4.1.3, §4.1.4</td><td>Clock Gating; Free Running Clock Mode</td><td class="num">101</td></tr>
+        <tr><td>§4.1.5, §4.1.5.1</td><td>Sideband transmission; Performant Mode</td><td class="num">102</td></tr>
+        <tr><td>§4.1.5.2, §4.1.5.2.1</td><td>Priority Sideband Packet Transfer</td><td class="num">103–104</td></tr>
+        <tr><td>§4.2, §4.2.1, Tables 4-2, 4-3</td><td>Lane Reversal; Lane ID</td><td class="num">104–107</td></tr>
+        <tr><td>§4.3, §4.3.1</td><td>Interconnect redundancy remapping; Data Lane repair</td><td class="num">107–109</td></tr>
+        <tr><td>§4.3.2–4.3.3.4</td><td>Repair with reversal; single and two lane repair</td><td class="num">109–115</td></tr>
+        <tr><td>§4.3.4–4.3.6</td><td>Clock, Track and Valid repair</td><td class="num">115–118</td></tr>
+        <tr><td>§4.3.7</td><td>Width Degrade in Standard Package</td><td class="num">118</td></tr>
+        <tr><td>§4.5.3.3.5–4.5.3.3.6, Tables 4-7, 4-9</td><td>REVERSALMB, REPAIRMB</td><td class="num">151–155</td></tr>
+        <tr><td>§4.7, §4.7.1, Figures 4-43 to 4-48</td><td>Multi-module Link; initialization and degrade</td><td class="num">175–178</td></tr>
+        <tr><td>§4.7.1.1</td><td>Sideband Assignment and Retimer Credits for Multi-module</td><td class="num">178</td></tr>
+        <tr><td>§4.7.2</td><td>Multi-module interoperability between x64 and x32</td><td class="num">181</td></tr>
+        <tr><td>§4.8</td><td>Sideband PHY Arbitration between MPMs and Link Management</td><td class="num">182</td></tr>
+        <tr><td>§5.13</td><td>Sideband signaling</td><td class="num">254</td></tr>
+        <tr><td>§10.3.1</td><td>Byte Mapping for FDI and RDI</td><td class="num">559–561</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 4.0–4.3, 4.7 and 4.8, with Chapters 1, 4.5, 5.13 and 10.3 for context.</div></footer>
