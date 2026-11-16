@@ -67,7 +67,7 @@ Start at `index.html`: it has a clickable layer map, reading paths and a topic f
 
 | Guide | File | Spec coverage | Interactive parts |
 | --- | --- | --- | --- |
-| FDI | `guides/fdi.html` | Ch 10.2–10.3 | Waveforms for bring-up, traffic, CRC replay, PM, retrain, errors |
+| FDI | `guides/fdi.html` | Ch 10.2–10.3 | Waveforms for bring-up, traffic, CRC replay, PM, retrain, errors; verification section |
 | RDI | `guides/rdi.html` | Ch 10.1, 10.3 | Waveforms; filterable signal table |
 | D2D Adapter | `guides/d2d-adapter.html` | Ch 3 | Flit-format byte map; format truth-table resolver; retry waveforms |
 | Link Training (LTSM) | `guides/link-training.html` | Ch 4.5–4.7 | Retrain resolver; state walk-throughs |
@@ -90,7 +90,7 @@ Every guide follows the same layout:
 3. **Rules and flows**: state machines, handshakes, encodings.
 4. **Why each rule exists**: cards with the rule, the reason, a real-time example, what breaks if you violate it, and where to check it in the spec. Use the chips above the cards to filter by area.
 5. **Live scenarios**: pick a tab, then use **Previous / Next** to step through a waveform. The highlighted columns match the step text.
-6. **Test yourself**: interview-style questions (Basic, Intermediate, Advanced). Click a question to reveal its answer, or use **Show all answers**. The FDI guide has a verification section instead.
+6. **Test yourself**: interview-style questions (Basic, Intermediate, Advanced). Click a question to reveal its answer, or use **Show all answers**.
 7. **Spec index**: every section, table and page the guide cites.
 
 Citations use § for section and p. for the printed page of the spec PDF. Every fact is tagged:
@@ -158,7 +158,7 @@ New maintainers and AI agents: start with [AGENTS.md](AGENTS.md), then [PROJECT_
 
 - Branch from `main` as `<type>/<short-description>`, for example `feat/ucie-field-guides-pcie-gen6` or `fix/ucie-field-guides-broken-anchor`.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) with the folder as scope: `feat(ucie-field-guides): …`, `fix(…)`, `docs(…)`, `build(…)`.
-- Run the three commands above before pushing and record changes in `CHANGELOG.md`.
+- Run the three commands above before pushing and record changes in `CHANGELOG.md`. A GitHub Actions workflow (`.github/workflows/ucie-field-guides.yml` at the repository root) runs the two checks on every pull request that touches this folder.
 - Keep spec quotations short; paraphrase and cite § and page instead of copying spec text or figures.
 
 ## License
