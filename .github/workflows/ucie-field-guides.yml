@@ -1,0 +1,37 @@
+name: ucie-field-guides
+
+on:
+  pull_request:
+    paths:
+      - "ucie-field-guides/**"
+      - ".github/workflows/ucie-field-guides.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ucie-field-guides/**"
+      - ".github/workflows/ucie-field-guides.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ucie-field-guides-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build is current and links resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: ucie-field-guides
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generated pages match src/
+        run: python tools/build.py --check
+      - name: Links, anchors and navigation
+        run: python tools/check_site.py
