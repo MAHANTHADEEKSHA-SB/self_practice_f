@@ -1,0 +1,406 @@
+<header class="top">
+  <div class="wrap hero">
+    {{SERIES}}
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapters A13 and A15 · virtual addresses on the bus, and keeping TLBs honest</div>
+    <h1>AXI Untranslated Transactions &amp; DVM Field Guide</h1>
+    <p class="lede">Devices can issue AXI requests with virtual addresses and let a System MMU translate them. That needs two things on the bus: fields that tell the SMMU which translation to use, and messages that tell it when a cached translation is stale. This guide covers the AxMMU signals, translation fault flows, StashTranslation, DVM messages on the AC and CR channels, DVM Sync and Complete, and the Coherency Connection handshake. It includes a DVM message encoder, waveforms, verification checks, interview questions and what changed since Issue H.c.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate (interconnect)</span>
+      <span><i class="sw" style="background:var(--sb)"></i>properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ and p. = section and printed page of ARM IHI 0022 <strong>Issue L</strong>. "H.c" = Issue H.c, where these lived in §E1.8–E1.9 and Chapter D13 (ACE). Tags: <span class="kind spec">Spec</span> <span class="kind derived">Derived</span> <span class="kind illus">Illustrative</span> <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#where">2 · Where it sits</a><a href="#signals">3 · Signals</a><a href="#ids">4 · Identifiers &amp; versions</a><a href="#flows">5 · Fault flows</a><a href="#stash">6 · Legal combinations, stash</a><a href="#dvm">7 · DVM messages</a><a href="#sync">8 · Sync &amp; Complete</a><a href="#conn">9 · Coherency Connection</a><a href="#rationale">10 · Why each rule</a><a href="#live">11 · Live scenarios</a><a href="#silicon">12 · Real silicon</a><a href="#changes">13 · H.c → Issue L</a><a href="#verify">14 · Verification</a><a href="#quiz">15 · Test yourself</a><a href="#refs">16 · Spec index</a>
+</div></nav>
+
+<style>
+  .tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; }
+  .tool .in { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+  .tool label { display: grid; gap: 4px; font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .tool select, .tool input[type=number], .tool input[type=text] { font-family: var(--font-mono); font-size: 14px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 136px; max-width: 100%; }
+  .tool select#d-op { width: 300px; }
+  .tool input:disabled, .tool select:disabled { opacity: .45; }
+  .tool label.cb { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+</style>
+
+<main>
+<section id="why"><div class="wrap">
+  <h2>1 · Why this exists</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Isolation</div><h3>Devices get their own address space</h3><p>A GPU, NIC or PCIe endpoint works in a virtual (or intermediate physical) address space. The SMMU translates and checks every access, so a device can only reach memory the OS or hypervisor mapped for it.</p><p class="src"><span class="sl">Spec</span>§A13.1, p.205</p></div>
+    <div class="card"><div class="tagline">One physical space</div><h3>Translate before the coherent interconnect</h3><p>Hardware coherency needs a single physical address space, so the SMMU usually sits between the device and the coherent interconnect.</p><p class="src"><span class="sl">Spec</span>§A13.2, p.206</p></div>
+    <div class="card"><div class="tagline">Which translation?</div><h3>The request carries its context</h3><p>The AxMMU signals tell the SMMU which security space, device stream and process the address belongs to, and what to do on a fault. Different requests on one interface can use different translations.</p><p class="src"><span class="sl">Spec</span>§A13.2–A13.4, p.206–210</p></div>
+    <div class="card"><div class="tagline">Stale TLBs</div><h3>Page tables change; caches must follow</h3><p>When software changes a translation table, every TLB that cached the old entry must drop it. DVM messages carry those invalidations to SMMUs, and DVM Sync tells the requester when they have taken effect.</p><p class="src"><span class="sl">Spec</span>§A13.1, p.205 · §A15.1, p.232</p></div>
+  </div>
+</div></section>
+
+<section id="where"><div class="wrap">
+  <h2>2 · Where it sits</h2>
+  <figure>
+    <svg viewBox="0 0 860 300" role="img" aria-label="A device sends AXI requests with virtual addresses and AxMMU fields to a System MMU. The SMMU, which has a TLB, sends requests with physical addresses to the interconnect, which reaches memory holding the translation tables. The interconnect sends DVM messages back to the SMMU on the AC channel; the SMMU answers on CR and sends DVM Complete on AR. A processor with its own MMU and TLB connects to the interconnect over CHI.">
+      <g font-family="var(--font-body)" font-size="12.5">
+        <rect x="20" y="40" width="170" height="70" rx="8" fill="var(--surface)" stroke="var(--lp)"/><text x="34" y="66" font-weight="600" fill="var(--lp)">Device (Manager)</text><text x="34" y="86" fill="var(--muted)">GPU, NIC, PCIe RC</text><text x="34" y="102" fill="var(--muted)">virtual addresses</text>
+        <line x1="190" y1="75" x2="290" y2="75" stroke="var(--lp)" stroke-width="2"/><polygon points="290,75 280,70 280,80" fill="var(--lp)"/>
+        <text x="196" y="62" fill="var(--lp)" font-family="var(--font-mono)" font-size="11">AXI + AxMMU*</text><text x="196" y="94" fill="var(--muted)" font-size="11">untranslated</text>
+        <rect x="290" y="30" width="170" height="90" rx="8" fill="var(--hl)" stroke="var(--ink)"/><text x="304" y="56" font-weight="600" fill="var(--ink)">System MMU</text><text x="304" y="76" fill="var(--muted)">TLB · table walker</text><text x="304" y="94" fill="var(--muted)">fault flows</text><text x="304" y="110" fill="var(--muted)">(Subordinate | Manager)</text>
+        <line x1="460" y1="55" x2="590" y2="55" stroke="var(--lp)" stroke-width="2"/><polygon points="590,55 580,50 580,60" fill="var(--lp)"/>
+        <text x="468" y="46" fill="var(--lp)" font-family="var(--font-mono)" font-size="11">AW/W/AR: PA</text>
+        <line x1="460" y1="95" x2="590" y2="95" stroke="var(--pl)" stroke-width="2"/><polygon points="460,95 470,90 470,100" fill="var(--pl)"/>
+        <text x="468" y="88" fill="var(--pl)" font-family="var(--font-mono)" font-size="11">AC: DVM message</text><text x="468" y="112" fill="var(--lp)" font-family="var(--font-mono)" font-size="11">CR · AR Complete</text>
+        <rect x="590" y="30" width="250" height="90" rx="8" fill="var(--surface)" stroke="var(--pl)"/><text x="604" y="56" font-weight="600" fill="var(--ink)">Interconnect</text><text x="604" y="76" fill="var(--muted)">distributes DVM messages</text><text x="604" y="94" fill="var(--muted)">to connected Managers</text>
+        <rect x="590" y="180" width="250" height="60" rx="8" fill="var(--surface)" stroke="var(--muted)"/><text x="604" y="206" font-weight="600" fill="var(--ink)">Memory</text><text x="604" y="226" fill="var(--muted)">translation tables</text>
+        <line x1="715" y1="120" x2="715" y2="180" stroke="var(--muted)"/>
+        <rect x="290" y="180" width="170" height="60" rx="8" fill="var(--surface)" stroke="var(--ink)"/><text x="304" y="206" font-weight="600" fill="var(--ink)">Processor</text><text x="304" y="226" fill="var(--muted)">own MMU and TLB</text>
+        <path d="M460,210 L530,210 L530,112 L590,112" fill="none" stroke="var(--muted)"/><text x="468" y="202" fill="var(--muted)" font-family="var(--font-mono)" font-size="11">CHI</text>
+        <text x="290" y="266" fill="var(--muted)" font-size="11.5">Software on the processor edits the tables, then asks for TLB invalidation and a Sync.</text>
+      </g>
+    </svg>
+    <figcaption>The device never sees physical addresses. DVM requests travel from the interconnect to the SMMU, the opposite way to ordinary requests. Redrawn after Figure A13.1.<span class="ref">Spec: §A13.1 and Figure A13.1, p.205 · §A15.1, p.232 · §A15.4, p.248</span></figcaption>
+  </figure>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="k">1 · Request</div><p style="font-size:14.5px">The Manager issues a transaction that uses a VA.</p></div>
+    <div class="card"><div class="k">2 · Translate</div><p style="font-size:14.5px">The SMMU uses a TLB entry, or walks the translation tables in memory. If no translation exists, the walk faults and the agent that maintains the tables must be told.</p></div>
+    <div class="card"><div class="k">3 · Forward</div><p style="font-size:14.5px">The SMMU issues the transaction with the PA for the requesting component.</p><p class="src"><span class="sl">Spec</span>§A13.1, p.205</p></div>
+  </div>
+</div></section>
+
+<section id="signals"><div class="wrap">
+  <h2>3 · Signals and properties</h2>
+  <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead><tbody id="sigbody"></tbody></table></div>
+</div></section>
+
+<section id="ids"><div class="wrap">
+  <h2>4 · Translation identifiers and versions</h2>
+  <div class="grid g3">
+    <div class="card"><div class="tagline">SECSID</div><h3>Which virtual address space</h3><ul class="tight" style="font-size:14.5px"><li>00 Non-secure, 01 Secure, 10 Realm, 11 reserved.</li><li>Width 1 without RME, 2 with RME, 0 when the feature is off.</li><li>Non-secure → PAS must be Non-secure. Secure → Non-secure or Secure. Realm → Non-secure or Realm.</li></ul><p class="src"><span class="sl">Spec</span>§A13.4.1 and Tables A13.4–A13.5, p.209</p></div>
+    <div class="card"><div class="tagline">SID</div><h3>Which device context</h3><ul class="tight" style="font-size:14.5px"><li>0–32 bits; maps a request to a translation context.</li><li>Each address space has its own namespace, so values may repeat across them.</li><li>Usually low bits from the component, high bits tied off per port; unsupplied bits LOW.</li><li>PCIe: the Requester ID.</li></ul><p class="src"><span class="sl">Spec</span>§A13.4, p.209 · §A13.4.2, p.210 · §A13.5, p.212</p></div>
+    <div class="card"><div class="tagline">SSIDV + SSID</div><h3>Which process within the device</h3><ul class="tight" style="font-size:14.5px"><li>0–20 bits, with its own valid bit.</li><li>SSID must be 0 when SSIDV is LOW.</li><li>SubstreamID 0 is not the same as no substream.</li><li>PCIe: the PASID; SSIDV follows the PASID prefix.</li></ul><p class="src"><span class="sl">Spec</span>§A13.4.3, p.210 · §A13.5, p.212</p></div>
+  </div>
+  <h3 style="margin:24px 0 8px">What each version adds</h3>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Tables A13.1 and A13.3, p.206–208. Y mandatory, C configurable, – must not be present. "True" means v1.</caption>
+    <thead><tr><th>Signal</th><th>v1</th><th>v2</th><th>v3</th><th>v4</th><th>What it is for</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td class="sig">AxMMUSECSID</td><td>Y</td><td>Y</td><td>Y</td><td>Y</td><td>Address space of the stream</td></tr>
+      <tr><td class="sig">AxMMUSID, SSIDV, SSID</td><td>C</td><td>C</td><td>C</td><td>C</td><td>Stream and substream</td></tr>
+      <tr><td class="sig">AxMMUATST</td><td>C</td><td>–</td><td>–</td><td>–</td><td>Already translated by PCIe ATS (1 bit: Stall or ATST)</td></tr>
+      <tr><td class="sig">AxMMUFLOW</td><td>–</td><td>C</td><td>C</td><td>C</td><td>Four fault flows; brings 3-bit BRESP/RRESP for TRANSFAULT</td></tr>
+      <tr><td class="sig">AxMMUVALID</td><td>–</td><td>–</td><td>Y</td><td>Y</td><td>Mix virtual and physical requests on one interface</td></tr>
+      <tr><td class="sig">AxMMUPM, AxMMUPASUNKNOWN</td><td>–</td><td>–</td><td>–</td><td>C</td><td>GDI Protected Mode and PCIe XT mode</td></tr>
+    </tbody></table></div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><div class="tagline">v3 · AxMMUVALID</div><ul class="tight" style="font-size:14.5px"><li>Default 1. LOW: the address is physical, and the other AxMMU fields may take any value.</li><li>HIGH: AxTAGOP must be Invalid (memory tags travel only with physical addresses).</li><li>Virtual and physical requests must not share an in-flight ID, separately on the write and read channels.</li></ul><p class="src"><span class="sl">Spec</span>§A13.7, p.217 · Table A13.2, p.207</p></div>
+    <div class="card"><div class="tagline">v4 · GDI and PCIe XT</div><ul class="tight" style="font-size:14.5px"><li><strong>AxMMUPM</strong> (Non-secure context only): a read may use NS and NSP spaces; a write may go to NSP but not NS. Flow must not be Stall.</li><li>Requests to the NSP or SA physical address space must be physical: AxMMUVALID LOW.</li><li><strong>AxMMUPASUNKNOWN</strong> with MMUVALID: SECSID Realm, AxPAS driven Realm but not applicable. PCIe T/XT bits map onto SECSID, PAS and this bit.</li></ul><p class="src"><span class="sl">Spec</span>§A13.4.4, p.211 · §A13.5.1 and Tables A13.9–A13.11, p.212–213</p></div>
+  </div>
+</div></section>
+
+<section id="flows"><div class="wrap">
+  <h2>5 · Translation fault flows</h2>
+  <p class="sub">The request says which flow the SMMU may use if the translation faults. With no flow signalled, Stall is assumed.</p>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A13.13, p.214 · §A13.6.1–A13.6.4, p.215–216</caption>
+    <thead><tr><th>AxMMUFLOW</th><th>Flow</th><th>On a fault</th><th>Meant for</th><th>Constraints</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td class="sig">00 Stall</td><td>can be used</td><td>Software chooses: SLVERR, OKAY with RAZ/WI data, or stall the translation, fix the tables and retry. The Manager isn't aware of a stall.</td><td>Platform devices with demand paging</td><td>Long latency may trip timeouts; can deadlock, so not recommended with PCIe.</td></tr>
+      <tr><td class="sig">01 ATST</td><td>must be used</td><td>SLVERR.</td><td>PCIe Root Ports, for requests already translated by ATS</td><td>SECSID Non-secure or Realm. SSIDV LOW in v1/v2; allowed from v3 to carry the PASID.</td></tr>
+      <tr><td class="sig">10 NoStall</td><td>must be used</td><td>SLVERR or OKAY, even if software enabled stalling.</td><td>Managers that can't be stalled, such as PCIe Root Ports</td><td>–</td></tr>
+      <tr><td class="sig">11 PRI</td><td>can be used</td><td>TRANSFAULT (0b101) on every response transfer; read data not valid. SLVERR if a page request can't fix it.</td><td>PCIe integrated endpoints</td><td>TRANSFAULT is only allowed for PRI requests. Software enables ATS; no ATS hardware needed.</td></tr>
+    </tbody></table></div>
+  <div class="card" style="margin-top:16px"><h3>Presence</h3><p style="font-size:14.5px">MMUFLOW_Present (default False) adds AxMMUATST for v1 or AxMMUFLOW for v2 and later. A Stall-flow request doesn't necessarily stall: stalling happens only if software enabled it, which it normally doesn't for PCIe endpoints.</p><p class="src"><span class="sl">Spec</span>Table A13.12, p.214 · §A13.6.1, p.215</p></div>
+</div></section>
+
+<section id="stash"><div class="wrap">
+  <h2>6 · Legal combinations and translation hints</h2>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A13.14, p.218 (grouped). Any other combination is not permitted.</caption>
+    <thead><tr><th>MMUVALID</th><th>SECSID</th><th>Flow</th><th>PM</th><th>PASUNKNOWN</th><th>PAS</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>0</td><td>any</td><td>any</td><td>any</td><td>any</td><td>Any of the six: Secure, Non-secure, Root, Realm, SA, NSP</td></tr>
+      <tr><td>1</td><td>Non-secure</td><td>Stall, NoStall, PRI</td><td>0</td><td>0</td><td>Non-secure</td></tr>
+      <tr><td>1</td><td>Non-secure</td><td>NoStall, PRI</td><td>1</td><td>0</td><td>Non-secure (Protected Mode)</td></tr>
+      <tr><td>1</td><td>Non-secure</td><td>ATST</td><td>0 or 1</td><td>0</td><td>Non-secure</td></tr>
+      <tr><td>1</td><td>Secure</td><td>Stall, NoStall, PRI</td><td>0</td><td>0</td><td>Secure or Non-secure</td></tr>
+      <tr><td>1</td><td>Realm</td><td>Stall, NoStall, PRI, ATST</td><td>0</td><td>0</td><td>Realm or Non-secure</td></tr>
+      <tr><td>1</td><td>Realm</td><td>Stall, NoStall, PRI, ATST</td><td>0</td><td>1</td><td>Realm (no PAS expectation)</td></tr>
+    </tbody></table></div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><div class="tagline">StashTranslation · AWSNOOP 0b01110</div><h3>Warm the translation cache</h3><ul class="tight" style="font-size:14.5px"><li>AW and one B; no write data. AWSNOOP may be 4 or 5 bits wide.</li><li>Virtual address: cache the page table entry. Physical address (MMUVALID LOW, RME only): cache the Granule Protection Table entry.</li><li>No stash target; AWATOP and AWTAGOP zero; any legal AWCACHE/AWDOMAIN.</li><li>Must not share an ID with outstanding non-StashTranslation writes.</li><li>OKAY means accepted, not stashed.</li></ul><p class="src"><span class="sl">Spec</span>§A13.9, p.219</p></div>
+    <div class="card"><div class="tagline">UnstashTranslation · AWSNOOP 0b10001</div><h3>This entry won't be needed again</h3><ul class="tight" style="font-size:14.5px"><li>Same shape as StashTranslation, but AWSNOOP must be 5 bits wide.</li><li>AWID unique in flight; AWIDUNQ asserted if present.</li><li>Property UnstashTranslation_Transaction; a Manager with True can't connect to a Subordinate with False.</li><li>OKAY means accepted, not deallocated.</li></ul><p class="src"><span class="sl">Spec</span>§A13.10 and Tables A13.15–A13.16, p.220–221</p></div>
+  </div>
+</div></section>
+
+<section id="dvm"><div class="wrap">
+  <h2>7 · DVM messages</h2>
+  <p class="sub">Six message types: TLB Invalidate, Branch Predictor Invalidate, Physical and Virtual Instruction Cache Invalidate, Sync and Hint. They only ever invalidate read-only structures, so invalidating more than asked is always functionally correct, only slower.</p>
+  <div class="grid g3">
+    <div class="card"><div class="tagline">Transport</div><ul class="tight" style="font-size:14.5px"><li>Request on AC (Subordinate → Manager), response on CR.</li><li>The payload rides on ACADDR, plus 4-bit ACVMIDEXT from DVM_v8.1.</li><li>A message with an address takes two transfers, back to back; the sender must not need the first response before sending the second.</li><li>CR only acknowledges receipt, in order; there is no success or failure.</li></ul><p class="src"><span class="sl">Spec</span>§A15.4–A15.4.1, p.248–250</p></div>
+    <div class="card"><div class="tagline">Handshake rules</div><ul class="tight" style="font-size:14.5px"><li>ACVALID must not wait for ACREADY; CRVALID must not wait for CRREADY.</li><li>CRVALID only after the AC handshake.</li><li>Credited transport: one Resource Plane, no shared credits, and the response still waits for a request.</li></ul><p class="src"><span class="sl">Spec</span>§A15.4.2–A15.4.3, p.250</p></div>
+    <div class="card"><div class="tagline">Support</div><ul class="tight" style="font-size:14.5px"><li>DVM_Message_Support: Receiver or False (default). Receiver needs Shareable_Transactions.</li><li>Versions DVM_v8, v8.1, v8.4, v9.2; each includes the earlier ones. Both ends must match.</li><li>ADDR_WIDTH limits the VA: 57-bit VA needs at least 48 address bits. Extra address bits received are ignored.</li></ul><p class="src"><span class="sl">Spec</span>Tables A15.1–A15.2, p.233 · §A15.4.4 and Table A15.19, p.250–251</p></div>
+  </div>
+  <h3 style="margin:24px 0 8px">Build a message: what goes on ACADDR</h3>
+  <div class="tool">
+    <div class="in">
+      <label>Operation<select id="d-op"></select></label>
+      <label>ASID (hex)<input type="text" id="d-asid" value="2A"></label>
+      <label>VMID (hex)<input type="text" id="d-vmid" value="103"></label>
+      <label>VA (hex)<input type="text" id="d-va" value="7F0012340000" style="width:170px"></label>
+    </div>
+    <div class="in">
+      <label class="cb"><input type="checkbox" id="d-rng"> Range</label>
+      <label>TG<select id="d-tg"><option value="0">00 none</option><option value="1" selected>01 4KB</option><option value="2">10 16KB</option><option value="3">11 64KB</option></select></label>
+      <label>TTL<select id="d-ttl"><option value="0">00 no hint</option><option value="1">01 level 1</option><option value="2">10 level 2</option><option value="3" selected>11 level 3</option></select></label>
+      <label>Scale<select id="d-sc"><option>0</option><option>1</option><option>2</option><option>3</option></select></label>
+      <label>Num (0–31)<input type="number" id="d-num" value="3" min="0" max="31"></label>
+    </div>
+    <p class="src" style="margin:0">First transfer, ACADDR[15:0]</p>
+    <div class="bitfield" id="d-bits"></div>
+    <div id="d-out" style="font-size:14.5px"></div>
+    <p class="src"><span class="sl">Spec</span>Table A15.3, p.234–236 · Table A15.8, p.239–241 · Tables A15.20–A15.21, p.252–255 · range formula p.242 · <span class="kind derived">Derived</span> encoding</p>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>Fields worth knowing</h3><ul class="tight" style="font-size:14.5px"><li><strong>Exception:</strong> 00 hypervisor and all guests, 01 EL3, 10 guest OS, 11 hypervisor.</li><li><strong>Security</strong> means different things per message type; for TLBI: 00 Realm, 01 Non-secure address from a Secure context, 10 Secure, 11 Non-secure.</li><li><strong>Stage:</strong> 00 both (Armv8+), 01 stage 1, 10 stage 2, 11 GPT.</li><li><strong>Leaf:</strong> invalidate leaf entries only. <strong>TTL/TG:</strong> hint for the table level holding the leaf.</li><li><strong>Range</strong> (Armv8.4+, with an address): (Num+1) × 2^(5×Scale+1) × granule bytes from the base address.</li><li><strong>GPT TLBI by PA</strong> uses a 4-bit Invalidation Size, 4KB to 512GB; an unaligned PA needs no invalidation.</li></ul><p class="src"><span class="sl">Spec</span>Table A15.3, p.234–236 · Table A15.6, p.238 · p.242</p></div>
+    <div class="card"><h3>8-bit and 16-bit ASID and VMID</h3><ul class="tight" style="font-size:14.5px"><li>A message doesn't say which size it uses. 8-bit senders drive the upper byte to zero.</li><li>A 16-bit sender talking to an 8-bit receiver: if the upper byte is non-zero the receiver ignores it and <strong>over-invalidates</strong>. Correct, but slower.</li><li>In a mixed system, maintenance should be done by a 16-bit agent.</li><li>The upper VMID byte travels on ACVMIDEXT and ACADDR[43:40], in different places for one-part and two-part messages.</li></ul><p class="src"><span class="sl">Spec</span>p.238–239 · Table A15.20, p.252–253</p></div>
+  </div>
+</div></section>
+
+<section id="sync"><div class="wrap">
+  <h2>8 · DVM Sync and Complete</h2>
+  <div class="twocol">
+    <div class="card"><h3>The flow</h3><ol class="tight" style="font-size:14.5px;padding-left:20px"><li>Sync arrives on AC. The Manager acknowledges on CR, without depending on progress of any AR or AW transaction.</li><li>When all earlier invalidations are complete, the Manager sends <strong>DVM Complete</strong> on AR, after the Sync's AC handshake and in a timely manner, even while more messages and Syncs arrive.</li><li>The interconnect answers on R; the read data is not valid.</li></ol><p style="font-size:14.5px">One Complete per Sync, and no Complete without a Sync.</p>
+      <p style="font-size:14.5px"><strong>"Complete" means:</strong> for a TLBI, the Manager can no longer use the invalidated translation <em>and</em> every earlier transaction that could have used it has finished. For branch predictor and instruction cache invalidations, the cached copies are gone and can't be accessed.</p><p class="src"><span class="sl">Spec</span>§A15.5 and Figure A15.3, p.258</p></div>
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A15.23, p.259. With credited transport any ARRP, but the same one for every DVM Complete on the interface.</caption>
+      <thead><tr><th>Signal</th><th>DVM Complete must have</th></tr></thead>
+      <tbody style="font-size:14px">
+        <tr><td class="sig">ARSNOOP</td><td>0b1110</td></tr>
+        <tr><td class="sig">ARADDR</td><td>zero</td></tr>
+        <tr><td class="sig">ARID</td><td>different from any outstanding read that isn't a DVM Complete</td></tr>
+        <tr><td class="sig">ARBURST, ARLEN</td><td>INCR, one transfer</td></tr>
+        <tr><td class="sig">ARSIZE</td><td>data width, or Max_Transaction_Bytes if smaller</td></tr>
+        <tr><td class="sig">ARDOMAIN</td><td>Shareable (01 or 10)</td></tr>
+        <tr><td class="sig">ARCACHE</td><td>0b0010 (Modifiable, Non-cacheable)</td></tr>
+        <tr><td class="sig">ARCHUNKEN, ARLOCK, ARTAGOP</td><td>zero</td></tr>
+        <tr><td class="sig">ARMMUVALID, ARMMUATST, ARMMUFLOW</td><td>zero (MMUVALID assumed 0 if absent)</td></tr>
+      </tbody></table></div>
+  </div>
+</div></section>
+
+<section id="conn"><div class="wrap">
+  <h2>9 · Coherency Connection</h2>
+  <p class="sub">DVM requests arrive at a Manager unasked, so a Manager that powers down must first stop them. SYSCOREQ and SYSCOACK form a four-phase handshake that is safe across clock domains.</p>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A15.26, p.261–262 · §A15.6.1, p.260–262. Both signals LOW in reset. No default values: both sides have the signals or neither does.</caption>
+    <thead><tr><th>State</th><th>REQ / ACK</th><th>Manager</th><th>Subordinate (interconnect)</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>Disabled</td><td class="mono">0 / 0</td><td>Must not use DVM-managed translation table data. Raises SYSCOREQ when it needs to.</td><td>Sends no DVM messages. Syncs are assumed complete for this Manager.</td></tr>
+      <tr><td>Connect</td><td class="mono">1 / 0</td><td>Must already accept and answer DVM messages, but not yet use translations.</td><td>Raises SYSCOACK once messages to this Manager are enabled. Must not send messages yet.</td></tr>
+      <tr><td>Enabled</td><td class="mono">1 / 1</td><td>May fetch and use translations. Drops SYSCOREQ only after every transaction using fetched data has completed.</td><td>May send DVM messages.</td></tr>
+      <tr><td>Disconnect</td><td class="mono">0 / 1</td><td>Must not fetch or use translations; still answers DVM messages until SYSCOACK falls.</td><td>Stops sending promptly, finishes a two-part message already started, waits for all responses, then drops SYSCOACK.</td></tr>
+    </tbody></table></div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="k">Level rules</div><p style="font-size:14.5px">The Manager changes SYSCOREQ only when SYSCOACK is at the same level. The Subordinate changes SYSCOACK only when SYSCOREQ is at the opposite level.</p><p class="src"><span class="sl">Spec</span>§A15.6.1, p.261</p></div>
+    <div class="card"><div class="k">Leftover Complete</div><p style="font-size:14.5px">The interconnect may drop SYSCOACK before a DVM Complete it is owed arrives. The Manager must still send that Complete on AR.</p><p class="src"><span class="sl">Spec</span>§A15.6.1, p.262</p></div>
+    <div class="card"><div class="k">Wake-up and gating</div><p style="font-size:14.5px">AWAKEUP must be asserted to guarantee a SYSCOACK transition. ACWAKEUP should precede ACVALID by a cycle. Credited snoop channels have their own ACTIVATEREQD/ACKD and ASKSTOPD, independent of the connection state.</p><p class="src"><span class="sl">Spec</span>§A14.1.2–A14.1.3, p.224 · §A15.7, p.263</p></div>
+  </div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>10 · Why each rule exists, with real-time examples</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="mmu"><div class="meta"><span>Untranslated</span><span>§A13.7 p.217</span></div><h3>Virtual and physical requests use different IDs</h3><p class="rule">Requests with AxMMUVALID HIGH and LOW must not share an in-flight ID.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Same-ID transactions must keep their order. A virtual request may wait for a table walk or a stall while a physical one bypasses translation; with a shared ID the SMMU would have to hold the fast one behind the slow one, or reorder illegally.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DMA engine issues a VA read (ID 3) that misses the TLB, then a PA read. If the PA read also used ID 3, its data would have to wait several hundred cycles for the walk.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Out-of-order responses on one ID, or a bypass path blocked behind translation.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A13.7, p.217 · rule added in Issue L, Table B4.3, p.311</li><li><span class="kind derived">Derived</span>reasoning from same-ID ordering</li><li><span class="kind illus">Illustrative</span>cycle counts</li></ul></div></article>
+
+    <article class="wcard" data-g="mmu"><div class="meta"><span>Untranslated</span><span>§A13.4.3 p.210</span></div><h3>SubstreamID 0 is not "no substream"</h3><p class="rule">AxMMUSSIDV says whether a SubstreamID exists; when LOW, AxMMUSSID must be 0.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The SMMU picks a different translation context for a stream with substream 0 and for the same stream with none. Without the valid bit the two would be indistinguishable.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A PCIe function sends some requests with a PASID prefix (a user process, shared virtual addressing) and others without (the kernel's DMA mapping). PASID 0 and no PASID use different page tables.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Requests translated with the wrong process's tables: a fault at best, a cross-process access at worst.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A13.4.3, p.210 · §A13.5, p.212</li><li><span class="kind bg">Background</span>shared virtual addressing</li></ul></div></article>
+
+    <article class="wcard" data-g="fault"><div class="meta"><span>Fault flows</span><span>§A13.6.1 p.215</span></div><h3>Don't stall PCIe</h3><p class="rule">Stall flow is not recommended with PCIe; Root Ports should use NoStall.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Resolving a stall needs software, and software may need to reach the same PCIe device (outgoing CPU-to-PCIe traffic) while the device's incoming transaction is stalled in the SMMU. Each waits on the other.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An NVMe drive's DMA write faults and stalls. The fault handler needs to read the drive's registers, but the Root Port can't accept the read until its stalled write moves.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Deadlock or a completion timeout on the PCIe link.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A13.6.1, p.215 · §A13.6.3, p.215</li><li><span class="kind illus">Illustrative</span>NVMe example</li></ul></div></article>
+
+    <article class="wcard" data-g="fault"><div class="meta"><span>Fault flows</span><span>§A13.6.4 p.216</span></div><h3>TRANSFAULT on every beat, and only for PRI</h3><p class="rule">If one response transfer is TRANSFAULT, all are; it is permitted only for PRI-flow requests.</p>
+      <div class="part"><span class="l l-why">Why</span><p>TRANSFAULT means "nothing happened, ask for the page and retry the whole transaction". A partly completed burst couldn't be retried safely. And only a PRI-capable Manager knows what to do with it; others expect SLVERR or OKAY.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An integrated endpoint's 4-beat read hits an unmapped page: four beats of TRANSFAULT, then a PCIe Page Request, then the same read again.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager that treats beat 1 as data and beat 2 as a fault has consumed garbage.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A13.6.4, p.216 · Table A3.31, p.63</li><li><span class="kind derived">Derived</span>retry reasoning</li></ul></div></article>
+
+    <article class="wcard" data-g="dvm"><div class="meta"><span>DVM</span><span>§A15.5 p.258</span></div><h3>The Sync acknowledgement must not wait for traffic</h3><p class="rule">The CR response to a DVM Sync must not depend on progress of any AR or AW transaction.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The interconnect may be holding the Manager's reads or writes until the DVM message is acknowledged, or other messages are queued behind it on the ordered AC channel. If the acknowledgement waited for those transactions, neither could move. The slow part (draining old traffic) is what DVM Complete is for.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An SMMU with 12 reads outstanding gets a Sync. It answers on CR next cycle, and sends DVM Complete on AR only after those 12 reads finish.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A system-wide hang during a TLB shootdown, usually under load.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A15.5, p.258</li><li><span class="kind derived">Derived</span>deadlock reasoning</li><li><span class="kind illus">Illustrative</span>counts</li></ul></div></article>
+
+    <article class="wcard" data-g="dvm"><div class="meta"><span>DVM</span><span>§A15.4 p.248</span></div><h3>Two-part messages are never split up</h3><p class="rule">Both parts are sent as successive transfers, and the sender must be able to send the second without the first's response.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The second part carries no type field: it is just address bits. The receiver knows what it is only because it directly follows a first part with Addr = 1. And requiring the first response before the second would deadlock a receiver that answers only whole messages.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>TLBI by VA: first transfer has ASID, VMID and VA[56:45]; the second has VA[44:12]. Use the encoder in section 7 to see both words.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The receiver decodes an address as a message type and invalidates the wrong thing, or nothing.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A15.4, p.248 · Table A15.20, p.252–253</li><li><span class="kind derived">Derived</span>decode reasoning</li></ul></div></article>
+
+    <article class="wcard" data-g="dvm"><div class="meta"><span>DVM</span><span>§A15.3 p.234</span></div><h3>Over-invalidation is always legal</h3><p class="rule">It is functionally correct to invalidate more entries than a DVM message requires.</p>
+      <div class="part"><span class="l l-why">Why</span><p>TLBs, branch predictors and instruction caches are read-only copies. Dropping an entry only costs a refill. This is what lets simple receivers ignore fields they don't implement.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A small SMMU with no per-ASID tagging treats "TLBI by ASID and VA" as "flush everything". It is slower after each shootdown but always correct.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The opposite error, under-invalidation, leaves a device using a mapping the OS has revoked: memory corruption or a security hole.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A15.3, p.234 · p.238–239</li><li><span class="kind illus">Illustrative</span>small SMMU</li></ul></div></article>
+
+    <article class="wcard" data-g="con"><div class="meta"><span>Connection</span><span>§A15.6.1 p.262</span></div><h3>Be ready for messages before SYSCOACK</h3><p class="rule">A Manager must be able to receive DVM messages in the Connect state, though the Subordinate may not send them yet.</p>
+      <div class="part"><span class="l l-why">Why</span><p>SYSCOACK and ACVALID may cross clock domains by different paths. The Manager can see ACVALID before it sees SYSCOACK rise, so it must already be listening.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>SYSCOACK passes a 2-flop synchroniser; the AC channel passes an async FIFO that happens to be a cycle faster. The first TLBI lands while the Manager still sees SYSCOACK LOW.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>The first invalidation after power-up is dropped or hangs the AC channel.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A15.6.1, p.262 · clarified in Issue L, Table B4.3, p.312</li><li><span class="kind illus">Illustrative</span>CDC structure</li></ul></div></article>
+
+    <article class="wcard" data-g="con"><div class="meta"><span>Connection</span><span>Table A15.26 p.261</span></div><h3>Finish using translations before disconnecting</h3><p class="rule">SYSCOREQ may fall only when every transaction using previously fetched translation data has completed.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Once disconnected, the interconnect treats Syncs as complete for this Manager. If it still had traffic using an old translation, software would be told the mapping is dead while it is still in use.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A display SMMU going idle drains its last frame's reads, flushes its TLB, then drops SYSCOREQ and waits for SYSCOACK before its power domain is switched off.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A page is freed and reused while a device is still writing to it.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>Table A15.26, p.261–262</li><li><span class="kind illus">Illustrative</span>display example</li></ul></div></article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>11 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+      <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+  <p style="color:var(--muted);font-size:14px">Cycle positions, addresses and IDs are illustrative. "M" rows are the device side of the SMMU, "S" rows the downstream side.</p>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <h2>12 · Real silicon: what the theory turns into</h2>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind bg">Background</span> typical deployments; the SMMU architecture itself is a separate Arm specification.</caption>
+    <thead><tr><th>Block</th><th>What it does with these features</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>Interconnect or bridge in front of the SMMU</td><td>Ties off the StreamID high bits per port, so each device gets a fixed range.</td></tr>
+      <tr><td>PCIe Root Complex</td><td>Maps Requester ID to SID and PASID to SSID; uses NoStall, ATST for ATS-translated requests, PRI for integrated endpoints.</td></tr>
+      <tr><td>SMMU (TBU side)</td><td>Subordinate for untranslated requests, Manager for translated ones; receives DVM on AC, raises SYSCOREQ after power-up.</td></tr>
+      <tr><td>Coherent interconnect</td><td>Fans a CPU's TLB invalidate out to every connected SMMU, collects DVM Completes, then reports the Sync done.</td></tr>
+      <tr><td>NIC or accelerator</td><td>Sends StashTranslation for buffers it will use soon, to hide table-walk latency.</td></tr>
+    </tbody></table></div>
+  <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead><tbody>
+    <tr><td>Device faults on every access after integration</td><td>StreamID high bits left floating or tied to the wrong port value.</td><td class="ref">§A13.4, p.209</td></tr>
+    <tr><td>TLB shootdown hangs under load</td><td>SMMU held the Sync's CR response until its reads drained.</td><td class="ref">§A15.5, p.258</td></tr>
+    <tr><td>Sync never completes after an SMMU powers down</td><td>Disconnected without sending the DVM Complete it owed.</td><td class="ref">§A15.6.1, p.262</td></tr>
+    <tr><td>Stale mapping used after unmap</td><td>DVM Complete sent before older transactions finished.</td><td class="ref">§A15.5, p.258</td></tr>
+    <tr><td>Too many entries flushed in a guest-heavy system</td><td>16-bit VMIDs sent to an 8-bit receiver, or ACVMIDEXT not connected.</td><td class="ref">p.238–239 · Table A15.17, p.249</td></tr>
+    <tr><td>Bypass traffic stuck behind a table walk</td><td>Physical and virtual requests sharing an ID.</td><td class="ref">§A13.7, p.217</td></tr>
+    <tr><td>All physical requests translated after upgrade to v3</td><td>AxMMUVALID assumed to default LOW; the default is 1.</td><td class="ref">Table A13.2, p.207 · Table B4.3, p.311</td></tr>
+  </tbody></table></div>
+</div></section>
+
+<section id="changes"><div class="wrap">
+  <h2>13 · What changed from Issue H.c to Issue L</h2>
+  <div class="tbl-wrap cmp"><table>
+    <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AMBA 5 / ACE</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>Untranslated versions</td><td class="then">v1 and v2 only.</td><td>v3 adds AxMMUVALID (Issue J); v4 adds PM and PASUNKNOWN for GDI and PCIe XT (Issue L).</td><td class="ref">H.c §E1.9, p.E1-369 · Table B4.1, p.307 · Table B4.3, p.311</td></tr>
+      <tr><td>SECSID</td><td class="then">1 bit: Non-secure or Secure.</td><td>Up to 2 bits, adding Realm.</td><td class="ref">H.c Table E1-13, p.E1-370 · Table A13.4, p.209</td></tr>
+      <tr><td>PCIe and ATST</td><td class="then">All PCIe requests Non-secure; with ATST, SECSID LOW and SSIDV LOW.</td><td>Non-secure or Realm; from v3, SSIDV may be HIGH with ATST to carry the PASID.</td><td class="ref">H.c §E1.9.3, p.E1-371 · p.E1-374 · §A13.5, p.212 · §A13.6.2, p.215</td></tr>
+      <tr><td>Translation hints</td><td class="then">StashTranslation only, for virtual addresses.</td><td>UnstashTranslation added (Issue J); both extended to Granule Protection Table entries (Issue K).</td><td class="ref">H.c §E1.9.7, p.E1-374 · Table B4.1, p.307 · Table B4.2, p.310</td></tr>
+      <tr><td>Who can send DVM messages</td><td class="then">ACE Managers could initiate them on AR (ARSNOOP 0b1111); "Bidirectional" was the default on ACE interfaces.</td><td>Receiver only; Bidirectional deprecated. Messages originate elsewhere (typically CHI) and reach AXI on AC.</td><td class="ref">H.c §D13.1–D13.2, p.D13-318–319 · Table A15.1, p.233</td></tr>
+      <tr><td>Snoop channel signals</td><td class="then">ACSNOOP (1111 message, 1110 Complete), ACPROT, CRRESP; CRRESP 0b00010 meant "can't perform".</td><td>ACSNOOP, ACPROT and CRRESP no longer required; a response only acknowledges receipt.</td><td class="ref">H.c Table D13-2 and §D13.2.5, p.D13-321–322 · §B2.1.3, p.287 · §A15.4.1, p.249</td></tr>
+      <tr><td>DVM versions</td><td class="then">DVM_v8, v8.1; v8.4 only on ACE5-LiteDVM.</td><td>DVM_v9.2 added (Realm and GPT messages, Issue J).</td><td class="ref">H.c §D13.3.1, p.D13-323 · Table A15.2, p.233 · Table B4.1, p.307</td></tr>
+      <tr><td>DVM Complete ARSIZE</td><td class="then">Equal to the data bus width.</td><td>Data width, or Max_Transaction_Bytes if smaller (Issue L).</td><td class="ref">H.c Table D13-2, p.D13-321 · Table A15.23, p.259 · Table B4.3, p.312</td></tr>
+      <tr><td>Coherency Connection</td><td class="then">Connected a Manager to snoops and DVM (ACE5, ACE5-LiteDVM); rules about cached coherent lines.</td><td>DVM only, with rules about translation table data; the SYSCOACK/ACVALID race is spelled out.</td><td class="ref">H.c §E1.8, p.E1-364–365 · §A15.6, p.260–262</td></tr>
+      <tr><td>Ordering on AC/CR</td><td class="then">Not stated outright.</td><td>Clarified in Issue K: AC and CR are ordered.</td><td class="ref">Table B4.2, p.310 · §A15.4.1, p.250</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>14 · Verification</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Assertions</h3><ul class="tight" style="font-size:14.5px">
+      <li>AxMMUSSIDV LOW → AxMMUSSID zero. <span class="ref">§A13.4.3, p.210</span></li>
+      <li>SECSID/PAS pairs and the full combination table. <span class="ref">§A13.4.1, p.209 · Table A13.14, p.218</span></li>
+      <li>AxMMUVALID HIGH → AxTAGOP Invalid; no ID shared between in-flight virtual and physical requests. <span class="ref">§A13.7, p.217</span></li>
+      <li>TRANSFAULT only if the request's flow was PRI, and then on all beats. <span class="ref">§A13.6.4, p.216</span></li>
+      <li>Stash/UnstashTranslation: no W beats, stash target LOW, ID rules. <span class="ref">§A13.9–A13.10, p.219–221</span></li>
+      <li>AC: second part directly follows a first part with Addr = 1; reserved bits zero; ASID/VMID zero when their valid bit is LOW. <span class="ref">§A15.4, p.248 · Table A15.3, p.234</span></li>
+      <li>CRVALID only after an AC handshake; responses counted in order. <span class="ref">§A15.4.2, p.250</span></li>
+      <li>DVM Complete: every field of Table A15.23; exactly one per Sync, none without. <span class="ref">§A15.5, p.258–259</span></li>
+      <li>SYSCOREQ/SYSCOACK four-phase rules; no ACVALID in Disabled or Connect. <span class="ref">§A15.6.1, p.261–262</span></li></ul>
+      <pre style="font-size:12px;overflow-x:auto;background:var(--code);padding:10px;border-radius:8px;margin:10px 0 0"><code>// Subordinate changes SYSCOACK only when REQ is opposite
+assert property (@(posedge ACLK) disable iff (!ARESETn)
+  $changed(SYSCOACK) |-> $past(SYSCOREQ) != $past(SYSCOACK));
+// No DVM request unless the connection is Enabled or Disconnect
+assert property (@(posedge ACLK) disable iff (!ARESETn)
+  $rose(ACVALID) |-> SYSCOACK);</code></pre>
+      <p class="src"><span class="kind illus">Illustrative</span> sketch; the second check assumes a synchronous connection.</p></div>
+    <div class="card"><h3>Scenarios and coverage</h3><ul class="tight" style="font-size:14.5px">
+      <li>Each fault flow × fault / no fault × read / write; PRI retry after TRANSFAULT; Stall with long latency.</li>
+      <li>Mixed virtual and physical traffic on one interface (v3), including StashTranslation with a PA.</li>
+      <li>Every TLBI row your DVM version supports, one-part and two-part, range and non-range; 8-bit and 16-bit ASID/VMID.</li>
+      <li>Sync while reads and writes are outstanding; several Syncs before the first Complete; messages arriving between Sync and Complete.</li>
+      <li>Back-pressure on ACREADY between the two parts; CRREADY held LOW.</li>
+      <li>Connect and disconnect with a message racing SYSCOACK; disconnect with a Complete still owed; disconnect in the middle of a two-part message.</li>
+      <li>Scoreboard: after DVM Complete, no later downstream request may use a translation invalidated before the Sync.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> · rules from Chapters A13 and A15</p></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>15 · Test yourself</h2>
+  <p class="sub"><button class="btn" id="qa-toggle" type="button" aria-pressed="false">Show all answers</button></p>
+  <details><summary>What is an untranslated transaction, and who translates it? <span class="lvl">Basic</span></summary><div><p>An AXI request whose address is virtual (or intermediate physical). A System MMU between the Manager and the rest of the system translates it to a physical address, using the AxMMU fields to choose the translation.</p><p class="src"><span class="sl">Spec</span>§A13.1–A13.2, p.205–206</p></div></details>
+  <details><summary>What do SID and SSID map to for PCIe? <span class="lvl">Basic</span></summary><div><p>SID is the Requester ID and SSID is the PASID. SSIDV is HIGH when the transaction had a PASID prefix.</p><p class="src"><span class="sl">Spec</span>§A13.5, p.212</p></div></details>
+  <details><summary>Which channels carry a DVM message, and in which direction? <span class="lvl">Basic</span></summary><div><p>The request goes on AC from the Subordinate interface (usually an interconnect) to the Manager; the acknowledgement returns on CR. That is the opposite direction to ordinary requests.</p><p class="src"><span class="sl">Spec</span>§A15.1, p.232 · §A15.4, p.248</p></div></details>
+  <details><summary>Name the four fault flows and what each returns on a fault. <span class="lvl">Intermediate</span></summary><div><p>Stall: SLVERR, OKAY with RAZ/WI, or a stall, as software configures. ATST: SLVERR. NoStall: SLVERR or OKAY, never a stall. PRI: TRANSFAULT on all beats (or SLVERR if a page request can't help).</p><p class="src"><span class="sl">Spec</span>§A13.6, p.214–216</p></div></details>
+  <details><summary>What does AxMMUVALID LOW mean, and what is its default? <span class="lvl">Intermediate</span></summary><div><p>The address is physical and needs no translation; the other AxMMU fields don't apply. The default is 1, so an interface without the signal is treated as always untranslated.</p><p class="src"><span class="sl">Spec</span>Table A13.2, p.207 · §A13.7, p.217</p></div></details>
+  <details><summary>What is the difference between the CR response to a Sync and DVM Complete? <span class="lvl">Intermediate</span></summary><div><p>CR only says the Sync was received, and must come without waiting for other traffic. DVM Complete, sent later on AR, says all earlier invalidations have taken effect and every transaction that could have used the old translations has finished.</p><p class="src"><span class="sl">Spec</span>§A15.5, p.258</p></div></details>
+  <details><summary>Why does a message with an address need two AC transfers, and how does the receiver know? <span class="lvl">Intermediate</span></summary><div><p>ACADDR isn't wide enough for the control fields, ASID, VMID and a VA of up to 57 bits together. The first transfer has Addr (ACADDR[0]) set, so the receiver knows the next AC transfer is the second part.</p><p class="src"><span class="sl">Spec</span>§A15.4, p.248 · Table A15.20, p.252–253 · <span class="kind derived">Derived</span> width reasoning</p></div></details>
+  <details><summary>A 16-bit-VMID hypervisor sends a TLBI to an SMMU that implements 8-bit VMIDs. What happens? <span class="lvl">Advanced</span></summary><div><p>The SMMU ignores VMID[15:8]. If those bits were non-zero it invalidates entries for every VM sharing the low byte: over-invalidation, which is correct but costs performance.</p><p class="src"><span class="sl">Spec</span>p.238–239</p></div></details>
+  <details><summary>The interconnect drops SYSCOACK while the Manager still owes a DVM Complete. Is that legal, and what must the Manager do? <span class="lvl">Advanced</span></summary><div><p>Legal. The Manager must still send the DVM Complete on AR even though DVM messages are now disabled.</p><p class="src"><span class="sl">Spec</span>§A15.6.1, p.262</p></div></details>
+  <details><summary>List the constraints on a DVM Complete request. <span class="lvl">Advanced</span></summary><div><p>ARSNOOP 0b1110, ARADDR 0, INCR, one transfer, ARSIZE = data width or Max_Transaction_Bytes if smaller, Shareable, ARCACHE 0b0010, ARID not shared with an outstanding non-Complete read, and ARCHUNKEN, ARLOCK, ARTAGOP, ARMMUVALID, ARMMUATST, ARMMUFLOW all zero.</p><p class="src"><span class="sl">Spec</span>Table A15.23, p.259</p></div></details>
+  <details><summary>Compute the range of a TLBI with TG = 4KB, Scale = 1, Num = 3. <span class="lvl">Advanced</span></summary><div><p>(3+1) × 2^(5×1+1) × 4KB = 4 × 64 × 4KB = 1 MB starting at the base VA.</p><p class="src"><span class="sl">Spec</span>range formula, p.242 · <span class="kind derived">Derived</span></p></div></details>
+  <details><summary>Why may a StashTranslation not share an ID with other outstanding writes? <span class="lvl">Advanced</span></summary><div><p>So there are no ordering constraints between the hint and real writes. A Subordinate that doesn't stash translations can then answer at once without tracking other transactions.</p><p class="src"><span class="sl">Spec</span>§A13.9, p.219</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>16 · Spec reference index</h2>
+  <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A13.1, Figure A13.1</td><td>Introduction to Distributed Virtual Memory</td><td class="num">205</td><td>1, 2, 11, 15</td></tr>
+    <tr><td>§A13.2–A13.3, Tables A13.1–A13.3</td><td>Support and signaling for untranslated transactions</td><td class="num">206–208</td><td>1, 3, 4, 12, 15</td></tr>
+    <tr><td>§A13.4, Tables A13.4–A13.8</td><td>Translation identifiers; GDI</td><td class="num">209–211</td><td>3, 4, 10, 12, 14</td></tr>
+    <tr><td>§A13.5, Tables A13.9–A13.11</td><td>PCIe considerations; XT mode</td><td class="num">212–213</td><td>3, 4, 10, 15</td></tr>
+    <tr><td>§A13.6, Tables A13.12–A13.13</td><td>Translation fault flows</td><td class="num">214–216</td><td>3, 5, 10, 11, 14, 15</td></tr>
+    <tr><td>§A13.7</td><td>Untranslated transaction qualifier</td><td class="num">217</td><td>3, 4, 10, 11, 12, 14, 15</td></tr>
+    <tr><td>§A13.8, Table A13.14</td><td>Permitted combinations of MMU signals and PAS</td><td class="num">218</td><td>6, 14</td></tr>
+    <tr><td>§A13.9–A13.10, Tables A13.15–A13.16</td><td>StashTranslation and UnstashTranslation</td><td class="num">219–221</td><td>3, 6, 11, 14, 15</td></tr>
+    <tr><td>§A15.1–A15.2, Tables A15.1–A15.2</td><td>Introduction; support for DVM messages</td><td class="num">232–233</td><td>1, 2, 3, 7, 13, 15</td></tr>
+    <tr><td>§A15.3, Tables A15.3–A15.16</td><td>DVM messages and fields</td><td class="num">234–247</td><td>7, 10, 12, 14, 15</td></tr>
+    <tr><td>§A15.4, Tables A15.17–A15.22</td><td>Transporting DVM messages; field mappings</td><td class="num">248–257</td><td>2, 3, 7, 10, 11, 12, 13, 14, 15</td></tr>
+    <tr><td>§A15.5, Table A15.23</td><td>DVM Sync and Complete</td><td class="num">258–259</td><td>8, 10, 11, 12, 13, 14, 15</td></tr>
+    <tr><td>§A15.6, Tables A15.24–A15.26</td><td>Coherency Connection signaling</td><td class="num">260–262</td><td>3, 9, 10, 11, 12, 13, 14, 15</td></tr>
+    <tr><td>§A15.7, Table A15.27</td><td>Snoop channels credit control</td><td class="num">263</td><td>3, 9</td></tr>
+    <tr><td>§A14.1.2–A14.1.3</td><td>AWAKEUP and Coherency Connection; ACWAKEUP</td><td class="num">224</td><td>3, 9, 11</td></tr>
+    <tr><td>Table A3.31</td><td>RRESP encodings (TRANSFAULT)</td><td class="num">63</td><td>10, 11</td></tr>
+    <tr><td>§B2.1.3</td><td>ACE5-LiteDVM</td><td class="num">287</td><td>13</td></tr>
+    <tr><td>Tables B4.1–B4.3</td><td>Revisions</td><td class="num">307–312</td><td>10, 12, 13</td></tr>
+  </tbody></table></div>
+  <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§D13.1–D13.3, Table D13-2</td><td>Distributed Virtual Memory Transactions (ACE)</td><td class="num">D13-318–D13-323</td><td>13</td></tr>
+    <tr><td>§E1.8</td><td>Coherency Connection signaling</td><td class="num">E1-364–E1-365</td><td>13</td></tr>
+    <tr><td>§E1.9, Table E1-13</td><td>Untranslated Transactions</td><td class="num">E1-369–E1-375</td><td>13</td></tr>
+  </tbody></table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from ARM IHI 0022 Issue L, Chapters A13 and A15, with §A14.1 and Appendix B; comparisons from Issue H.c Chapter D13 and §E1.8–E1.9. For sign-off, check the spec at the cited page.</div></footer>

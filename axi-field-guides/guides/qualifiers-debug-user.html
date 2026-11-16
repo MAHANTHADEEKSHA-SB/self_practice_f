@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXI Qualifiers, Debug &amp; User Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* AXI field guides. Color encodes who drives a signal: amber = Manager (class lp), teal = Subordinate (class pl),
+   violet = credits, interface-level signals and annotations (class sb). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+
+/* ---- AXI additions ---- */
+.ver { display:inline-block; font-family:var(--font-mono); font-size:10.5px; line-height:16px; padding:0 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; vertical-align:1px; }
+.ver.new { color:var(--pl); border-color:var(--pl); }
+.ver.old { color:var(--lp); border-color:var(--lp); }
+.ver.gone { color:var(--bad); border-color:var(--bad); }
+.cmp td:first-child { font-weight:500; min-width:150px; }
+.cmp td.then { color:var(--muted); }
+.dep text { font-family:var(--font-mono); font-size:12px; }
+.kbd { font-family:var(--font-mono); font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 5px; background:var(--code); }
+
+/* ---- phone and touch upgrades ---- */
+.calc, .tool { grid-template-columns: minmax(0, 1fr); }
+.calc > *, .tool > * { min-width: 0; }
+#wave { display: flex; align-items: flex-start; padding-left: 0; scroll-behavior: auto; }
+#wave > svg { flex: none; }
+.wfix { position: sticky; left: 0; z-index: 1; flex: none; background: var(--bg); border-right: 1px solid var(--line); }
+nav.toc a[aria-current] { background: var(--hl); color: var(--ink); font-weight: 500; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 28px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--pl); }
+.pager a small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pager a.nx { text-align: right; grid-column: 2; }
+.pager a strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.pager .all { grid-column: 1 / -1; text-align: center; font-size: 14px; padding: 10px; }
+@media (pointer: coarse) {
+  .chip, .tab, .btn, nav.toc a { min-height: 40px; display: inline-flex; align-items: center; }
+  .dot { min-width: 38px; min-height: 38px; }
+  summary { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (max-width: 640px) {
+  .hero { padding-top: 18px; padding-bottom: 16px; }
+  .lede { font-size: 15.5px; }
+  .series { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px 14px; padding: 6px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .series::-webkit-scrollbar { display: none; }
+  .series > * { flex: none; }
+  figure { overflow-x: auto; }
+  figure svg { min-width: 560px; max-width: none; }
+  figure svg.dep, figure svg.lmap { min-width: 700px; }
+  figcaption { position: sticky; left: 0; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: auto; }
+  table.stack tr { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  table.stack td:empty { display: none; }
+  table.stack td::before { content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+  table.stack td:first-child { font-size: 15px; font-weight: 600; }
+  table.stack td:first-child::before { display: none; }
+  table.stack caption { display: block; }
+  table.stack td.dir, table.stack td.dir + td { display: inline-block; margin-right: 10px; vertical-align: middle; }
+  table.stack td.dir::before, table.stack td.dir + td::before { display: none; }
+  .pager { grid-template-columns: 1fr; }
+  .pager a.nx { grid-column: 1; text-align: left; }
+  .bitfield { grid-auto-columns: minmax(22px, 1fr); overflow-x: auto; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>AXI Field Guides (Issue L):</span><a href="../index.html"><strong>All guides</strong></a><a href="channels-handshake.html">Channels &amp; Handshake</a><a href="bursts-addressing.html">Bursts &amp; Addressing</a><a href="request-attributes.html">Request Attributes</a><a href="ids-ordering.html">IDs &amp; Ordering</a><a href="responses-exclusives-atomics.html">Responses, Exclusives &amp; Atomics</a><a href="caches-cmos.html">Caches &amp; CMOs</a><span class="here">Qualifiers, Debug &amp; User</span><a href="untranslated-dvm.html">Untranslated &amp; DVM</a><span title="coming soon" style="opacity:.55">Power, Reset &amp; Protection</span><span title="coming soon" style="opacity:.55">Signals &amp; Interface Classes</span><span title="coming soon" style="opacity:.55">Interconnect &amp; Bridges</span><span title="coming soon" style="opacity:.55">AXI-Stream</span></div>
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapters A10, A11, A12 · extra request qualifiers, special writes, system features</div>
+    <h1>AXI Qualifiers, Debug &amp; User Field Guide</h1>
+    <p class="lede">Around the core protocol sits a set of optional features that carry system information with a request or add special write types. This guide covers NSAID, PBHA, Subsystem ID and Arm Compression Technology, WriteZero and WriteDeferrable, MPAM, the Memory Tagging Extension, Trace, Loopback and User signals. It includes an MPAM field packer, waveforms, verification checks, interview questions and what changed since AXI4.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ and p. = section and printed page of ARM IHI 0022 <strong>Issue L</strong>. "H.c" = Issue H.c, where most of these were AMBA 5 features in Part E. Tags: <span class="kind spec">Spec</span> <span class="kind derived">Derived</span> <span class="kind illus">Illustrative</span> <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#map">2 · Feature map</a><a href="#signals">3 · Signals</a><a href="#qual">4 · Qualifiers</a><a href="#writes">5 · Other writes</a><a href="#mpam">6 · MPAM</a><a href="#mte">7 · MTE</a><a href="#dbg">8 · Trace, Loopback, User</a><a href="#rationale">9 · Why each rule</a><a href="#live">10 · Live scenarios</a><a href="#silicon">11 · Real silicon</a><a href="#changes">12 · AXI4 → Issue L</a><a href="#verify">13 · Verification</a><a href="#quiz">14 · Test yourself</a><a href="#refs">15 · Spec index</a>
+</div></nav>
+
+<style>
+  .tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; }
+  .tool .in { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+  .tool label { display: grid; gap: 4px; font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .tool select, .tool input[type=number] { font-family: var(--font-mono); font-size: 14px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 110px; }
+  .tool label.cb { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+</style>
+
+<main>
+<section id="why"><div class="wrap">
+  <h2>1 · Why these extras exist</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Isolation</div><h3>Who is asking, not just where</h3><p>NSAID and Subsystem ID let firewalls tell Non-secure clients apart, beyond the address space.</p><p class="src"><span class="sl">Spec</span>§A10.1, p.175 · §A10.3, p.178</p></div>
+    <div class="card"><div class="tagline">Efficiency</div><h3>Don't send what you don't need</h3><p>WriteZero sends no data; ACT sends uncompressed data to a shared codec; WriteDeferrable lets accelerators refuse work instead of blocking.</p><p class="src"><span class="sl">Spec</span>§A10.4, p.179 · Chapter A11, p.183–186</p></div>
+    <div class="card"><div class="tagline">Platform features</div><h3>Arm architecture extensions on the bus</h3><p>MPAM (resource partitioning) and MTE (memory tagging) need the bus to carry their information end to end.</p><p class="src"><span class="sl">Spec</span>§A12.1–A12.2, p.187–198</p></div>
+    <div class="card"><div class="tagline">Debug and integration</div><h3>Hooks that cost little</h3><p>Trace follows a transaction, Loopback speeds up response lookup, User signals cover what nothing else does (but use them sparingly).</p><p class="src"><span class="sl">Spec</span>§A12.3–A12.5, p.199–203</p></div>
+  </div>
+</div></section>
+
+<section id="map"><div class="wrap">
+  <h2>2 · Feature map</h2>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Chapters A10–A12, p.175–203. Every feature is optional and off by default.</caption>
+    <thead><tr><th>Feature</th><th>Channels</th><th>Signals</th><th>Enabled by</th><th>Section</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>NSAID</td><td>AW, AR</td><td>AxNSAID[3:0]</td><td>NSAccess_Identifiers</td><td class="ref">§A10.1, p.175</td></tr>
+      <tr><td>PBHA</td><td>AW, AR</td><td>AxPBHA[3:0]</td><td>PBHA_Support</td><td class="ref">§A10.2, p.177</td></tr>
+      <tr><td>Subsystem ID</td><td>AW, AR</td><td>AxSUBSYSID[0–8 bits]</td><td>SUBSYSID_WIDTH</td><td class="ref">§A10.3, p.178</td></tr>
+      <tr><td>Arm Compression Technology</td><td>AW, AR</td><td>AxACTV, AxACT[16–32]</td><td>ACT_Support (AXI5 only)</td><td class="ref">§A10.4, p.179–181</td></tr>
+      <tr><td>WriteZero</td><td>AW, B</td><td>AWSNOOP 0111</td><td>WriteZero_Transaction</td><td class="ref">§A11.1, p.183</td></tr>
+      <tr><td>WriteDeferrable</td><td>AW, W, B</td><td>AWSNOOP 10000, BRESP DEFER/UNSUPPORTED</td><td>WriteDeferrable_Transaction</td><td class="ref">§A11.2, p.184–186</td></tr>
+      <tr><td>MPAM</td><td>AW, AR</td><td>AxMPAM[11–15 bits]</td><td>MPAM_Support</td><td class="ref">§A12.1, p.187–189</td></tr>
+      <tr><td>MTE</td><td>AW, W, B, AR, R</td><td>AxTAGOP, WTAG, RTAG, WTAGUPDATE, BTAGMATCH, BCOMP</td><td>MTE_Support</td><td class="ref">§A12.2, p.190–198</td></tr>
+      <tr><td>Trace</td><td>all five</td><td>xTRACE</td><td>Trace_Signals</td><td class="ref">§A12.3, p.199</td></tr>
+      <tr><td>Loopback</td><td>AW/B, AR/R</td><td>AxLOOP, BLOOP, RLOOP</td><td>Loopback_Signals</td><td class="ref">§A12.4, p.200–201</td></tr>
+      <tr><td>User</td><td>all five</td><td>AxUSER, WUSER, BUSER, RUSER</td><td>USER_*_WIDTH</td><td class="ref">§A12.5, p.202–203</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="signals"><div class="wrap">
+  <h2>3 · Signals and properties</h2>
+  <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead><tbody id="sigbody"></tbody></table></div>
+</div></section>
+
+<section id="qual"><div class="wrap">
+  <h2>4 · Request qualifiers</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">NSAID</div><h3>Protected Non-secure memory</h3><ul class="tight" style="font-size:14.5px">
+      <li>16 identifiers, each with its own permissions (none, RO, WO, RW) set by an MPU; mechanism IMPLEMENTATION DEFINED.</li>
+      <li>Only Non-secure PAS requests may use non-zero NSAIDs; 0 recommended when unprotected.</li>
+      <li>Caches must remember the NSAID a line was fetched with and use it for write-backs and snoop responses.</li>
+      <li>Snoop data with a different NSAID must go to memory and back through the permission check.</li>
+      <li>Invalidate-only snoops (MakeInvalid) must be replaced by clean-and-invalidate when memory protection is used.</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A10.1, p.175–176</p></div>
+    <div class="card"><div class="tagline">PBHA, Subsystem ID, ACT</div><h3>More context per request</h3><ul class="tight" style="font-size:14.5px">
+      <li><strong>PBHA:</strong> 4 bits from a translation-table entry; meaning IMPLEMENTATION DEFINED; may become inaccurate through merging interconnects, caches or table changes, so integrators must check every hop.</li>
+      <li><strong>Subsystem ID:</strong> 0–8 bits naming the originating subsystem: firewalls, snoop filters, profiling. Usage not defined by the spec.</li>
+      <li><strong>ACT:</strong> WriteACT/ReadACT carry a 16–32-bit payload to an external compression codec. INCR, Device, System, ADDR[13:0] = 0, full-width when Length &gt; 1, unique ID, DATA_WIDTH ≥ 128, untranslated. Size and Length must never change on the way.</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A10.2–A10.4, p.177–181</p></div>
+  </div>
+</div></section>
+
+<section id="writes"><div class="wrap">
+  <h2>5 · Other write transactions</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">WriteZero</div><h3>Zero a line with no data</h3><ul class="tight" style="font-size:14.5px"><li>AW + B only; line sized and Regular.</li><li>AWSNOOP 0b0111, not exclusive, no tag op, unique ID.</li><li>Any Domain; Shareable behaves as WriteUniqueFull with zeros.</li><li>A Manager that issues it can't connect to a Subordinate without support.</li></ul><p class="src"><span class="sl">Spec</span>§A11.1, p.183</p></div>
+    <div class="card"><div class="tagline">WriteDeferrable</div><h3>A 64-byte store that may be refused</h3><ul class="tight" style="font-size:14.5px"><li>AWSNOOP 0b10000 (5-bit), BRESP 3-bit, System Domain, Device or Normal Non-cacheable.</li><li>64 bytes as 1×64, 2×32, 4×16, 8×8 or 16×4; 64-byte aligned; all strobes; INCR.</li><li>64-byte atomic: never split or merged; only to locations with 64-byte single-copy atomicity.</li><li>Responses: OKAY, SLVERR, DECERR, DEFER (try later), UNSUPPORTED; never EXOKAY. Maps to PCIe DMWr.</li></ul><p class="src"><span class="sl">Spec</span>§A11.2, p.184–186</p></div>
+  </div>
+</div></section>
+
+<section id="mpam"><div class="wrap">
+  <h2>6 · MPAM</h2>
+  <p class="sub">Each request carries a partition ID (PARTID), a performance monitor group (PMG) and a security or address-space field. Memory-system components use them to partition and monitor caches and bandwidth per VM or application.</p>
+  <div class="tool">
+    <div class="in">
+      <label>MPAM_Support<select id="m-sup"><option value="9">MPAM_9_1</option><option value="12" selected>MPAM_12_1</option></select></label>
+      <label class="cb"><input type="checkbox" id="m-rme"> RME_Support</label>
+      <label><span id="m-spl">MPAM_NS (1 bit)</span><input type="number" id="m-sp" value="1" min="0" max="3"></label>
+      <label>PARTID<input type="number" id="m-part" value="37" min="0" max="4095"></label>
+      <label>PMG<input type="number" id="m-pmg" value="1" min="0" max="1"></label>
+    </div>
+    <div class="bitfield" id="m-bits"></div>
+    <p id="m-out" style="margin:0;font-size:14.5px"></p>
+    <p class="src"><span class="sl">Spec</span>Tables A12.1–A12.6, p.187–188 · <span class="kind derived">Derived</span> encoding</p>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="k">Managers</div><p style="font-size:14.5px">Drive MPAM when AxVALID is HIGH; values IMPLEMENTATION DEFINED. A non-MPAM Manager in an MPAM system gets values added by the system, for example the PAS copied into the low bits.</p><p class="src"><span class="sl">Spec</span>§A12.1.3, p.189</p></div>
+    <div class="card"><div class="k">Interconnects</div><p style="font-size:14.5px">MPAM IDs are global; no need to make them unique. Propagate them or substitute IMPLEMENTATION DEFINED values.</p><p class="src"><span class="sl">Spec</span>§A12.1.3, p.189</p></div>
+    <div class="card"><div class="k">Subordinates</div><p style="font-size:14.5px">Sample MPAM with AxVALID and use it for partitioning (cache ways, bandwidth) and monitoring.</p><p class="src"><span class="sl">Spec</span>§A12.1.3, p.189</p></div>
+  </div>
+</div></section>
+
+<section id="mte"><div class="wrap">
+  <h2>7 · Memory Tagging Extension</h2>
+  <p class="sub">Every 16 bytes of memory has a 4-bit Allocation Tag. Pointers carry a Physical Tag. MTE on AXI moves tags with data, updates them, and checks them.</p>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A12.10, p.193 · Table A12.12, p.194</caption>
+      <thead><tr><th>TagOp</th><th>Read (ARTAGOP)</th><th>Write (AWTAGOP)</th></tr></thead>
+      <tbody style="font-size:13.5px">
+        <tr><td class="mono">00</td><td>Invalid: no tags, RTAG zero</td><td>Invalid: no tag work</td></tr>
+        <tr><td class="mono">01</td><td>Transfer: a tag with every beat, every granule touched</td><td>Transfer: tags are Clean, may be cached</td></tr>
+        <tr><td class="mono">10</td><td>Reserved</td><td>Update: tags Dirty, write those flagged in WTAGUPDATE</td></tr>
+        <tr><td class="mono">11</td><td>Fetch: tags only, data not valid; line sized and Regular</td><td>Match: compare with stored tags; data written even if it fails; two-part response</td></tr>
+      </tbody></table></div>
+    <div class="card"><h3>Rules when tags travel</h3><ul class="tight" style="font-size:14.5px">
+      <li>≤ a cache line, no line crossing; physical address (AxMMUVALID LOW); INCR or WRAP.</li>
+      <li>Normal Write-Back: AxCACHE[1:0] = 11, [3:2] ≠ 00.</li>
+      <li>Unique in-flight ID for reads with Transfer/Fetch and writes with Transfer/Update/Match.</li>
+      <li>Tags cached coherently like data (Invalid, Clean, Dirty); tags valid only when data is; dirty tags written back even on MakeInvalid/ROMI.</li>
+      <li>Support levels: Standard (all), Simplified (no Match, no partial tag writes), Basic (limited ops). Not with DATA_WIDTH ≤ 32.</li>
+      <li>Non-tagging memory: data handled normally, tags dropped, RTAG zero, one combined Match response.</li>
+      <li>Atomics may use Match only; their RTAG is not valid.</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A12.2.1–A12.2.8, p.190–197</p></div>
+  </div>
+</div></section>
+
+<section id="dbg"><div class="wrap">
+  <h2>8 · Trace, Loopback and User</h2>
+  <div class="grid g3">
+    <div class="card"><div class="tagline">Trace</div><p style="font-size:14.5px">One bit per channel. Recommended: echo the request's trace bit on every response transfer (and a clear bit for untraced requests), preserve it through pass-through components, propagate WTRACE; for Atomics, RTRACE follows AWTRACE. Use is coordinated system-wide.</p><p class="src"><span class="sl">Spec</span>§A12.3, p.199 · Table B4.3, p.312</p></div>
+    <div class="card"><div class="tagline">Loopback</div><p style="font-size:14.5px">0–8 bits per direction. BLOOP = AWLOOP (on the Completion if BCOMP exists), RLOOP = ARLOOP on every beat, and RLOOP = AWLOOP for Atomics. Not unique; intermediates may swap in their own values and restore them.</p><p class="src"><span class="sl">Spec</span>§A12.4, p.200–201</p></div>
+    <div class="card"><div class="tagline">User</div><p style="font-size:14.5px">Recommended to avoid. Request 0–128, data 0–512, response 0–16 bits (guidance). RUSER = data part + response part. Recommended: data width a multiple of the byte lanes, response bits constant per transaction, response info in low RUSER bits.</p><p class="src"><span class="sl">Spec</span>§A12.5, p.202–203</p></div>
+  </div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>9 · Why each rule exists, with real-time examples</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="q"><div class="meta"><span>Qualifiers</span><span>§A10.1.2 p.176</span></div><h3>A cached line remembers its NSAID</h3><p class="rule">Write-backs and snoop responses must use the NSAID the line was fetched with.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Otherwise a client could read protected data under one NSAID and have it written back, or forwarded to another client, under a different one, bypassing the MPU.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DRM video decoder (NSAID 5) reads a protected frame; the line is later evicted. The write-back must carry NSAID 5 so the MPU checks it against the protected region's rules.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Protected content leaks through the cache.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A10.1.2, p.176</li><li><span class="kind illus">Illustrative</span>DRM example</li></ul></div></article>
+
+    <article class="wcard" data-g="q"><div class="meta"><span>Qualifiers</span><span>§A10.4.3 p.181</span></div><h3>ACT requests never change shape</h3><p class="rule">An ACT transaction must never have its Size or Length changed, even where Non-modifiable transactions normally may be.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The ACT payload describes exactly this transaction's Size and Length for the codec. Splitting or narrowing it would leave the codec with a payload that no longer matches the data.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 256-byte ReadACT on a 128-bit path to the codec: every link must be at least 128 bits wide and accept the burst unsplit.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Corrupted decompression; the topology must be planned for ACT.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A10.4.3, p.181</li><li><span class="kind illus">Illustrative</span>sizes</li></ul></div></article>
+
+    <article class="wcard" data-g="wr"><div class="meta"><span>Other writes</span><span>§A11.2.2 p.185</span></div><h3>WriteDeferrable is 64-byte atomic</h3><p class="rule">Never split or merged; only to locations with 64-byte single-copy atomicity.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The accelerator accepts or refuses the whole descriptor. Half a descriptor accepted and half deferred would corrupt its queue.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A crypto accelerator's submission portal behind a CXL/PCIe link takes one 64-byte work descriptor per write; DEFER means the queue was full, so software retries.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Torn descriptors, which an accelerator might execute.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A11.2, p.184–185</li><li><span class="kind illus">Illustrative</span>accelerator</li></ul></div></article>
+
+    <article class="wcard" data-g="wr"><div class="meta"><span>Other writes</span><span>§A11.1 p.183</span></div><h3>WriteZero needs a supporting Subordinate</h3><p class="rule">A Manager that issues WriteZero can't be connected to a Subordinate that doesn't support it.</p>
+      <div class="part"><span class="l l-why">Why</span><p>There is no data to fall back on. A Subordinate that ignored AWSNOOP would see a write with no W beats and wait forever, or write garbage.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An interconnect in front of a legacy SRAM converts WriteZero into a normal write with 4 W beats of zeros.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A hung W channel at the legacy Subordinate.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A11.1, p.183</li><li><span class="kind bg">Background</span>conversion</li></ul></div></article>
+
+    <article class="wcard" data-g="mte"><div class="meta"><span>MTE &amp; MPAM</span><span>§A12.2.6 p.194–196</span></div><h3>Match writes the data anyway</h3><p class="rule">With AWTAGOP Match, memory is updated even when the tags don't match; the result is reported separately.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Stores are posted; the CPU has already retired the instruction. MTE reports violations (synchronously or asynchronously at the CPU) rather than blocking the store, keeping the write path simple and fast.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A use-after-free store in Android with MTE in async mode: memory is overwritten, the Match response says Fail, the kernel later reports the fault.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Subordinate that drops data on Fail behaves differently from what software expects.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>Table A12.12, p.194</li><li><span class="kind bg">Background</span>MTE modes</li></ul></div></article>
+
+    <article class="wcard" data-g="mte"><div class="meta"><span>MTE &amp; MPAM</span><span>§A12.2.3 p.191–192</span></div><h3>Dirty tags must never be lost</h3><p class="rule">Dirty tags are written back or passed dirty when evicted, even by MakeInvalid or ReadOnceMakeInvalid.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Discarding data is sometimes acceptable (MakeInvalid), but tags define memory safety for the whole allocation. Losing them would silently disable checking.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A MakeInvalid hits a line whose data is disposable but whose tags were just updated by malloc; the tags still go to memory.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>False tag-check failures or missed violations later.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A12.2.3, p.191–192</li><li><span class="kind illus">Illustrative</span>malloc</li></ul></div></article>
+
+    <article class="wcard" data-g="dbg"><div class="meta"><span>Debug &amp; user</span><span>§A12.5 p.202</span></div><h3>Avoid User signals</h3><p class="rule">User signals are allowed but recommended against; the protocol defines no meaning for them.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Two IPs using the same USER bits for different things can't be connected without glue, and interconnects must decide what to do with USER on splits, merges and width changes.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>One vendor's DMA uses AWUSER[3:0] for a stream ID; another's system cache uses AWUSER[3:0] as an allocation hint. Connected, the DMA's stream IDs become random cache policies.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Silent misbehaviour after integration. Prefer defined features (MPAM, Subsystem ID, Loopback) where they fit.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A12.5, p.202–203</li><li><span class="kind illus">Illustrative</span>example</li></ul></div></article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>10 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+      <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+  <p style="color:var(--muted);font-size:14px">Cycle positions are illustrative.</p>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <h2>11 · Real silicon: what the theory turns into</h2>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind bg">Background</span> typical deployments.</caption>
+    <thead><tr><th>Feature</th><th>Typical producer</th><th>Typical consumer</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>NSAID</td><td>Media pipeline Managers in a protected-content flow</td><td>Memory protection unit / TrustZone address-space controller</td></tr>
+      <tr><td>Subsystem ID</td><td>Interconnect per subsystem (safety island, application cluster)</td><td>Firewalls, snoop filters, profilers</td></tr>
+      <tr><td>MPAM</td><td>CPUs (from MPAM system registers), SMMU for devices</td><td>System cache way partitioning, memory controller bandwidth regulation</td></tr>
+      <tr><td>MTE</td><td>Armv8.5+ CPUs, some DMA</td><td>System cache and memory controller with tag storage</td></tr>
+      <tr><td>WriteDeferrable</td><td>CPUs (e.g. 64-byte store instructions)</td><td>PCIe/CXL root port to accelerators</td></tr>
+      <tr><td>Trace</td><td>Debug logic, per-Manager trigger</td><td>Interconnect monitors, trace buffers</td></tr>
+    </tbody></table></div>
+  <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead><tbody>
+    <tr><td>Cache partitioning has no effect</td><td>Interconnect zeroed MPAM on one hop.</td><td class="ref">§A12.1.3, p.189</td></tr>
+    <tr><td>Tag check faults after DMA</td><td>DMA path dropped tags on a write with Update.</td><td class="ref">§A12.2.6, p.194</td></tr>
+    <tr><td>MTE Match never reports</td><td>Manager Standard connected to a Simplified Subordinate (not compatible).</td><td class="ref">Table A12.8, p.191</td></tr>
+    <tr><td>Accelerator queue corrupted</td><td>A downsizer split a WriteDeferrable.</td><td class="ref">§A11.2.2, p.185</td></tr>
+    <tr><td>Wrong response matched by a DMA</td><td>Subordinate didn't reflect AWLOOP on BLOOP.</td><td class="ref">§A12.4, p.201</td></tr>
+    <tr><td>Protected data leaks between clients</td><td>Cache wrote back with the evicting client's NSAID.</td><td class="ref">§A10.1.2, p.176</td></tr>
+  </tbody></table></div>
+</div></section>
+
+<section id="changes"><div class="wrap">
+  <h2>12 · What changed from AXI4 to Issue L</h2>
+  <div class="tbl-wrap cmp"><table>
+    <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI4 / AMBA 5 features</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>User signals</td><td class="then">Introduced in AMBA 4 (AXI4). H.c: USER_DATA_WIDTH max DATA_WIDTH/2.</td><td>Same recommendation to avoid; data guidance up to 512 bits.</td><td class="ref">H.c §A8.3, p.A8-104 · §A12.5, p.202</td></tr>
+      <tr><td>Trace, Loopback, NSAID, MPAM, MTE, WriteZero</td><td class="then">AMBA 5 optional features in Part E (not in AXI4).</td><td>Core chapters A10–A12. MPAM 12-bit PARTID option and MTE Simplified (Issue K); RME fields in MPAM.</td><td class="ref">H.c §E1.4–E1.5, §E1.10, §E1.14–E1.15, §E1.17 · Table B4.2, p.309</td></tr>
+      <tr><td>PBHA, Subsystem ID, WriteDeferrable</td><td class="then">Not present.</td><td>New in Issue J.</td><td class="ref">Table B4.1, p.307</td></tr>
+      <tr><td>Arm Compression Technology</td><td class="then">Not present.</td><td>New in Issue L (AXI5 only).</td><td class="ref">Table B4.3, p.311</td></tr>
+      <tr><td>Trace recommendation</td><td class="then">Echo trace on responses to traced requests.</td><td>Also: respond with trace LOW to untraced requests (Issue L).</td><td class="ref">Table B4.3, p.312</td></tr>
+      <tr><td>MTE details</td><td class="then">Basic and Standard support.</td><td>Simplified option (Issue K); tags only with physical addresses (Issue L); tagged transactions don't cross a line (Issue J).</td><td class="ref">Tables B4.1–B4.3</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>13 · Verification</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Assertions</h3><ul class="tight" style="font-size:14.5px">
+      <li>NSAID ≠ 0 only with Non-secure PAS. <span class="ref">§A10.1.1, p.175</span></li>
+      <li>ACT: AxSNOOP 0, INCR, Device, System, ADDR[13:0] = 0, unique ID; never resized by interconnects. <span class="ref">§A10.4, p.180–181</span></li>
+      <li>WriteZero: no W beats; line sized; unique ID. WriteDeferrable: 64 B legal shapes, aligned, all strobes, System. <span class="ref">§A11, p.183–185</span></li>
+      <li>MTE: tag ops only on legal Opcodes (Tables A12.11, A12.13); tagged transactions physically addressed, Normal WB, no line crossing; WTAGUPDATE only for Update; BTAGMATCH response pairs per Table A12.15. <span class="ref">§A12.2, p.192–197</span></li>
+      <li>Loopback: BLOOP/RLOOP equal to the request's value. <span class="ref">§A12.4, p.201</span></li></ul></div>
+    <div class="card"><h3>Scenarios and coverage</h3><ul class="tight" style="font-size:14.5px">
+      <li>WriteDeferrable: OKAY, DEFER, UNSUPPORTED, SLVERR; retry loops.</li>
+      <li>MTE Match: Completion first, Match first, combined; Pass and Fail; Atomic with Match; Subordinate without MTE.</li>
+      <li>MPAM: every support/RME combination, max PARTID, propagation through each hop.</li>
+      <li>Trace/Loop through interconnect splits and width converters.</li>
+      <li>Coverage: TagOp × Opcode × MTE_Support; NSAID values × PAS; WriteDeferrable shape × response.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> · rules from Chapters A10–A12</p></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>14 · Test yourself</h2>
+  <p class="sub"><button class="btn" id="qa-toggle" type="button" aria-pressed="false">Show all answers</button></p>
+  <details><summary>What does WriteZero save, and what does it need from the Subordinate? <span class="lvl">Basic</span></summary><div><p>All W beats of a line of zeros: only AW and B. The Subordinate must support it; a Manager that issues WriteZero can't connect to one that doesn't.</p><p class="src"><span class="sl">Spec</span>§A11.1, p.183</p></div></details>
+  <details><summary>What responses can a WriteDeferrable get, and what does DEFER mean? <span class="lvl">Basic</span></summary><div><p>OKAY, SLVERR, DECERR, DEFER, UNSUPPORTED (never EXOKAY). DEFER: not performed now, might succeed if retried.</p><p class="src"><span class="sl">Spec</span>Table A11.3, p.185</p></div></details>
+  <details><summary>Why are User signals discouraged? <span class="lvl">Basic</span></summary><div><p>The protocol defines no meaning for them, so two components may use them incompatibly, and converters can't know how to transform them.</p><p class="src"><span class="sl">Spec</span>§A12.5, p.202</p></div></details>
+  <details><summary>MPAM_12_1 with RME: how wide is AxMPAM and where is PARTID? <span class="lvl">Intermediate</span></summary><div><p>15 bits: MPAM_SP [1:0], PARTID [13:2], PMG [14].</p><p class="src"><span class="sl">Spec</span>Table A12.6, p.188</p></div></details>
+  <details><summary>What are the two responses of an MTE Match write, and can they be combined? <span class="lvl">Intermediate</span></summary><div><p>Completion (BCOMP HIGH, BTAGMATCH 01) with normal ordering, and Match (BCOMP LOW, BTAGMATCH 10 Fail or 11 Pass) with no ordering. Yes: one transfer with BCOMP HIGH and BTAGMATCH Pass or Fail.</p><p class="src"><span class="sl">Spec</span>§A12.2.6, p.196–197</p></div></details>
+  <details><summary>What must a cache do with NSAID on write-back and snoop? <span class="lvl">Intermediate</span></summary><div><p>Use the NSAID the line was fetched with. If a snoop returns data with a different NSAID than the read, write it to memory with the snoop's NSAID and re-read with the request's NSAID, passing through the permission check.</p><p class="src"><span class="sl">Spec</span>§A10.1.2, p.176</p></div></details>
+  <details><summary>Why must an ACT transaction's Size and Length never change? <span class="lvl">Advanced</span></summary><div><p>The ACT payload is specific to that Size and Length; the external codec relies on it. That's stricter than ordinary Non-modifiable transactions, which may be split if Length &gt; 16 or narrowed by downsizing.</p><p class="src"><span class="sl">Spec</span>§A10.4.3, p.181</p></div></details>
+  <details><summary>Which TagOps can an Atomic transaction use, and are its RTAGs valid? <span class="lvl">Advanced</span></summary><div><p>Only Match. Read data from an Atomic has no valid RTAG (recommended zero). A 32-byte AtomicCompare with Match uses the same tag for compare and swap halves.</p><p class="src"><span class="sl">Spec</span>§A12.2.8, p.197</p></div></details>
+  <details><summary>What happens when an MTE Match write reaches memory without tag support? <span class="lvl">Advanced</span></summary><div><p>The data is written normally and a single combined response is given (BCOMP HIGH, BTAGMATCH 10 is listed as "Match Fail or MTE Match not supported"); OKAY unless the equivalent non-MTE write would have failed.</p><p class="src"><span class="sl">Spec</span>§A12.2.7, p.197 · Table A12.15, p.197</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>15 · Spec reference index</h2>
+  <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A10.1, Tables A10.1–A10.2</td><td>Non-secure Access Identifiers</td><td class="num">175–176</td><td>1, 2, 3, 4, 9, 11, 13, 14</td></tr>
+    <tr><td>§A10.2, Tables A10.3–A10.4</td><td>Page-based Hardware Attributes</td><td class="num">177</td><td>2, 3, 4</td></tr>
+    <tr><td>§A10.3, Tables A10.5–A10.6</td><td>Subsystem Identifier</td><td class="num">178</td><td>1, 2, 3, 4</td></tr>
+    <tr><td>§A10.4, Tables A10.7–A10.10</td><td>Arm Compression Technology</td><td class="num">179–181</td><td>1, 2, 3, 4, 9, 13, 14</td></tr>
+    <tr><td>§A11.1, Table A11.1</td><td>WriteZero Transaction</td><td class="num">183</td><td>1, 2, 5, 9, 10, 14</td></tr>
+    <tr><td>§A11.2, Tables A11.2–A11.3</td><td>WriteDeferrable Transaction</td><td class="num">184–186</td><td>1, 2, 5, 9, 10, 11, 14</td></tr>
+    <tr><td>§A12.1, Tables A12.1–A12.6</td><td>MPAM</td><td class="num">187–189</td><td>1, 2, 3, 6, 11, 14</td></tr>
+    <tr><td>§A12.2, Tables A12.7–A12.15</td><td>Memory Tagging Extension</td><td class="num">190–198</td><td>1, 2, 3, 7, 9, 10, 11, 13, 14</td></tr>
+    <tr><td>§A12.3, Tables A12.16–A12.17</td><td>Trace signals</td><td class="num">199</td><td>2, 3, 8, 10</td></tr>
+    <tr><td>§A12.4, Tables A12.18–A12.20</td><td>User Loopback signaling</td><td class="num">200–201</td><td>2, 3, 8, 10, 11, 13</td></tr>
+    <tr><td>§A12.5, Tables A12.21–A12.22</td><td>User defined signaling</td><td class="num">202–203</td><td>2, 3, 8, 9, 12, 14</td></tr>
+    <tr><td>Tables B4.1–B4.3</td><td>Revisions</td><td class="num">307–312</td><td>8, 12</td></tr>
+  </tbody></table></div>
+  <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A8.3</td><td>User-defined signaling (AMBA 4)</td><td class="num">A8-104–A8-105</td><td>12</td></tr>
+    <tr><td>§E1.4, E1.5, E1.10, E1.14, E1.15, E1.17</td><td>Trace, Loopback, NSAID, MPAM, MTE, WriteZero (AMBA 5)</td><td class="num">E1-357–E1-398</td><td>12</td></tr>
+  </tbody></table></div>
+</div></section>
+<div class="wrap"><nav class="pager" aria-label="Guides"><a class="pv" href="caches-cmos.html"><small>← Previous guide</small><strong>Caches &amp; CMOs</strong></a><a class="nx" href="untranslated-dvm.html"><small>Next guide →</small><strong>Untranslated &amp; DVM</strong></a><a class="all" href="../index.html">All guides and the request map</a></nav></div></main>
+<footer><div class="wrap">Built from ARM IHI 0022 Issue L, Chapters A10–A12, with Appendix B4; comparisons from Issue H.c §A8.3 and Part E. For sign-off, check the spec at the cited page.</div></footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  function at(n, s, labels) { var a = []; for (var i = 0; i < n; i++) a.push(""); labels.forEach(function (l, k) { a[s + k] = l; }); return a; }
+
+  window.PAGE = {
+    CW: 50,
+    dirName: { lp: "Manager", pl: "Subordinate", cfg: "Property" },
+    dirCls: { cfg: "sb" },
+    groups: [["all", "All"], ["q", "Qualifiers"], ["mpam", "MPAM"], ["mte", "MTE"], ["dbg", "Trace, loop, user"], ["prop", "Properties"]],
+    sigs: [
+      ["q", "AWNSAID, ARNSAID [3:0]", "lp", "bus", "Non-secure access identifier", "Any value for Non-secure PAS; 0 for other spaces. Checked by an MPU: none / RO / WO / RW.", "Table A10.2, p.175"],
+      ["q", "AWPBHA, ARPBHA [3:0]", "lp", "bus", "Page-based hardware attributes", "4 bits from the translation table; use IMPLEMENTATION DEFINED; may degrade through the system.", "Table A10.3, p.177"],
+      ["q", "AWSUBSYSID, ARSUBSYSID", "lp", "bus", "Which subsystem a request came from", "0–8 bits. For firewalls, snoop filtering, profiling.", "Tables A10.5–A10.6, p.178"],
+      ["q", "AWACTV / AWACT, ARACTV / ARACT", "lp", "bus", "Arm Compression Technology request and payload", "AxSNOOP 0 with ACTV HIGH = WriteACT/ReadACT. Payload 16–32 bits. AXI5 only.", "Tables A10.9–A10.10, p.180"],
+      ["mpam", "AWMPAM, ARMPAM", "lp", "bus", "Partition ID, monitor group, security", "11, 12, 14 or 15 bits depending on MPAM_9_1/MPAM_12_1 and RME. Sampled with AxVALID.", "Tables A12.2–A12.6, p.187–188"],
+      ["mte", "AWTAGOP, ARTAGOP [1:0]", "lp", "bus", "Tag operation", "W: Invalid, Transfer, Update, Match. R: Invalid, Transfer, Fetch.", "Tables A12.9–A12.12, p.191–194"],
+      ["mte", "WTAG, RTAG", "lp", "bus", "4-bit Allocation Tag per 128 data bits", "ceil(DATA_WIDTH/128)×4 bits. RTAG is driven by the Subordinate. Invalid tags recommended 0.", "Table A12.9, p.191"],
+      ["mte", "WTAGUPDATE", "lp", "bus", "Which tags to write on Update", "One bit per tag; deasserted outside the container and for non-Update ops.", "Table A12.9, p.191 · §A12.2.6, p.194"],
+      ["mte", "BTAGMATCH [1:0]", "pl", "bus", "Tag match result", "00 None, 01 Separate, 10 Fail, 11 Pass.", "Table A12.14, p.196"],
+      ["dbg", "AWTRACE, WTRACE, BTRACE, ARTRACE, RTRACE", "lp", "level", "Trace this transaction", "Responses recommended to echo the request's trace bit. R and B versions driven by the Subordinate.", "Table A12.17, p.199"],
+      ["dbg", "AWLOOP / BLOOP, ARLOOP / RLOOP", "lp", "bus", "Index reflected from request to response", "0–8 bits. BLOOP = AWLOOP, RLOOP = ARLOOP (Atomics: RLOOP = AWLOOP). Need not survive end to end.", "Tables A12.19–A12.20, p.200–201"],
+      ["dbg", "AxUSER, WUSER, BUSER, RUSER", "lp", "bus", "User-defined extensions", "Avoid if possible. RUSER = data part + response part.", "Tables A12.21–A12.22, p.202"],
+      ["prop", "NSAccess_Identifiers, PBHA_Support, SUBSYSID_WIDTH, ACT_Support", "cfg", "-", "A10 feature switches", "All default off.", "p.175–179"],
+      ["prop", "WriteZero_Transaction, WriteDeferrable_Transaction", "cfg", "bool", "A11 Opcodes", "Manager True + Subordinate False is not connectable.", "Tables A11.1–A11.2, p.183–184"],
+      ["prop", "MPAM_Support, MTE_Support", "cfg", "-", "MPAM_9_1 / MPAM_12_1; MTE Basic / Simplified / Standard", "MTE needs DATA_WIDTH &gt; 32.", "Table A12.1, p.187 · Table A12.7, p.190"],
+      ["prop", "Trace_Signals, Loopback_Signals, USER_*_WIDTH", "cfg", "-", "Debug and user extensions", "USER widths 0–128 / 0–512 / 0–16 (guidance).", "Tables A12.16–A12.21, p.199–202"]
+    ],
+
+    wgroups: [["all", "All"], ["q", "Qualifiers"], ["wr", "Other writes"], ["mte", "MTE & MPAM"], ["dbg", "Debug & user"]],
+
+    scenarios: [
+      {
+        id: "wz", tab: "WriteZero", title: "WriteZero: a whole line of zeros with no data beats",
+        desc: "An OS zeroes a freshly allocated 64-byte line. WriteZero does it with one AW and one B: no W transfers at all.",
+        ref: "§A11.1, p.183",
+        n: 9, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "AWSNOOP", d: "lp", t: "bus", v: at(9, 1, ["WriteZero 0x9000"]) },
+          { name: "AWIDUNQ", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(9, []) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(9, [[4, 4]]) },
+          { name: "memory", d: "sb", t: "note", v: seq([["old", 4], ["64 × 0x00", 5]]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "One request", x: "AWSNOOP 0b0111 (or 0b00111 with a 5-bit field), line sized and Regular, not exclusive, no tag op, unique in-flight ID. Any Domain; Shareable acts like WriteUniqueFull with zero data.", s: "§A11.1, p.183" },
+          { r: [2, 4], t: "No data, one response", x: "Functionally identical to a full-strobe write of zeros, without spending W bandwidth or power.", w: "Zeroing is one of the most common write patterns from CPUs. Making it data-less saves the whole W channel traffic for it.", s: "§A11.1, p.183" }
+        ]
+      },
+      {
+        id: "wd", tab: "WriteDeferrable", title: "WriteDeferrable: queue full, DEFER, retry",
+        desc: "A CPU submits a 64-byte work descriptor to an accelerator's shared queue across a chip-to-chip link. The queue is full, so the first attempt returns DEFER and nothing is written; the retry succeeds.",
+        ref: "§A11.2, p.184–186",
+        n: 16, gaps: [7],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(16, [[1, 1], [9, 9]]) },
+          { name: "AW", d: "lp", t: "bus", v: at(16, 1, ["WriteDeferrable 64B", "", "", "", "", "", "", "", "retry"]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(16, [[1, 1], [9, 9]]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(16, [[5, 5], [13, 13]]) },
+          { name: "BRESP", d: "pl", t: "bus", v: at(16, 5, ["DEFER", "", "", "", "", "", "", "", "OKAY"]) },
+          { name: "queue", d: "sb", t: "note", v: seq([["full", 7], ["", 1], ["slot free", 8]]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "A 64-byte atomic store", x: "AWSNOOP 0b10000 (needs 5-bit AWSNOOP and 3-bit BRESP), System Domain, Device or Normal Non-cacheable, 64-byte aligned, all strobes, unique ID. Must never be split or merged.", s: "§A11.2.2, p.184–185" },
+          { r: [5, 5], t: "DEFER", x: "The queue is full: the write is not performed but might succeed later. UNSUPPORTED would mean the target can't take this type at all.", w: "This maps directly to PCIe Gen5 Deferrable Memory Write (DMWr), a non-posted write that can be refused, so accelerators can be shared without software locks.", s: "Table A11.3, p.185 · §A11.2, p.184" },
+          { r: [9, 13], t: "Retry succeeds", x: "Software resubmits; a slot is free and BRESP is OKAY.", s: "Table A11.3, p.185" }
+        ]
+      },
+      {
+        id: "mte", tab: "MTE Match", title: "Write with tag Match: two responses, Fail",
+        desc: "A store with a Physical Tag to 0x5000_0040. The memory stores the data anyway and checks the tag; the Completion and the Match result return separately. Here the tags differ.",
+        ref: "§A12.2.6, p.194–197",
+        n: 13, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(13, [[1, 1]]) },
+          { name: "AWTAGOP", d: "lp", t: "bus", v: at(13, 1, ["Match"]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(13, [[1, 1]]) },
+          { name: "WTAG", d: "lp", t: "bus", v: at(13, 1, ["0x7"]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(13, [[5, 5], [9, 9]]) },
+          { name: "BCOMP", d: "pl", t: "bit", v: bits(13, [[5, 5]]) },
+          { name: "BTAGMATCH", d: "pl", t: "bus", v: at(13, 5, ["01 Separate", "", "", "", "10 Fail"]) },
+          { name: "memory", d: "sb", t: "note", v: seq([["old data, tag 0x3", 5], ["new data, tag 0x3", 8]]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "Store with a Physical Tag", x: "AWTAGOP Match; WTAG holds the pointer's tag (0x7) for the 16-byte granule. The transaction is to Normal Write-Back memory, physically addressed, unique ID.", s: "§A12.2.4, p.192 · Table A12.12, p.194" },
+          { r: [5, 5], t: "Completion response", x: "BCOMP HIGH, BTAGMATCH 01: the write is observable. Normal ordering; the ID can be reused after it.", s: "§A12.2.6, p.196" },
+          { r: [9, 9], t: "Match response: Fail", x: "BCOMP LOW, BTAGMATCH 10. The data was still written; the CPU raises a tag-check fault. A one-part combined response with BCOMP HIGH and 10/11 is also allowed.", w: "Separate responses let a memory with separate data and tag storage answer each when ready.", s: "§A12.2.6, p.194–197 · Table A12.15, p.197" }
+        ]
+      },
+      {
+        id: "loop", tab: "Loopback", title: "Loopback: the response brings back its own table index",
+        desc: "A DMA stores per-request state in a 16-entry table and puts the entry number on AWLOOP. The Subordinate returns it on BLOOP, so the DMA can index the table directly instead of searching by ID.",
+        ref: "§A12.4, p.200–201",
+        n: 12, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(12, [[1, 2]]) },
+          { name: "AWID", d: "lp", t: "bus", v: at(12, 1, ["3", "3"]) },
+          { name: "AWLOOP", d: "lp", t: "bus", v: at(12, 1, ["0xA", "0x4"]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(12, [[6, 7]]) },
+          { name: "BLOOP", d: "pl", t: "bus", v: at(12, 6, ["0xA", "0x4"]) },
+          { name: "DMA table", d: "sb", t: "note", v: at(12, 6, ["free [10]", "free [4]"]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "Two writes, same ID, different loop values", x: "Loop values need not be unique; here they are table indices.", s: "§A12.4, p.200–201" },
+          { r: [6, 7], t: "Reflected", x: "BLOOP equals the request's AWLOOP. With BCOMP present, BLOOP only has to match on the Completion response.", w: "Matching by ID would need a CAM or per-ID queue; the loop value is a direct index, which is faster and smaller.", s: "§A12.4, p.201" },
+          { r: [3, 5], t: "Intermediates may substitute", x: "An interconnect may store the incoming AWLOOP, send its own value downstream, and restore the original on the way back.", s: "§A12.4, p.201" }
+        ]
+      },
+      {
+        id: "trace", tab: "Trace", title: "Trace: follow one transaction through the system",
+        desc: "A debugger marks one read with ARTRACE so that every component can log it. The Subordinate echoes RTRACE on every data beat.",
+        ref: "§A12.3, p.199",
+        n: 10, gaps: [],
+        sig: [
+          { name: "ARVALID", d: "lp", t: "bit", v: bits(10, [[1, 2]]) },
+          { name: "ARTRACE", d: "lp", t: "bit", v: bits(10, [[2, 2]]) },
+          { name: "RVALID", d: "pl", t: "bit", v: bits(10, [[4, 7]]) },
+          { name: "RTRACE", d: "pl", t: "bit", v: bits(10, [[6, 7]]) },
+          { name: "beat", d: "sb", t: "note", v: at(10, 4, ["a0", "a1", "b0", "b1"]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "Only b is traced", x: "ARTRACE HIGH on the second request.", s: "§A12.3, p.199" },
+          { r: [4, 7], t: "Echo on every beat of b", x: "Recommended: RTRACE HIGH on every response transfer of a traced read and LOW for untraced ones. Pass-through components preserve the bit.", w: "One bit, coordinated system-wide, lets trace and performance tools follow a single transaction through several interconnect hops.", s: "§A12.3, p.199 · Table B4.3, p.312" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact, part, plw) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = part === "wave" ? 4 : part === "labels" ? plw : (compact ? 150 : LW);
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    if (part === "labels") {
+      var ls = "<svg viewBox=\"0 0 " + lw + " " + H + "\" width=\"" + lw + "\" height=\"" + H + "\" aria-hidden=\"true\">", mc = Math.floor((lw - 14) / 7.25);
+      rows.forEach(function (r, ri) {
+        var y0 = TOP + ri * RH, mid = (y0 + 6 + y0 + RH - 7) / 2, nm = r.name;
+        if (nm.length > mc) nm = nm.slice(0, mc - 1) + "…";
+        ls += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\"><title>" + esc(r.name) + "</title>" + esc(nm) + "</text>";
+      });
+      return ls + "</svg>";
+    }
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      if (part !== "wave") s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      var longest = 0; s.sig.forEach(function (r) { longest = Math.max(longest, r.name.length); });
+      var narrow = waveEl.clientWidth && waveEl.clientWidth < 560;
+      var plw = Math.max(64, Math.min(Math.round(longest * 7.25 + 18), narrow ? Math.round(waveEl.clientWidth * 0.36) : 230));
+      waveEl.innerHTML = "<div class=\"wfix\">" + renderWave(s, null, false, "labels", plw) + "</div>" + renderWave(s, st.r, false, "wave");
+      var vis = waveEl.clientWidth - plw, a = 4 + st.r[0] * CW, b = 4 + (st.r[1] + 1) * CW;
+      if (vis > 0) waveEl.scrollLeft = (b - a >= vis) ? Math.max(0, a - 6) : Math.max(0, Math.min(a - CW * 0.6, (a + b) / 2 - vis / 2 + 0));
+      if (vis > 0 && b <= vis - 6) waveEl.scrollLeft = 0;
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { go(step); }, 150); });
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- tables: label cells so they can stack into cards on phones ---------- */
+  (function () {
+    function label(t) {
+      var ths = t.querySelectorAll("thead th"); if (!ths.length) return;
+      var heads = Array.prototype.map.call(ths, function (h) { return h.textContent.trim(); });
+      Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] !== undefined) td.setAttribute("data-label", heads[i]); });
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("table"), function (t) {
+      if (!t.tHead || t.querySelector("[rowspan],[colspan]") || t.classList.contains("nostack")) return;
+      t.classList.add("stack"); label(t);
+      if (window.MutationObserver && t.tBodies[0]) new MutationObserver(function () { label(t); }).observe(t.tBodies[0], { childList: true });
+    });
+  })();
+
+  /* ---------- section nav: mark the section being read; series nav: show the current guide ---------- */
+  (function () {
+    var here = document.querySelector(".series .here"), ser = $("series");
+    if (here && ser && ser.scrollWidth > ser.clientWidth) ser.scrollLeft = Math.max(0, here.offsetLeft - ser.offsetLeft - 60);
+    var bar = document.querySelector("nav.toc .wrap");
+    if (!bar || !window.IntersectionObserver) return;
+    var links = {}, cur = null;
+    Array.prototype.forEach.call(bar.querySelectorAll("a[href^='#']"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = links[e.target.id]; if (!a || a === cur) return;
+        if (cur) cur.removeAttribute("aria-current");
+        cur = a; a.setAttribute("aria-current", "true");
+        bar.scrollLeft = Math.max(0, a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2);
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(links).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+
+</script>
+<script>(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  if (!$("m-sup")) return;
+  function run() {
+    var sup = $("m-sup").value, rme = $("m-rme").checked;
+    var pw = sup === "12" ? 12 : 9, sw = rme ? 2 : 1, width = sw + pw + 1;
+    var partid = parseInt($("m-part").value, 10) || 0, pmg = parseInt($("m-pmg").value, 10) || 0, sp = parseInt($("m-sp").value, 10) || 0;
+    var errs = [];
+    if (partid < 0 || partid >= (1 << pw)) errs.push("PARTID must fit in " + pw + " bits (0–" + ((1 << pw) - 1) + ").");
+    if (pmg < 0 || pmg > 1) errs.push("PMG is 1 bit.");
+    if (sp < 0 || sp >= (1 << sw)) errs.push((rme ? "MPAM_SP" : "MPAM_NS") + " is " + sw + " bit" + (sw > 1 ? "s" : "") + ".");
+    $("m-spl").textContent = rme ? "MPAM_SP (2 bits)" : "MPAM_NS (1 bit)";
+    var val = (pmg << (sw + pw)) | ((partid & ((1 << pw) - 1)) << sw) | (sp & ((1 << sw) - 1));
+    var cells = "";
+    for (var b = width - 1; b >= 0; b--) {
+      var f = b === width - 1 ? "PMG" : (b >= sw ? "PARTID" : (rme ? "SP" : "NS"));
+      var cls = f === "PMG" ? "sb" : f === "PARTID" ? "lp" : "pl";
+      cells += "<div><span class=\"bn\">" + b + "</span><span class=\"f " + cls + "\">" + ((val >> b) & 1) + "</span><span class=\"bn\">" + f + "</span></div>";
+    }
+    $("m-bits").innerHTML = cells;
+    var tbl = { "9": { false: "Table A12.3", true: "Table A12.4" }, "12": { false: "Table A12.5", true: "Table A12.6" } }[sup][rme];
+    $("m-out").innerHTML = (errs.length ? "<span style=\"color:var(--bad)\">" + errs.join(" ") + "</span><br>" : "") +
+      "MPAM_WIDTH = <strong>" + width + "</strong> · AxMPAM = <span class=\"mono\">0x" + val.toString(16).toUpperCase() + "</span> · layout from " + tbl + " (p.188)" +
+      (rme ? "<br><span class=\"note-s\">With RME, MPAM_SP carries the physical address space instead of a 1-bit security flag.</span>" : "");
+  }
+  ["m-sup", "m-rme", "m-part", "m-pmg", "m-sp"].forEach(function (k) { $(k).addEventListener("input", run); $(k).addEventListener("change", run); });
+  run();
+})();
+</script>
+</body>
+</html>

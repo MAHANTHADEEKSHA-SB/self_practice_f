@@ -1,0 +1,145 @@
+<header class="top">
+  <div class="wrap hero">
+    <div class="eyebrow">AMBA AXI Protocol Specification · ARM IHI 0022 Issue L · 27 Aug 2025</div>
+    <h1>AXI Field Guides</h1>
+    <p class="lede">Twelve plain-English guides that walk the AXI spec chapter by chapter. Each one explains why a rule exists, ties every fact to a section and page, lets you step through waveforms of the flows that matter, and shows what changed from AXI3 and AXI4. Start with the request anatomy map, or jump to a topic below.</p>
+    <p class="src" style="max-width:76ch"><span class="sl">How to read them</span>Every card cites § (section) and p. (printed page) of Issue L; "H.c" marks Issue H.c, the last spec that still described AXI3 and AXI4. Tags: <span class="kind spec">Spec</span> stated in the spec, <span class="kind derived">Derived</span> worked out from spec values, <span class="kind illus">Illustrative</span> example values, <span class="kind bg">Background</span> from outside the spec.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#map">Request map</a><a href="#guides">All guides</a><a href="#versions">AXI3 → AXI4 → AXI5</a><a href="#paths">Reading paths</a><a href="#topics">Topic finder</a><a href="#notes">Spec notes</a>
+</div></nav>
+<style>
+  .lmap a { cursor: pointer; }
+  .lmap a:hover rect, .lmap a:focus rect { stroke-width: 2.6; }
+  .lmap a:focus { outline: none; }
+  .lmap a.soon { opacity: 0.45; }
+  .gcard h3 a { color: inherit; text-decoration: none; }
+  .gcard h3 a:hover { text-decoration: underline; }
+  .gcard .ch { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .gcard .tools { font-size: 13.5px; color: var(--muted); margin: 8px 0 0; }
+  .gcard .go { display: inline-block; margin-top: 10px; font-weight: 500; color: var(--pl); text-decoration: none; }
+  .gcard .go:hover { text-decoration: underline; }
+  .gcard .go.soon { color: var(--muted); }
+  .path ol { margin: 6px 0 0; padding-left: 20px; }
+  .path li { margin: 4px 0; font-size: 15px; }
+  .path a, #topics td a { color: var(--pl); text-decoration: none; }
+  .path a:hover, #topics td a:hover { text-decoration: underline; }
+  .soonl { color: var(--muted); }
+</style>
+<main>
+
+<section id="map"><div class="wrap">
+  <h2>Request map: click a box to open its guide</h2>
+  <figure>
+    <svg class="lmap" viewBox="0 0 880 470" role="img" aria-label="AXI request map. The transport layer at the top links to Channels and Handshake. Below it the fields of a request are grouped by guide: addressing and bursts, IDs and ordering, request attributes, responses exclusives and atomics, caches and CMOs, qualifiers debug and user, untranslated transactions and DVM. Interface-level power and protection, signals and interface classes, interconnect and bridges, and AXI-Stream sit alongside.">
+      <g font-family="var(--font-body)" style="color:var(--ink)">
+        <a data-k="chan" href="{{URL:chan}}" target="_blank" rel="noopener"><rect x="20" y="16" width="600" height="58" rx="9" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.6"/><text x="40" y="41" font-size="16" font-weight="600" fill="currentColor">Transport: AW · W · B · AR · R</text><text x="40" y="61" font-size="12" fill="var(--muted)">VALID/READY, credits, dependencies, reset, register stages (A1–A2)</text></a>
+
+        <text x="20" y="98" font-size="12" fill="var(--muted)" font-family="var(--font-mono)">fields of a request (AW / AR) and its data and response</text>
+        <a data-k="burst" href="{{URL:burst}}" target="_blank" rel="noopener"><rect x="20" y="108" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="34" y="132" font-size="14" font-weight="600" fill="currentColor">Bursts &amp; Addressing</text><text x="34" y="152" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxADDR AxLEN AxSIZE</text><text x="34" y="168" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxBURST WSTRB (A3)</text></a>
+        <a data-k="order" href="{{URL:order}}" target="_blank" rel="noopener"><rect x="225" y="108" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="239" y="132" font-size="14" font-weight="600" fill="currentColor">IDs &amp; Ordering</text><text x="239" y="152" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxID xIDUNQ, ordering</text><text x="239" y="168" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">model, chunking (A5)</text></a>
+        <a data-k="attr" href="{{URL:attr}}" target="_blank" rel="noopener"><rect x="430" y="108" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="444" y="132" font-size="14" font-weight="600" fill="currentColor">Request Attributes</text><text x="444" y="152" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxCACHE AxPROT AxQOS</text><text x="444" y="168" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxREGION MEC (A4)</text></a>
+
+        <a data-k="resp" href="{{URL:resp}}" target="_blank" rel="noopener"><rect x="20" y="198" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="34" y="222" font-size="14" font-weight="600" fill="currentColor">Responses, Exclusives</text><text x="34" y="240" font-size="14" font-weight="600" fill="currentColor">&amp; Atomics</text><text x="34" y="262" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">xRESP AxLOCK AWATOP</text></a>
+        <a data-k="cache" href="{{URL:cache}}" target="_blank" rel="noopener"><rect x="225" y="198" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="239" y="222" font-size="14" font-weight="600" fill="currentColor">Caches &amp; CMOs</text><text x="239" y="242" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxSNOOP AxDOMAIN</text><text x="239" y="258" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">stash, CMOs (A7–A9)</text></a>
+        <a data-k="qual" href="{{URL:qual}}" target="_blank" rel="noopener"><rect x="430" y="198" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="444" y="222" font-size="14" font-weight="600" fill="currentColor">Qualifiers, Debug, User</text><text x="444" y="242" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">MPAM MTE TRACE LOOP</text><text x="444" y="258" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">USER NSAID (A10–A12)</text></a>
+
+        <a data-k="mmu" href="{{URL:mmu}}" target="_blank" rel="noopener"><rect x="20" y="288" width="600" height="56" rx="8" fill="var(--surface)" stroke="var(--sb)" stroke-width="1.4"/><text x="34" y="312" font-size="14" font-weight="600" fill="currentColor">Untranslated Transactions &amp; DVM</text><text x="34" y="332" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxMMU* SID SSID · snoop channels AC/CR · TLBI, DVM Sync (A13, A15)</text></a>
+        <a data-k="pwr" href="{{URL:pwr}}" target="_blank" rel="noopener"><rect x="20" y="356" width="295" height="56" rx="8" fill="var(--surface)" stroke="var(--sb)" stroke-width="1.4" stroke-dasharray="5 3"/><text x="34" y="380" font-size="14" font-weight="600" fill="var(--sb)">Power, Reset &amp; Protection</text><text x="34" y="400" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AWAKEUP ASKSTOP POISON *CHK (A14, A16)</text></a>
+        <a data-k="sig" href="{{URL:sig}}" target="_blank" rel="noopener"><rect x="325" y="356" width="295" height="56" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="339" y="380" font-size="14" font-weight="600" fill="currentColor">Signals &amp; Interface Classes</text><text x="339" y="400" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">signal list, properties (B1–B4)</text></a>
+
+        <a data-k="ic" href="{{URL:ic}}" target="_blank" rel="noopener"><rect x="650" y="16" width="210" height="160" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="668" y="44" font-size="15" font-weight="600" fill="currentColor">Interconnect &amp; Bridges</text><text x="668" y="68" font-size="12" fill="var(--muted)">ID width extension,</text><text x="668" y="86" font-size="12" fill="var(--muted)">decode and DECERR,</text><text x="668" y="104" font-size="12" fill="var(--muted)">width and clock-domain</text><text x="668" y="122" font-size="12" fill="var(--muted)">conversion, AXI4 ↔ AXI5,</text><text x="668" y="140" font-size="12" fill="var(--muted)">AXI ↔ APB/AHB</text><text x="668" y="162" font-size="11.5" fill="var(--muted)">(spec rules + practice)</text></a>
+        <a data-k="axis" href="{{URL:axis}}" target="_blank" rel="noopener"><rect x="650" y="196" width="210" height="148" rx="9" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="668" y="224" font-size="15" font-weight="600" fill="currentColor">AXI-Stream</text><text x="668" y="248" font-size="12" fill="var(--muted)">TVALID/TREADY, TDATA,</text><text x="668" y="266" font-size="12" fill="var(--muted)">TSTRB/TKEEP, TLAST,</text><text x="668" y="284" font-size="12" fill="var(--muted)">TID, TDEST, TUSER,</text><text x="668" y="302" font-size="12" fill="var(--muted)">TWAKEUP</text><text x="668" y="328" font-size="11.5" fill="var(--muted)">(ARM IHI 0051B)</text></a>
+        <text x="755" y="380" text-anchor="middle" font-size="11.5" fill="var(--muted)">faded boxes: guide</text>
+        <text x="755" y="396" text-anchor="middle" font-size="11.5" fill="var(--muted)">not published yet</text>
+      </g>
+    </svg>
+    <p class="src"><span class="kind illus">Illustrative</span> grouping of AXI signals by guide. Each box opens in a new tab.</p>
+  </figure>
+</div></section>
+
+<section id="guides"><div class="wrap">
+  <h2>All guides</h2>
+  <div class="grid g2" id="glist"></div>
+</div></section>
+
+<section id="versions"><div class="wrap">
+  <h2>AXI3 → AXI4 → AXI5 at a glance</h2>
+  <p class="sub">Each guide has its own "What changed" section. This table is the short version for interviews.</p>
+  <div class="tbl-wrap cmp">
+    <table>
+      <thead><tr><th>Feature</th><th>AXI3</th><th>AXI4</th><th>AXI5 (Issue L)</th><th>Guide</th></tr></thead>
+      <tbody>
+        <tr><td>Burst length</td><td>1–16 (AxLEN 4 bits)</td><td>INCR 1–256 (8 bits); WRAP 2, 4, 8, 16; FIXED 1–16</td><td>As AXI4</td><td data-g="burst"></td></tr>
+        <tr><td>Write data interleaving</td><td>Allowed, using WID</td><td>Removed; no WID</td><td>None, except across Resource Planes on credited links</td><td data-g="order"></td></tr>
+        <tr><td>Write response dependency</td><td>After last W only</td><td>After AW and last W</td><td>As AXI4</td><td data-g="chan"></td></tr>
+        <tr><td>Locked transfers</td><td>AxLOCK 2 bits: normal, exclusive, locked</td><td>AxLOCK 1 bit: locked removed</td><td>As AXI4, plus Atomic transactions (AWATOP)</td><td data-g="resp"></td></tr>
+        <tr><td>Memory types</td><td>AxCACHE as cacheable/bufferable/allocate</td><td>AxCACHE[1] becomes Modifiable; named memory types</td><td>As AXI4, plus Domains, CMOs, stash</td><td data-g="attr"></td></tr>
+        <tr><td>QoS, Region, User</td><td>-</td><td>AxQOS, AxREGION, xUSER added</td><td>Plus QoS accept, MPAM, loopback</td><td data-g="attr"></td></tr>
+        <tr><td>Flow control</td><td>VALID/READY</td><td>VALID/READY</td><td>VALID/READY or Credited (Issue L)</td><td data-g="chan"></td></tr>
+        <tr><td>Lite variant</td><td>-</td><td>AXI4-Lite</td><td>AXI5-Lite</td><td data-g="sig"></td></tr>
+        <tr><td>Interface protection</td><td>-</td><td>-</td><td>Poison, parity check signals</td><td data-g="pwr"></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="src" style="margin-top:8px">Sources are cited in each guide. AXI3/AXI4 columns: Issue H.c Parts A and B. AXI5 column: Issue L.</p>
+</div></section>
+
+<section id="paths"><div class="wrap">
+  <h2>Reading paths</h2>
+  <div class="grid g2">
+    <div class="card path"><div class="tagline">New to AXI</div><h3>The core, in order</h3><ol>
+      <li><a data-g="chan">Channels &amp; Handshake</a>: how anything moves</li>
+      <li><a data-g="burst">Bursts &amp; Addressing</a>: what one transaction covers</li>
+      <li><a data-g="order">IDs &amp; Ordering</a>: what can overtake what</li>
+      <li><a data-g="resp">Responses, Exclusives &amp; Atomics</a>: how it ends</li>
+      <li><a data-g="attr">Request Attributes</a>: what the system may do with it</li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Verification engineer</div><h3>Checkers and corner cases first</h3><ol>
+      <li><a data-g="chan">Channels &amp; Handshake</a>: handshake and dependency assertions</li>
+      <li><a data-g="burst">Bursts &amp; Addressing</a>: WRAP, 4 KB, narrow and unaligned</li>
+      <li><a data-g="order">IDs &amp; Ordering</a>: scoreboards and reordering</li>
+      <li><a data-g="resp">Responses, Exclusives &amp; Atomics</a>: exclusive monitor, atomics</li>
+      <li><a data-g="ic">Interconnect &amp; Bridges</a>: what a fabric adds</li>
+    </ol></div>
+    <div class="card path"><div class="tagline">SoC and system</div><h3>Coherency, memory system, software</h3><ol>
+      <li><a data-g="attr">Request Attributes</a></li>
+      <li><a data-g="cache">Caches &amp; CMOs</a></li>
+      <li><a data-g="mmu">Untranslated &amp; DVM</a></li>
+      <li><a data-g="qual">Qualifiers, Debug &amp; User</a></li>
+      <li><a data-g="pwr">Power, Reset &amp; Protection</a></li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Interview prep</div><h3>The quizzes</h3><p style="font-size:15px">Every guide ends with interview-style questions (Basic, Intermediate, Advanced) with answers and page references, and has a "What changed from AXI3/AXI4" table. A quick round: the quizzes of Channels &amp; Handshake, Bursts &amp; Addressing, IDs &amp; Ordering and Responses, then the version table above.</p></div>
+  </div>
+</div></section>
+
+<section id="topics"><div class="wrap">
+  <h2>Topic finder</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>If you are looking for…</th><th>Guide</th><th>Spec (Issue L)</th></tr></thead>
+    <tbody id="tbody-topics"></tbody>
+  </table></div>
+</div></section>
+
+<section id="notes"><div class="wrap">
+  <h2>Spec notes found while building the guides</h2>
+  <p class="sub">Places where the spec is easy to misread, where Issue L quietly differs from H.c, or where a later issue corrected an earlier one. Each is explained in the linked guide.</p>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Dropped explanation</div><h3>Why BVALID waits for AW is no longer in the text</h3><p>H.c explained that a write response hands hazard-checking responsibility to the Subordinate, and warned about the AW/W deadlock. Issue L keeps both rules but drops the explanations.</p><p class="src"><span class="sl">Spec</span>H.c p.A3-46 vs §A2.3.2.1, p.31 · <a data-g="chan">Channels guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>"May wait for VALID" is not "may be combinational on VALID"</h3><p>A receiver may wait for VALID before READY, but §A2.1.1 forbids combinational input-to-output paths on an interface. A READY that waits for VALID can rise one cycle later at the earliest.</p><p class="src"><span class="kind derived">Derived</span> §A2.1.1, p.27 with §A2.3, p.29 · <a data-g="chan">Channels guide</a></p></div>
+    <div class="card"><div class="tagline">Correction in Issue L</div><h3>The WRAP address formula was wrong before</h3><p>Issue L corrects the expression for the address of each transfer in a wrapping burst to Address_N = Aligned_Addr + ((N − 1) × Size) − (Size × Length).</p><p class="src"><span class="sl">Spec</span>Table B4.3, p.311 · <a data-g="burst">Bursts guide</a></p></div>
+    <div class="card"><div class="tagline">Correction in Issue K</div><h3>Read_Interleaving_Disabled on AXI5-Lite</h3><p>Issue J constrained it to True for AXI5-Lite; Issue K says that was wrong and it should be False.</p><p class="src"><span class="sl">Spec</span>Table B4.2, p.310 · <a data-g="sig">Signals guide</a></p></div>
+    <div class="card"><div class="tagline">Wording fixed in Issue J</div><h3>"AxLEN is 1, 2, 4, 8 or 16" in H.c's Regular definition</h3><p>H.c defined a Regular transaction with "AxLEN is 1, 2, 4, 8, or 16", but AxLEN is Length − 1. Issue L says "Length is 1, 2, 4, 8, or 16", which is what was meant.</p><p class="src"><span class="sl">Spec</span>H.c §A3.4.3, p.A3-53 vs §A3.1.8, p.52 · <a data-g="burst">Bursts guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>An unaligned FIXED burst never becomes aligned</h3><p>In the §A3.1.7 pseudocode only a moving address sets the "aligned" flag. FIXED never moves, so every beat uses the first-beat lane formula. Models that copy INCR behaviour after beat 1 get the lanes wrong.</p><p class="src"><span class="kind derived">Derived</span> §A3.1.7, p.51 · <a data-g="burst">Bursts guide</a></p></div>
+    <div class="card"><div class="tagline">Moved, not removed</div><h3>AxLOCK left the Non-modifiable table</h3><p>H.c's list of fields a Non-modifiable transaction must keep included the lock type. Issue L's Table A4.3 lists address, size, length, burst and protection only; AxLOCK appears instead under "must not be changed" for Modifiable transactions. Since Non-modifiable is stricter, treat AxLOCK as fixed in both.</p><p class="src"><span class="kind derived">Derived</span> H.c Table A4-2, p.A4-64 vs Table A4.3, p.69 and §A4.2.2, p.70 · <a data-g="attr">Attributes guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>One ARCACHE value, two memory types</h3><p>ARCACHE 0b1010 is both Write-Through No-Allocate and Write-Through Write-Allocate (likewise 0b1110, 0b1011, 0b1111). On a read, the write-allocate hint has nothing to act on, so the table gives both types the same read encoding.</p><p class="src"><span class="kind derived">Derived</span> Table A4.4, p.71 · <a data-g="attr">Attributes guide</a></p></div>
+    <div class="card"><div class="tagline">Quiet change</div><h3>Device vs Normal ordering became a property</h3><p>H.c said its same-location guarantees "imply" ordering between Device and Normal accesses. Issue L adds "with the same cacheability", removes any ordering between Cacheable and Device/Non-cacheable requests, and makes Device vs Normal Non-cacheable ordering depend on Device_Normal_Independence (default False, ordered).</p><p class="src"><span class="sl">Spec</span>H.c §A6.5.1, p.A6-88 vs §A5.3.4 and §A5.3.8, p.94–97 · <a data-g="order">Ordering guide</a></p></div>
+    <div class="card"><div class="tagline">Inconsistency</div><h3>Missing AxDOMAIN: Non-shareable or Shareable?</h3><p>§A8.3.4 first says that without Domain signals, Cacheable requests are assumed Non-shareable; a few lines later, after Table A8.5, it says Cacheable requests are assumed Shareable. CMOs without AxDOMAIN are assumed Non-shareable (§A9.3). Fix the assumption in your integration spec.</p><p class="src"><span class="kind derived">Derived</span> §A8.3.4, p.135 · §A9.3, p.156 · <a data-g="cache">Caches guide</a></p></div>
+    <div class="card"><div class="tagline">Typo in the spec</div><h3>UnstashTranslation text says "StashTranslation"</h3><p>In §A13.10, the bullet for a physical address reads "the StashTranslation request has a physical address and the MMU should deallocate the relevant Granule Protection Table entry". The section is about UnstashTranslation, and deallocation only makes sense for it; read it that way.</p><p class="src"><span class="sl">Spec</span>§A13.10, p.220 vs §A13.9, p.219 · <a data-g="mmu">Untranslated &amp; DVM guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>AxMMUVALID defaults to 1, not 0</h3><p>An interface without AxMMUVALID is treated as always untranslated. Issue L corrected the default from 0b0 to 0b1, and added the rule that translated and untranslated requests must not share in-flight IDs, which was intended from the start but missing.</p><p class="src"><span class="sl">Spec</span>Table A13.2, p.207 · §A13.7, p.217 · Table B4.3, p.311 · <a data-g="mmu">Untranslated &amp; DVM guide</a></p></div>
+  </div>
+  <p class="src" style="margin-top:12px">More notes are added as each guide is built.</p>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the AMBA AXI Protocol Specification, ARM IHI 0022 Issue L (27 Aug 2025), with AXI3/AXI4 comparisons from Issue H.c (Jan 2021) and the AXI-Stream guide from ARM IHI 0051B. The guides explain and index the spec; for sign-off, check the spec itself at the cited page.</div></footer>

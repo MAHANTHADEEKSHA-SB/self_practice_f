@@ -1,0 +1,1794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXI Channels &amp; Handshake Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* AXI field guides. Color encodes who drives a signal: amber = Manager (class lp), teal = Subordinate (class pl),
+   violet = credits, interface-level signals and annotations (class sb). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+
+/* ---- AXI additions ---- */
+.ver { display:inline-block; font-family:var(--font-mono); font-size:10.5px; line-height:16px; padding:0 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; vertical-align:1px; }
+.ver.new { color:var(--pl); border-color:var(--pl); }
+.ver.old { color:var(--lp); border-color:var(--lp); }
+.ver.gone { color:var(--bad); border-color:var(--bad); }
+.cmp td:first-child { font-weight:500; min-width:150px; }
+.cmp td.then { color:var(--muted); }
+.dep text { font-family:var(--font-mono); font-size:12px; }
+.kbd { font-family:var(--font-mono); font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 5px; background:var(--code); }
+
+/* ---- phone and touch upgrades ---- */
+.calc, .tool { grid-template-columns: minmax(0, 1fr); }
+.calc > *, .tool > * { min-width: 0; }
+#wave { display: flex; align-items: flex-start; padding-left: 0; scroll-behavior: auto; }
+#wave > svg { flex: none; }
+.wfix { position: sticky; left: 0; z-index: 1; flex: none; background: var(--bg); border-right: 1px solid var(--line); }
+nav.toc a[aria-current] { background: var(--hl); color: var(--ink); font-weight: 500; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 28px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--pl); }
+.pager a small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pager a.nx { text-align: right; grid-column: 2; }
+.pager a strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.pager .all { grid-column: 1 / -1; text-align: center; font-size: 14px; padding: 10px; }
+@media (pointer: coarse) {
+  .chip, .tab, .btn, nav.toc a { min-height: 40px; display: inline-flex; align-items: center; }
+  .dot { min-width: 38px; min-height: 38px; }
+  summary { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (max-width: 640px) {
+  .hero { padding-top: 18px; padding-bottom: 16px; }
+  .lede { font-size: 15.5px; }
+  .series { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px 14px; padding: 6px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .series::-webkit-scrollbar { display: none; }
+  .series > * { flex: none; }
+  figure { overflow-x: auto; }
+  figure svg { min-width: 560px; max-width: none; }
+  figure svg.dep, figure svg.lmap { min-width: 700px; }
+  figcaption { position: sticky; left: 0; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: auto; }
+  table.stack tr { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  table.stack td:empty { display: none; }
+  table.stack td::before { content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+  table.stack td:first-child { font-size: 15px; font-weight: 600; }
+  table.stack td:first-child::before { display: none; }
+  table.stack caption { display: block; }
+  table.stack td.dir, table.stack td.dir + td { display: inline-block; margin-right: 10px; vertical-align: middle; }
+  table.stack td.dir::before, table.stack td.dir + td::before { display: none; }
+  .pager { grid-template-columns: 1fr; }
+  .pager a.nx { grid-column: 1; text-align: left; }
+  .bitfield { grid-auto-columns: minmax(22px, 1fr); overflow-x: auto; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>AXI Field Guides (Issue L):</span><a href="../index.html"><strong>All guides</strong></a><span class="here">Channels &amp; Handshake</span><a href="bursts-addressing.html">Bursts &amp; Addressing</a><a href="request-attributes.html">Request Attributes</a><a href="ids-ordering.html">IDs &amp; Ordering</a><a href="responses-exclusives-atomics.html">Responses, Exclusives &amp; Atomics</a><a href="caches-cmos.html">Caches &amp; CMOs</a><a href="qualifiers-debug-user.html">Qualifiers, Debug &amp; User</a><a href="untranslated-dvm.html">Untranslated &amp; DVM</a><span title="coming soon" style="opacity:.55">Power, Reset &amp; Protection</span><span title="coming soon" style="opacity:.55">Signals &amp; Interface Classes</span><span title="coming soon" style="opacity:.55">Interconnect &amp; Bridges</span><span title="coming soon" style="opacity:.55">AXI-Stream</span></div>
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapters A1 and A2 · Manager ↔ Subordinate</div>
+    <h1>AXI Channels &amp; Handshake Field Guide</h1>
+    <p class="lede">Everything in AXI rides on five one-way channels and one rule for moving a transfer across each of them. This guide covers why the channels are split the way they are, the VALID/READY handshake and the dependencies that keep it deadlock-free, clock and reset, the new credited transport in Issue L, register stages, and what changed from AXI3 and AXI4. It ends with cycle-level scenarios, verification checks and interview questions.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>credits, interface-level signals, annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = printed page of the AMBA AXI Protocol Specification, ARM IHI 0022 <strong>Issue L</strong> (27 Aug 2025). "H.c" marks the previous-generation spec, ARM IHI 0022 Issue H.c (Jan 2021), which still contained AXI3, AXI4 and AXI4-Lite; its pages are numbered per chapter, for example p.A3-45. Cards tag each fact as <span class="kind spec">Spec</span>stated in the spec, <span class="kind derived">Derived</span>worked out from spec rules or values, <span class="kind illus">Illustrative</span>example values, or <span class="kind bg">Background</span>general engineering practice, not spec text. Section 14 indexes every citation.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a>
+    <a href="#where">2 · Where it sits</a>
+    <a href="#clock">3 · Clock, reset, transport</a>
+    <a href="#signals">4 · Signals</a>
+    <a href="#handshake">5 · Handshake</a>
+    <a href="#deps">6 · Dependencies</a>
+    <a href="#credit">7 · Credited transport</a>
+    <a href="#rationale">8 · Why each rule</a>
+    <a href="#live">9 · Live scenarios</a>
+    <a href="#silicon">10 · Real silicon</a>
+    <a href="#changes">11 · AXI3/AXI4 → Issue L</a>
+    <a href="#verify">12 · Verification</a>
+    <a href="#quiz">13 · Test yourself</a>
+    <a href="#refs">14 · Spec index</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- 1 WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why AXI is built from channels</h2>
+    <p class="sub">Nearly every rule in Chapter A2 serves one of four goals. Once you know which goal a rule serves, it is easy to remember.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Frequency</div>
+        <h3>Any wire can be pipelined</h3>
+        <p>Each channel goes one way and no channel is tied to another in time. That means a register stage can go on any channel without breaking the protocol. Long paths across a big SoC get register slices; short processor-to-memory paths stay direct.</p>
+        <p class="src"><span class="sl">Spec</span>§A1.1, p.21 · §A2.5, p.40</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Latency hiding</div>
+        <h3>Ask early, answer late, answer out of order</h3>
+        <p>Requests are separate from data, so a Manager can have many requests in flight while slow memory works on them. Only the start address is sent per burst. Transactions can complete out of order.</p>
+        <p class="src"><span class="sl">Spec</span>§A1.1, p.21 · §A1.2, p.22</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Bandwidth</div>
+        <h3>Reads and writes never share a data path</h3>
+        <p>Write data and read data have their own channels, each up to 1024 bits wide, with one strobe per byte on writes. A DMA can read and write at full rate at the same time. Request channels carry much less traffic than data channels, which is why interconnects often share them.</p>
+        <p class="src"><span class="sl">Spec</span>§A1.1, p.21 · §A1.2, p.23 · §A1.2.1, p.24</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Interoperability</div>
+        <h3>One interface, everywhere</h3>
+        <p>The same interface definition connects a Manager to an interconnect, a Subordinate to an interconnect, and a Manager straight to a Subordinate. To each side, an interconnect looks like just another component.</p>
+        <p class="src"><span class="sl">Spec</span>§A1.2.1, p.24</p>
+      </div>
+    </div>
+    <p style="margin-top:18px;color:var(--muted);font-size:15px">Background: AXI arrived with AMBA 3 (AXI3) in 2003–2004 to replace the shared, pipelined AHB bus in high-performance SoCs. AXI4 (2010) widened bursts and removed write interleaving. AXI5 (Issue F, 2017) added optional features. Issue J (2023) dropped AXI3 and AXI4 from the document, and Issue L (2025) added credited transport. The revision history is on p.ii.</p>
+  </div>
+</section>
+
+<!-- 2 WHERE -->
+<section id="where">
+  <div class="wrap">
+    <h2>2 · Where it sits: five channels between two interfaces</h2>
+    <p class="sub">A channel is a one-way connection from a transmitter (Tx) to a receiver (Rx). An interface is the set of channel ends on one component. A transfer is one cycle of communication on one channel; a transaction is all the transfers needed for one Manager–Subordinate exchange.</p>
+    <div class="twocol">
+      <figure>
+        <svg viewBox="0 0 560 330" role="img" aria-label="Manager on the left, Subordinate on the right. Five channels: AW, W and AR go from Manager to Subordinate; B and R go from Subordinate to Manager. Each channel has VALID in its direction and READY back.">
+          <defs>
+            <marker id="ah-lp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--lp)"/></marker>
+            <marker id="ah-pl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--pl)"/></marker>
+          </defs>
+          <g style="color:var(--ink)" font-family="var(--font-body)">
+            <rect x="14" y="20" width="120" height="290" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+            <text x="74" y="160" text-anchor="middle" font-family="var(--font-display)" font-size="17" font-weight="600" fill="currentColor">Manager</text>
+            <text x="74" y="180" text-anchor="middle" font-size="11.5" fill="var(--muted)">interface</text>
+            <rect x="426" y="20" width="120" height="290" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+            <text x="486" y="160" text-anchor="middle" font-family="var(--font-display)" font-size="17" font-weight="600" fill="currentColor">Subordinate</text>
+            <text x="486" y="180" text-anchor="middle" font-size="11.5" fill="var(--muted)">interface</text>
+
+            <line x1="138" y1="58" x2="420" y2="58" stroke="var(--lp)" stroke-width="2.2" marker-end="url(#ah-lp)"/>
+            <text x="150" y="50" font-family="var(--font-mono)" font-size="12" font-weight="500" fill="var(--lp)">AW · write request</text>
+            <text x="410" y="74" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">AWVALID → · ← AWREADY</text>
+
+            <line x1="138" y1="114" x2="420" y2="114" stroke="var(--lp)" stroke-width="2.2" marker-end="url(#ah-lp)"/>
+            <text x="150" y="106" font-family="var(--font-mono)" font-size="12" font-weight="500" fill="var(--lp)">W · write data + WSTRB, WLAST</text>
+            <text x="410" y="130" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">WVALID → · ← WREADY</text>
+
+            <line x1="420" y1="170" x2="138" y2="170" stroke="var(--pl)" stroke-width="2.2" marker-end="url(#ah-pl)"/>
+            <text x="410" y="162" text-anchor="end" font-family="var(--font-mono)" font-size="12" font-weight="500" fill="var(--pl)">B · write response</text>
+            <text x="150" y="186" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">BREADY → · ← BVALID</text>
+
+            <line x1="138" y1="226" x2="420" y2="226" stroke="var(--lp)" stroke-width="2.2" marker-end="url(#ah-lp)"/>
+            <text x="150" y="218" font-family="var(--font-mono)" font-size="12" font-weight="500" fill="var(--lp)">AR · read request</text>
+            <text x="410" y="242" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">ARVALID → · ← ARREADY</text>
+
+            <line x1="420" y1="282" x2="138" y2="282" stroke="var(--pl)" stroke-width="2.2" marker-end="url(#ah-pl)"/>
+            <text x="410" y="274" text-anchor="end" font-family="var(--font-mono)" font-size="12" font-weight="500" fill="var(--pl)">R · read data + response, RLAST</text>
+            <text x="150" y="298" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">RREADY → · ← RVALID</text>
+          </g>
+        </svg>
+        <figcaption>Arrow colour is the direction of VALID and the payload; READY always runs the other way. Reads use two channels and writes use three, because a write needs a completion that is separate from its data.<span class="ref">Spec: §A1.2 and Figures A1.1–A1.2, p.22–23 · §A1.3.2, p.25 · Table A2.2, p.30</span></figcaption>
+      </figure>
+      <div class="grid" style="gap:12px">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Channel</th><th>Tx → Rx</th><th>Carries</th><th>Per transaction</th><th>Spec</th></tr></thead>
+            <tbody>
+              <tr><td class="sig lp">AW</td><td>M → S</td><td>Address, ID, length, size, burst, attributes</td><td>1 transfer</td><td class="ref">§A1.2, p.22–23</td></tr>
+              <tr><td class="sig lp">W</td><td>M → S</td><td>WDATA (≤1024 bits), WSTRB, WLAST</td><td>AWLEN+1 beats</td><td class="ref">§A1.2, p.23 · §A3.2.1, p.53</td></tr>
+              <tr><td class="sig pl">B</td><td>S → M</td><td>BID, BRESP: one completion per write</td><td>1 transfer</td><td class="ref">§A1.2, p.23</td></tr>
+              <tr><td class="sig lp">AR</td><td>M → S</td><td>Address, ID, length, size, burst, attributes</td><td>1 transfer</td><td class="ref">§A1.2, p.22–23</td></tr>
+              <tr><td class="sig pl">R</td><td>S → M</td><td>RDATA, RRESP per beat, RLAST</td><td>ARLEN+1 beats</td><td class="ref">§A1.2, p.23 · §A3.2.2, p.55</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <p><strong>Two facts the rest of the series builds on.</strong> Write data is always treated as buffered: a Manager may send writes without waiting for earlier ones to be acknowledged. Completion is signalled once per transaction on B, not once per beat. A read has no separate completion; the response travels with every data beat.</p>
+          <p class="src"><span class="sl">Spec</span>§A1.2, p.23</p>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Topology</th><th>What is shared</th><th>Spec</th></tr></thead>
+            <tbody>
+              <tr><td>Shared request and data</td><td>One path for everything</td><td class="ref" rowspan="3">§A1.2.1.1, p.24</td></tr>
+              <tr><td>Shared request, multiple data</td><td>Requests are cheap, so share them and run data in parallel</td></tr>
+              <tr><td>Multilayer</td><td>Separate request and data paths per layer</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 CLOCK RESET TRANSPORT -->
+<section id="clock">
+  <div class="wrap">
+    <h2>3 · Clock, reset and the two transports</h2>
+    <p class="sub">One clock, one reset, and since Issue L a choice of two flow-control schemes. The choice is made per interface, not per channel.</p>
+    <div class="grid g3">
+      <div class="card">
+        <div class="k">ACLK</div>
+        <ul class="tight">
+          <li>One clock per interface.</li>
+          <li>Inputs are sampled on the rising edge; outputs change only after it.</li>
+          <li>No combinational path from any input to any output on an interface.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A2.1.1, p.27</p>
+      </div>
+      <div class="card">
+        <div class="k">ARESETn</div>
+        <ul class="tight">
+          <li>Single active-LOW reset.</li>
+          <li>May assert asynchronously; deasserts only on a rising ACLK edge.</li>
+          <li>Signals that must be LOW in reset stay LOW until at least the edge after ARESETn is HIGH. Everything else may take any value in reset.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A2.1.2 and Figure A2.1, p.27</p>
+      </div>
+      <div class="card">
+        <div class="k">Held LOW in reset</div>
+        <ul class="tight">
+          <li>Every VALID (AW, W, AR from the Manager; B, R from the Subordinate).</li>
+          <li>On credited interfaces: every CRDT and CRDTSH. The transmitter starts with zero credits.</li>
+          <li>Not required: READY, payload, PENDING (PENDING may even stay HIGH).</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A2.3, p.29 · §A2.4.1, p.34 · §A2.4.4, p.38</p>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:16px">
+      <table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A2.2 and Table A2.1, p.28</caption>
+        <thead><tr><th>AXI_Transport</th><th>Default</th><th>Flow control</th><th>Good for</th><th>Restrictions</th></tr></thead>
+        <tbody>
+          <tr><td class="sig">Ready</td><td>Yes</td><td>Receiver drives READY; transfer when VALID and READY are both HIGH</td><td>Every AXI design to date; simplest to build and bridge</td><td>Num_RP must be 1; no shared credits</td></tr>
+          <tr><td class="sig">Credited</td><td>No</td><td>Receiver drives CRDT pulses; transmitter spends one credit per VALID</td><td>High-frequency links, and Resource Planes for independent traffic classes</td><td>AXI5 interfaces only; both ends must use the same transport</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 4 SIGNALS -->
+<section id="signals">
+  <div class="wrap">
+    <h2>4 · Signals</h2>
+    <p class="sub">The handshake and transport signals. Payload signals (address, length, size, IDs, attributes, responses) get their own guides. The "Live behavior" column says what you will see the signal do on a waveform.</p>
+    <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+    <p style="color:var(--muted);font-size:15px">A note on direction for credited channels: credits flow from the <em>receiver</em> of a channel. On AW, W and AR that is the Subordinate; on B and R it is the Manager. PENDING, RP and SHAREDCRD come from the transmitter. <span class="ref">Table A2.3, p.33 · Table A2.9, p.39</span></p>
+  </div>
+</section>
+
+<!-- 5 HANDSHAKE -->
+<section id="handshake">
+  <div class="wrap">
+    <h2>5 · The VALID/READY handshake</h2>
+    <p class="sub">The transmitter says "I have something" with VALID; the receiver says "I can take something" with READY. A transfer happens on a rising edge where both are HIGH. Three orderings are legal, plus one freedom that only the receiver has.</p>
+    <div class="mini" id="minis"></div>
+    <div class="twocol" style="margin-top:16px">
+      <div class="callout">
+        <p><strong>The transmitter's obligations</strong></p>
+        <ul class="tight">
+          <li>Must not wait for READY before asserting VALID. <span class="ref">§A2.3, p.29</span></li>
+          <li>Once VALID is HIGH it stays HIGH until the handshake. <span class="ref">§A2.3, p.29</span></li>
+          <li>The payload stays stable until the transfer. <span class="ref">§A2.3, p.29</span></li>
+          <li>VALID is LOW in reset. <span class="ref">§A2.3, p.29</span></li>
+        </ul>
+      </div>
+      <div class="callout" style="border-left-color:var(--lp)">
+        <p><strong>The receiver's freedoms</strong></p>
+        <ul class="tight">
+          <li>May wait for VALID before asserting READY. <span class="ref">§A2.3, p.29</span></li>
+          <li>May assert READY before VALID, and drop it again before VALID arrives. <span class="ref">§A2.3, p.29</span></li>
+          <li>Default READY may be HIGH or LOW. On request channels HIGH is recommended for latency; then any valid request presented must be accepted. <span class="ref">§A2.3, p.30</span></li>
+          <li>Still bound by §A2.1.1: no combinational path from VALID to READY on the same interface. <span class="ref">§A2.1.1, p.27</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 DEPENDENCIES -->
+<section id="deps">
+  <div class="wrap">
+    <h2>6 · Dependencies between channels</h2>
+    <p class="sub">The handshake rule covers one channel. These rules cover how the channels of one transaction may wait on each other. Single-headed arrows: may be asserted before or after. Double-headed arrows: must be asserted only after.</p>
+    <figure>
+      <svg class="dep" viewBox="0 0 900 300" role="img" aria-label="Three dependency diagrams. AXI4 and AXI5 writes: BVALID must follow AWVALID, AWREADY, WVALID and WREADY (with WLAST). AXI3 writes: BVALID must follow WVALID and WREADY only. Reads: RVALID must follow ARVALID and ARREADY.">
+        <defs>
+          <marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+          <marker id="d2" viewBox="0 0 16 10" refX="15" refY="5" markerWidth="11" markerHeight="7" orient="auto"><path d="M0,0 L8,5 L0,10 z M7,0 L15,5 L7,10 z" fill="var(--bad)"/></marker>
+        </defs>
+        <g fill="none">
+          <!-- AXI4/5 write -->
+          <text x="20" y="22" font-family="var(--font-display)" font-size="15" font-weight="600" fill="var(--ink)" style="font-family:var(--font-display)">Write · Issue L (= AXI4, AXI5)</text>
+          <rect x="20" y="40" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="68" y="60" text-anchor="middle" fill="var(--lp)">AWVALID</text>
+          <rect x="20" y="130" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="68" y="150" text-anchor="middle" fill="var(--lp)">WVALID†</text>
+          <rect x="150" y="40" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="198" y="60" text-anchor="middle" fill="var(--pl)">AWREADY</text>
+          <rect x="150" y="130" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="198" y="150" text-anchor="middle" fill="var(--pl)">WREADY</text>
+          <rect x="150" y="220" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="198" y="240" text-anchor="middle" fill="var(--pl)">BVALID</text>
+          <rect x="20" y="220" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="68" y="240" text-anchor="middle" fill="var(--lp)">BREADY</text>
+          <line x1="116" y1="55" x2="148" y2="55" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="116" y1="145" x2="148" y2="145" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="116" y1="62" x2="150" y2="134" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="116" y1="138" x2="150" y2="66" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <path d="M246,55 C300,70 300,200 248,228" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="198" y1="160" x2="198" y2="218" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <path d="M68,70 C40,110 130,200 160,220" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="96" y1="160" x2="168" y2="220" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="150" y1="235" x2="118" y2="235" stroke="var(--muted)" marker-end="url(#d1)"/>
+
+          <!-- AXI3 write -->
+          <text x="330" y="22" font-size="15" font-weight="600" fill="var(--ink)" style="font-family:var(--font-display)">Write · AXI3 (H.c)</text>
+          <rect x="330" y="40" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="378" y="60" text-anchor="middle" fill="var(--lp)">AWVALID</text>
+          <rect x="330" y="130" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="378" y="150" text-anchor="middle" fill="var(--lp)">WVALID†</text>
+          <rect x="460" y="40" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="508" y="60" text-anchor="middle" fill="var(--pl)">AWREADY</text>
+          <rect x="460" y="130" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="508" y="150" text-anchor="middle" fill="var(--pl)">WREADY</text>
+          <rect x="460" y="220" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="508" y="240" text-anchor="middle" fill="var(--pl)">BVALID</text>
+          <rect x="330" y="220" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="378" y="240" text-anchor="middle" fill="var(--lp)">BREADY</text>
+          <line x1="426" y1="55" x2="458" y2="55" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="426" y1="145" x2="458" y2="145" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="426" y1="62" x2="460" y2="134" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="426" y1="138" x2="460" y2="66" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="508" y1="160" x2="508" y2="218" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="406" y1="160" x2="478" y2="220" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="460" y1="235" x2="428" y2="235" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <text x="566" y="60" font-size="11" fill="var(--muted)" style="font-family:var(--font-body)">no arrow</text>
+          <text x="566" y="74" font-size="11" fill="var(--muted)" style="font-family:var(--font-body)">to BVALID</text>
+
+          <!-- Read -->
+          <text x="660" y="22" font-size="15" font-weight="600" fill="var(--ink)" style="font-family:var(--font-display)">Read · all versions</text>
+          <rect x="660" y="40" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="708" y="60" text-anchor="middle" fill="var(--lp)">ARVALID</text>
+          <rect x="790" y="40" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="838" y="60" text-anchor="middle" fill="var(--pl)">ARREADY</text>
+          <rect x="790" y="130" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--pl)"/><text x="838" y="150" text-anchor="middle" fill="var(--pl)">RVALID</text>
+          <rect x="660" y="130" width="96" height="30" rx="6" fill="var(--surface)" stroke="var(--lp)"/><text x="708" y="150" text-anchor="middle" fill="var(--lp)">RREADY</text>
+          <line x1="756" y1="55" x2="788" y2="55" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <line x1="838" y1="70" x2="838" y2="128" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="740" y1="70" x2="812" y2="130" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/>
+          <line x1="790" y1="145" x2="758" y2="145" stroke="var(--muted)" marker-end="url(#d1)"/>
+          <g style="font-family:var(--font-body)" font-size="11.5">
+            <line x1="660" y1="210" x2="700" y2="210" stroke="var(--muted)" marker-end="url(#d1)"/><text x="708" y="214" fill="var(--muted)" style="font-family:var(--font-body)">may come before or after</text>
+            <line x1="660" y1="236" x2="700" y2="236" stroke="var(--bad)" stroke-width="1.4" marker-end="url(#d2)"/><text x="708" y="240" fill="var(--muted)" style="font-family:var(--font-body)">must come after</text>
+            <text x="660" y="268" fill="var(--muted)" style="font-family:var(--font-body)">† BVALID waits for the WLAST beat</text>
+          </g>
+        </g>
+      </svg>
+      <figcaption>The only difference between the two write diagrams is that AXI4 and AXI5 added the arrows from AWVALID and AWREADY to BVALID. The arrow layout is redrawn for clarity; the content follows the spec figures.<span class="ref">Spec: §A2.3.2.1 and Figure A2.5, p.31 · §A2.3.2.2 and Figure A2.6, p.32 · H.c §A3.3.1 and Figures A3-5 to A3-7, p.A3-45–A3-46</span></figcaption>
+    </figure>
+
+    <div class="twocol" style="margin-top:16px">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A2.3.2.1, p.31 · §A2.3.2.2, p.32</caption>
+          <thead><tr><th>Signal</th><th>Must not wait for</th><th>May wait for</th><th>Must wait for</th></tr></thead>
+          <tbody>
+            <tr><td class="sig lp">AWVALID, WVALID</td><td>AWREADY, WREADY (every beat)</td><td>-</td><td>-</td></tr>
+            <tr><td class="sig pl">AWREADY</td><td>-</td><td>AWVALID, WVALID, both</td><td>-</td></tr>
+            <tr><td class="sig pl">WREADY</td><td>-</td><td>AWVALID, WVALID, both</td><td>-</td></tr>
+            <tr><td class="sig pl">BVALID</td><td>BREADY</td><td>-</td><td>AWVALID, AWREADY, WVALID, WREADY, the WLAST beat</td></tr>
+            <tr><td class="sig lp">BREADY</td><td>-</td><td>BVALID</td><td>-</td></tr>
+            <tr><td class="sig lp">ARVALID</td><td>ARREADY</td><td>-</td><td>-</td></tr>
+            <tr><td class="sig pl">ARREADY</td><td>-</td><td>ARVALID</td><td>-</td></tr>
+            <tr><td class="sig pl">RVALID</td><td>RREADY</td><td>-</td><td>ARVALID, ARREADY</td></tr>
+            <tr><td class="sig lp">RREADY</td><td>-</td><td>RVALID</td><td>-</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Transaction-level relationships (§A2.6)</h3>
+        <ul class="tight">
+          <li>A write response always follows the last write transfer; read data always follows its request.</li>
+          <li>A Manager that issues a write must be able to supply all its data, and later accept its response, without depending on any other transaction.</li>
+          <li>A Manager that issues a read must be able to accept all its data the same way. Same-ID reads return in order, so storage is needed only per ID.</li>
+          <li>Either side may choose to handle one transaction at a time.</li>
+          <li>A Subordinate must not block data-less write requests because of transactions whose write data arrived early.</li>
+          <li>Nothing else links the channels: W may arrive before AW, or in the same cycle. An interconnect must realign them so data is shown only to the Subordinate it belongs to.</li>
+          <li>Writes without data (for example some cache maintenance writes) drop the W terms from the dependency rules.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A2.6, p.41 · §A2.3.2.1, p.31 · Table B4.2, p.309</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 CREDITED -->
+<section id="credit">
+  <div class="wrap">
+    <h2>7 · Credited transport (new in Issue L)</h2>
+    <p class="sub">On a credited interface READY disappears. The receiver hands the transmitter credits, one per free buffer entry; the transmitter spends one per transfer. Every signal in both directions is registered, so nothing has to settle combinationally within one cycle.</p>
+    <div class="flow">
+      <div><span class="n">1</span><p><strong>Reset:</strong> the transmitter has no credits and the receiver has all of them. Every CRDT and CRDTSH is LOW. <span class="ref">§A2.4.1, p.34</span></p></div>
+      <div><span class="n">2</span><p><strong>Give:</strong> each cycle a CRDT bit is HIGH gives one credit on that Resource Plane. A receiver gives at least 1 and at most 15 per plane, and at most 15 shared. <span class="ref">§A2.4.1, p.34</span></p></div>
+      <div><span class="n">3</span><p><strong>Announce:</strong> PENDING is HIGH in the cycle before VALID, so a gated receiver can wake its clock. PENDING HIGH does not oblige VALID to follow. <span class="ref">§A2.4.4, p.38</span></p></div>
+      <div><span class="n">4</span><p><strong>Spend:</strong> each cycle VALID is HIGH uses one credit; VALID is never HIGH with zero credits. There is no READY, so the transfer happens in that cycle. <span class="ref">§A2.4.1, p.34</span></p></div>
+      <div><span class="n">5</span><p><strong>No same-cycle tricks:</strong> no combinational path between credit signals and anything else on the channel. A credit can't be spent in the cycle it arrives or given back in the cycle it's spent. <span class="ref">§A2.4.1, p.34</span></p></div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <div class="tagline">Resource Planes</div>
+        <h3>Independent lanes inside one channel</h3>
+        <ul class="tight">
+          <li>Each plane has its own credits. Transfers on different planes must not block each other between transmitter and receiver.</li>
+          <li>Num_RP_AWW (AW and W) and Num_RP_AR are each 1 to 8, default 1. B and R always have one plane.</li>
+          <li>RP is clog2(Num_RP) bits wide; with one plane there is no RP signal.</li>
+          <li>The AW and W of one transaction use the same plane.</li>
+          <li>No ordering across planes. So a Manager must not issue a request with the same ID as an outstanding transaction on the same channel but a different plane. It may interleave write data of different transactions if they are on different planes.</li>
+          <li>Interfaces may differ in plane count, but a Manager must not need more planes than its Subordinate provides.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A2.4.2 and Table A2.5, p.35</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Shared credits</div>
+        <h3>A pool any plane can draw on</h3>
+        <ul class="tight">
+          <li>Optional per channel (Shared_Credits_AW, _W, _AR); only with Credited transport and more than one plane.</li>
+          <li>CRDTSH gives one shared credit and may be asserted without CRDT. SHAREDCRD goes with VALID to say a shared credit was spent.</li>
+          <li>Planes stay independent whichever kind of credit is used.</li>
+          <li>Recommended: spend a dedicated credit when you have one, and keep shared ones for planes that have run out.</li>
+          <li>Mismatched settings still work (Table A2.7); tie unused SHAREDCRD inputs or CRDTSH inputs LOW.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A2.4.3, Tables A2.6–A2.7, p.36–37</p>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:16px">
+      <table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A2.9, p.39. "x" stands for AW, W or AR where the signal exists only on those channels.</caption>
+        <thead><tr><th>Signal</th><th>Width</th><th>Tie-off default</th><th>From</th><th>Present when</th></tr></thead>
+        <tbody>
+          <tr><td class="sig">AWPENDING, WPENDING, BPENDING, ARPENDING, RPENDING</td><td>1</td><td class="mono">0b1</td><td>Tx</td><td>Credited</td></tr>
+          <tr><td class="sig">AWCRDT, WCRDT</td><td>Num_RP_AWW</td><td class="mono">all zeros</td><td>Rx (Subordinate)</td><td>Credited</td></tr>
+          <tr><td class="sig">ARCRDT</td><td>Num_RP_AR</td><td class="mono">all zeros</td><td>Rx (Subordinate)</td><td>Credited</td></tr>
+          <tr><td class="sig">BCRDT, RCRDT</td><td>1</td><td class="mono">0b0</td><td>Rx (Manager)</td><td>Credited</td></tr>
+          <tr><td class="sig">xCRDTSH</td><td>1</td><td class="mono">0b0</td><td>Rx</td><td>Shared_Credits_x = True</td></tr>
+          <tr><td class="sig">xRP</td><td>clog2(Num_RP)</td><td class="mono">all zeros</td><td>Tx</td><td>Num_RP &gt; 1</td></tr>
+          <tr><td class="sig">xSHAREDCRD</td><td>1</td><td class="mono">0b0</td><td>Tx</td><td>Shared_Credits_x = True</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color:var(--muted);font-size:15px">How a credited interface is clock- and power-gated (channel states, ASKSTOP, returning credits before stopping) is in A14.2 and is covered in the Power, Reset &amp; Protection guide. <span class="ref">§A2.4.4, p.38 · §A14.2, p.225</span></p>
+  </div>
+</section>
+
+<!-- 8 RATIONALE -->
+<section id="rationale">
+  <div class="wrap">
+    <h2>8 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives a rule, the reason behind it, an example with real numbers, and what goes wrong in a design that ignores it. Numbers assume a 128-bit data path at 1 GHz unless the card says otherwise.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshake</span><span>§A2.3 p.29</span></div>
+        <h3>VALID must not wait for READY</h3>
+        <p class="rule">A transmitter may not hold VALID LOW until it sees READY.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Receivers are explicitly allowed to wait for VALID before raising READY. If transmitters could also wait for READY, two compliant-looking blocks could each wait for the other forever. Putting the "go first" duty on one side, always the transmitter, makes every pairing safe.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DDR controller's AR port raises ARREADY only after it sees ARVALID and checks its command queue, two cycles later. A DMA that waits for ARREADY first would never issue a read to it. The same DMA worked with an SRAM whose ARREADY was tied HIGH, which is why this bug often survives unit test.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A hang with no error, and only with some partners. Formal tools and VIP flag it as a liveness or protocol violation.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.3, p.29</li><li><span class="kind illus">Illustrative</span>DDR and DMA timing</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshake</span><span>§A2.3 p.29</span></div>
+        <h3>Once VALID, always VALID, until the transfer</h3>
+        <p class="rule">After VALID rises it stays HIGH, with a stable payload, until the cycle VALID and READY are both HIGH.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receiver may already be acting on what it sees: allocating a buffer, starting a DRAM activate, decoding an address. If the transmitter could withdraw or change the request, the receiver would have to undo that work. Sticky VALID makes "the receiver saw it" and "it happened" the same thing.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An interconnect arbiter offers Manager A's request downstream. Two cycles later Manager B, with higher QoS, arrives. The arbiter may not swap B in while AWVALID is HIGH and AWREADY is LOW. It has to wait for A's handshake, or not offer A in the first place.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Subordinate that latched A's address but receives B's data, or two requests counted where one was sent. These are some of the most common interconnect bugs.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.3, p.29</li><li><span class="kind illus">Illustrative</span>arbiter example</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="hs">
+        <div class="meta"><span>Handshake</span><span>§A2.3 p.29–30</span></div>
+        <h3>READY may come early, late, or drop</h3>
+        <p class="rule">The receiver may wait for VALID, may raise READY first, and may lower READY again before VALID arrives. Request-channel READY is recommended HIGH by default.</p>
+        <div class="part"><span class="l l-why">Why</span><p>READY is the receiver's statement about its own capacity, which changes from cycle to cycle. Raising it early saves a cycle per transfer; that is why a default-HIGH AWREADY or ARREADY is recommended. With READY LOW by default every transfer takes at least two cycles. The price of default HIGH is that the receiver must be able to accept any valid request presented.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Subordinate with a 4-entry request queue drives ARREADY = (entries free &gt; 0), from a flop. When the queue is full ARREADY drops, even with no ARVALID; that is legal. Back-to-back reads move one per cycle while space lasts.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A default-LOW READY halves the peak request rate. A default-HIGH READY with no room behind it drops a request: data loss, not a stall.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.3, p.29–30</li><li><span class="kind spec">Spec</span>H.c §A3.2.2 Note, p.A3-42</li><li><span class="kind illus">Illustrative</span>queue design</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rst">
+        <div class="meta"><span>Clock &amp; reset</span><span>§A2.1.1 p.27</span></div>
+        <h3>No combinational path from input to output</h3>
+        <p class="rule">On an interface, every output must come from a flop or from other outputs' logic, never straight through from an input.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If both ends of an interface had combinational paths, for example READY = f(VALID) on one side and VALID = f(READY) on the other, the pair could form a loop with no flop in it. Even without a loop, input-to-output paths chain across components until timing fails. The rule makes every interface a clean timing boundary.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A peripheral computes PREADY-style AWREADY = AWVALID &amp;&amp; !busy. On its own it looks harmless. Behind a Manager that also drives AWVALID from a combinational arbitration of its inputs, this path can run across three blocks and miss 1 GHz.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Combinational loops in synthesis, or timing paths that fail only when two IPs are integrated. Lint tools that model AXI boundaries flag it.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.1.1, p.27</li><li><span class="kind bg">Background</span>timing-closure reasoning</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="rst">
+        <div class="meta"><span>Clock &amp; reset</span><span>§A2.1.2 p.27</span></div>
+        <h3>Assert reset any time, release it on an edge</h3>
+        <p class="rule">ARESETn may assert asynchronously; deassertion must be synchronous to ACLK. Signals held LOW in reset may rise at the earliest on the edge after ARESETn is HIGH.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Asynchronous assertion lets reset work even with no clock running. Synchronous release avoids flops leaving reset in different cycles (reset recovery and removal violations). The extra edge of margin covers skew in the reset tree, so the partner is guaranteed out of reset before the first VALID.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 2-flop reset synchroniser in each IP releases reset on an ACLK edge. If the Manager's tree releases one cycle before the Subordinate's, a VALID driven on the very first edge could hit a Subordinate still in reset. Issue L made explicit that both sides wait for the edge after ARESETn is HIGH.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>The first transaction after power-on or a warm reset vanishes, or is half-accepted. It is intermittent because it depends on reset-tree skew.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.1.2, p.27</li><li><span class="kind spec">Spec</span>Table B4.3 (Reset clarification), p.311</li><li><span class="kind bg">Background</span>reset synchroniser practice</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="dep">
+        <div class="meta"><span>Dependencies</span><span>§A2.3.2.1 p.31</span></div>
+        <h3>A write is answered only after its request and its last beat</h3>
+        <p class="rule">BVALID waits for the AWVALID/AWREADY handshake and the WVALID/WREADY handshake of the WLAST beat.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A write response tells the Manager the write is now the Subordinate's problem. From then on the Subordinate has to order it correctly against every later access to the same address. It can only do that hazard check once it knows the address. Waiting for WLAST makes sure the response covers all the data.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU writes a flag, gets BRESP, then reads the flag through another path. If the Subordinate had answered before seeing AWADDR, it could not have known that read was to the same location, and the read could overtake the write.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An AXI3-style Subordinate that answers before taking the address is not compliant with AXI4 or AXI5. It needs a wrapper that holds B until AW is accepted.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.3.2.1, p.31</li><li><span class="kind spec">Spec</span>H.c §A3.3.1, p.A3-46 · §A3.3.2, p.A3-47</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="dep">
+        <div class="meta"><span>Dependencies</span><span>§A2.3.2.1 p.31</span></div>
+        <h3>AW and W are independent in both directions</h3>
+        <p class="rule">The Manager must not wait for AWREADY or WREADY before raising AWVALID or WVALID. The Subordinate may wait for either VALID, or both, before raising either READY.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Subordinates differ. One accepts the address first and streams data; another buffers data first and needs both to start. Letting the receiver choose, and forbidding the transmitter from choosing, covers both without a deadlock.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A width converter needs AWSIZE before it can pack W beats, so it waits for AWVALID before WREADY. An SRAM controller wants all data before the write, so it waits for WLAST before AWREADY. A Manager that drives both VALIDs freely works with both.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>See the Deadlock scenario in section 9: Manager waits for AWREADY, Subordinate waits for WVALID, and the bus stops.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.3.2.1, p.31</li><li><span class="kind spec">Spec</span>H.c Caution, p.A3-46</li><li><span class="kind illus">Illustrative</span>converter and SRAM examples</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="dep">
+        <div class="meta"><span>Dependencies</span><span>§A2.3.2.2 p.32 · §A3.2.2 p.55</span></div>
+        <h3>Read data only for a request that was accepted</h3>
+        <p class="rule">RVALID waits for ARVALID and ARREADY. Even a Subordinate with a single data source raises RVALID only in response to a request.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The Manager matches each R beat to an outstanding request by ID and counts beats to find the end. Unrequested data would have nothing to match. A FIFO-like peripheral that "always has data" must still wait to be asked.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A UART RX FIFO behind an AXI port has a byte ready. Driving RVALID because the FIFO is non-empty would hand a byte to a Manager that never asked, which would drop it or match it to the wrong ID.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Lost data, or an R beat matched to a later request that then gets one beat too many.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.3.2.2, p.32</li><li><span class="kind spec">Spec</span>§A3.2.2, p.55</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="txn">
+        <div class="meta"><span>Transactions</span><span>§A2.6 p.41</span></div>
+        <h3>A Manager must finish what it started, on its own</h3>
+        <p class="rule">Having issued a write, a Manager must be able to supply all its data and then take its response. Having issued a read, it must be able to take all its data. None of this may depend on other transactions.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Interconnects and Subordinates commit resources when they accept a request. If the Manager's ability to finish depended on some other transaction making progress, that other transaction could be stuck behind the resources this one holds: a cycle of waits across the system.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DMA issues a 16-beat read and plans to empty its 4-beat buffer by writing to a second Subordinate. If that write is blocked behind the read in the interconnect, the read can't drain. The fix is to issue reads only up to buffer space, or to size the buffer for all outstanding read data.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>System-level deadlocks that appear only under particular traffic mixes, often found late in emulation.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.6, p.41</li><li><span class="kind illus">Illustrative</span>DMA example</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="txn">
+        <div class="meta"><span>Transactions</span><span>§A2.6 p.41 · Table B4.2 p.309</span></div>
+        <h3>Don't block data-less writes behind early data</h3>
+        <p class="rule">A Subordinate must not stop accepting data-less write requests because some other write's data arrived before its request.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Write data can lead its request. If a Subordinate refuses new AW requests while holding data whose AW has not come yet, and the next AW in line is a data-less write, the AW that would release the data may be queued behind it. Data-less writes have no W beats to unblock anything, so they must not be caught in that wait.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An interconnect forwards W for write X early, but X's AW sits behind a data-less cache maintenance write Y in the AW queue. A Subordinate that waits for X's AW before taking Y never gets X's AW.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Deadlock in systems that mix normal writes with data-less write requests. Issue K made this rule explicit.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.6, p.41</li><li><span class="kind spec">Spec</span>Table B4.2, p.309</li><li><span class="kind derived">Derived</span>deadlock sequence</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="txn">
+        <div class="meta"><span>Transactions</span><span>§A2.6 p.41</span></div>
+        <h3>An interconnect must realign AW and W</h3>
+        <p class="rule">When an interconnect routes by address, it must show write data as valid only to the Subordinate the data is for.</p>
+        <div class="part"><span class="l l-why">Why</span><p>W has no address. With W allowed ahead of AW, an interconnect that forwarded WVALID before decoding the matching AW could deliver data to the wrong port.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 1×4 crossbar keeps a small FIFO of decoded AW destinations. W beats are steered by the head of that FIFO. If the FIFO is empty, W waits (WREADY LOW to the Manager), even though the Subordinates might be ready.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Data written to the wrong Subordinate, or W beats of two writes mixed at one port.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.6, p.41</li><li><span class="kind bg">Background</span>crossbar design</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="pipe">
+        <div class="meta"><span>Register stages</span><span>§A2.5 p.40</span></div>
+        <h3>Any number of register stages, on any channel</h3>
+        <p class="rule">VALID, READY and CRDT paths may each have any number of stages; channels may differ. VALID is delayed exactly like its payload (and RP, SHAREDCRD).</p>
+        <div class="part"><span class="l l-why">Why</span><p>No channel is tied to another in time, so delaying one channel never breaks a cross-channel rule. Keeping VALID aligned with its own payload is the one thing a stage must never break.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A GPU-to-memory path crosses 6 mm of die at 1.5 GHz and needs two slices on AR and R. W gets one, AW gets three because its fan-out is larger. Write data now often arrives before AW, which the protocol already allows.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A stage that delays VALID but not the payload (or the reverse) makes the receiver sample the previous transfer's address or data.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.5, p.40</li><li><span class="kind illus">Illustrative</span>floorplan numbers</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="pipe">
+        <div class="meta"><span>Register stages</span><span>§A2.5 p.40</span></div>
+        <h3>A full-rate slice needs two entries</h3>
+        <p class="rule">To register READY as well as VALID without losing throughput, a slice has to hold two transfers.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If READY to the upstream side comes from a flop, the slice only learns that downstream stalled one cycle after it already said "ready". It must have room for the transfer that arrives in that cycle. One entry for the transfer being presented plus one for the skid gives full throughput.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>See the Register slice scenario: the Subordinate stalls in cycles 5–6, the slice holds two entries, and the Manager sees AWREADY drop only in cycles 6–7. Streaming runs at one per cycle with one extra cycle of latency.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A one-entry slice with registered READY runs at 50%. A one-entry slice with combinational READY keeps a long timing path, which was the reason for adding the slice.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.5, p.40</li><li><span class="kind bg">Background</span>skid-buffer design</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="cr">
+        <div class="meta"><span>Credited transport</span><span>§A2.2 p.28 · §A2.4.1 p.34</span></div>
+        <h3>Credits replace READY</h3>
+        <p class="rule">The receiver pre-grants buffer space as credits; a transfer happens whenever VALID is HIGH, and needs a credit.</p>
+        <div class="part"><span class="l l-why">Why</span><p>With READY, the transmitter has to see the receiver's state from the same cycle, either through a combinational path or through a skid buffer at every register stage. With credits, the transmitter already knows it has space. Every wire can be a pure pipeline flop and no skid buffers are needed along the way.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 2 GHz mesh with three pipeline stages each way. With Valid-Ready each stage needs a 2-entry skid buffer per channel. With credits, the receiver's buffer is sized to the credit loop once and the stages are plain flops.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Sending without a credit overflows the receiver's buffer: silent corruption, not backpressure.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.2, p.28 · §A2.4.1, p.34</li><li><span class="kind bg">Background</span>mesh pipelining</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="cr">
+        <div class="meta"><span>Credited transport</span><span>§A2.4.1 p.34</span></div>
+        <h3>1 to 15 credits per plane</h3>
+        <p class="rule">A receiver gives at least one credit per Resource Plane and at most 15 per plane, plus at most 15 shared.</p>
+        <div class="part"><span class="l l-why">Why</span><p>At least one guarantees every plane can always make progress. The cap of 15 bounds the transmitter's counter at 4 bits per plane, so implementations agree without negotiating counter widths.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Credit loop: 1 cycle VALID flop + 2 cycles receiver turnaround + 1 cycle CRDT flop = 4 cycles, the same loop as Figure A2.7. Full rate needs ≥ 4 credits, well within 15. Add two register stages each way and the loop is 8.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Too few credits: throughput capped at credits ÷ loop. A 16th credit overflows a 4-bit counter at the transmitter, making it believe it has 0.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.4.1, p.34</li><li><span class="kind derived">Derived</span>throughput = credits ÷ loop</li><li><span class="kind illus">Illustrative</span>pipeline depths</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="cr">
+        <div class="meta"><span>Credited transport</span><span>§A2.4.2 p.35</span></div>
+        <h3>Same ID never spans two planes</h3>
+        <p class="rule">A Manager must not issue a request with the same ID as an outstanding transaction on the same channel but on a different Resource Plane.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Planes have no ordering between them; that is the point of planes. AXI's same-ID ordering promise can only hold if all same-ID traffic shares one plane.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A Manager puts posted writes on RP0 and latency-critical writes on RP1, all with AWID 4. RP1 traffic would overtake RP0, and B responses with ID 4 would come back in an order the Manager can't untangle.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Responses matched to the wrong transaction. Give each plane its own IDs.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.4.2, p.35</li><li><span class="kind illus">Illustrative</span>traffic split</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="cr">
+        <div class="meta"><span>Credited transport</span><span>§A2.4.4 p.38</span></div>
+        <h3>PENDING: one cycle of warning</h3>
+        <p class="rule">PENDING is HIGH in the cycle before VALID. When PENDING falls, VALID is LOW in the next cycle. PENDING may be HIGH with no transfer following.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The receiver can gate its input clock while PENDING is LOW and be sure no transfer arrives unannounced. PENDING is only a hint upward, so a transmitter that can't predict its traffic simply ties it HIGH (the default).</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A memory controller's AR input pipeline gates 40% of its idle cycles by watching ARPENDING. The ungating ICG needs one cycle, which is exactly the warning PENDING gives.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>VALID without PENDING the cycle before: the transfer lands in a gated flop and is lost. Register stages must keep PENDING one cycle ahead of VALID.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A2.4.4, p.38 · §A2.5, p.40</li><li><span class="kind illus">Illustrative</span>gating numbers</li></ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- 9 LIVE -->
+<section id="live">
+  <div class="wrap">
+    <h2>9 · Live scenarios</h2>
+    <p class="sub">Cycle-level views. Each column is one ACLK cycle; a transfer happens in a column where VALID and READY are both HIGH (or, on credited channels, where VALID is HIGH). Step through each scenario; the shaded columns are the cycles that step describes. A zig-zag column separates two independent halves.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead">
+        <h3 id="sc-title"></h3>
+        <p id="sc-desc"></p>
+        <p class="src" id="sc-src"></p>
+      </div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar">
+          <button class="btn" id="prev" type="button">← Previous</button>
+          <button class="btn primary" id="next" type="button">Next →</button>
+          <div class="dots" id="dots" aria-label="Steps"></div>
+          <span class="cycles" id="cyc"></span>
+        </div>
+        <div class="stepbody">
+          <h3 id="st-title"></h3>
+          <p id="st-text"></p>
+          <p class="why" id="st-why"></p>
+          <p class="src" id="st-src"></p>
+        </div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px">The credited scenarios reproduce Figures A2.7 and A2.8 cycle for cycle. The other waveforms are drawn from the rules in §A2.3–A2.6. Their cycle positions are illustrative: the spec fixes ordering, not exact delays.</p>
+  </div>
+</section>
+
+<!-- 10 SILICON -->
+<section id="silicon">
+  <div class="wrap">
+    <h2>10 · Real silicon: what the theory turns into</h2>
+    <p class="sub">Numbers and design consequences you meet when you build or verify an AXI fabric.</p>
+    <div class="twocol">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind derived">Derived</span> peak = DATA_WIDTH ÷ 8 × ACLK, per data channel. R and W are independent, so a full-duplex DMA can use both. DATA_WIDTH options: Table A3.19, p.53.</caption>
+          <thead><tr><th>DATA_WIDTH</th><th class="num">ACLK</th><th class="num">R or W peak</th><th class="num">R + W</th><th>Typical place</th></tr></thead>
+          <tbody>
+            <tr><td>32</td><td class="num">200 MHz</td><td class="num">0.8 GB/s</td><td class="num">1.6 GB/s</td><td>Peripheral subsystem</td></tr>
+            <tr><td>64</td><td class="num">800 MHz</td><td class="num">6.4 GB/s</td><td class="num">12.8 GB/s</td><td>Microcontroller-class CPU</td></tr>
+            <tr><td>128</td><td class="num">1 GHz</td><td class="num">16 GB/s</td><td class="num">32 GB/s</td><td>Application CPU cluster port</td></tr>
+            <tr><td>256</td><td class="num">1.5 GHz</td><td class="num">48 GB/s</td><td class="num">96 GB/s</td><td>DDR or HBM controller port</td></tr>
+            <tr><td>512</td><td class="num">2 GHz</td><td class="num">128 GB/s</td><td class="num">256 GB/s</td><td>Accelerator fabric</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind bg">Background</span> common register-slice variants; the spec only requires §A2.5's rules.</caption>
+          <thead><tr><th>Slice type</th><th>Registers</th><th>Throughput</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Forward</td><td>VALID + payload</td><td>100% (READY passes through combinationally)</td><td>Long VALID/data wires</td></tr>
+            <tr><td>Backward</td><td>READY only (1 skid entry)</td><td>100%</td><td>Long READY wires, high fan-out READY</td></tr>
+            <tr><td>Full (2-entry)</td><td>Both directions</td><td>100%, +1 cycle</td><td>Default for crossing a die</td></tr>
+            <tr><td>Light / half</td><td>Both, 1 entry</td><td>50%</td><td>Low-bandwidth config ports</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 6px">Sizing a credited channel</h3>
+    <div class="tbl-wrap">
+      <table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind derived">Derived</span> from §A2.4.1, p.34: a credit can't be used in the cycle it is given or given in the cycle it is used, so the loop is at least 2 cycles. Loop = VALID stages + receiver turnaround + CRDT stages, counted from the cycle a credit is spent to the first cycle it can be spent again (Figure A2.7: 1 + 2 + 1 = 4). Full rate needs credits ≥ loop; throughput = min(1, credits ÷ loop). Pipeline depths are <span class="kind illus">Illustrative</span>.</caption>
+        <thead><tr><th>Path</th><th class="num">VALID stages</th><th class="num">Rx turnaround</th><th class="num">CRDT stages</th><th class="num">Loop (cycles)</th><th class="num">Credits for 100%</th><th class="num">With 4 credits</th></tr></thead>
+        <tbody>
+          <tr><td>Adjacent blocks</td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td class="num">3</td><td class="num">3</td><td class="num">100%</td></tr>
+          <tr><td>Figure A2.7</td><td class="num" colspan="3">credit spent cycle 4, returned 7, usable 8</td><td class="num">4</td><td class="num">4</td><td class="num">100%</td></tr>
+          <tr><td>Across a large die</td><td class="num">3</td><td class="num">2</td><td class="num">3</td><td class="num">8</td><td class="num">8</td><td class="num">50%</td></tr>
+          <tr><td>Chiplet bridge</td><td class="num">6</td><td class="num">3</td><td class="num">6</td><td class="num">15</td><td class="num">15 (the cap)</td><td class="num">27%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+        <tbody>
+          <tr><td>Bus hangs on the first write to one particular Subordinate</td><td>Manager waits for AWREADY before WVALID; that Subordinate waits for WVALID before AWREADY.</td><td class="ref">§A2.3.2.1, p.31</td></tr>
+          <tr><td>VIP flags BVALID before AW handshake on a legacy IP</td><td>AXI3 Subordinate responding to write data before taking the address.</td><td class="ref">§A2.3.2.1, p.31 · H.c §A3.3.2, p.A3-47</td></tr>
+          <tr><td>Address of one Manager paired with data of another</td><td>Arbiter switched requests while AWVALID was HIGH and AWREADY LOW.</td><td class="ref">§A2.3, p.29</td></tr>
+          <tr><td>Write data lands on the wrong Subordinate</td><td>Crossbar forwards W before decoding the AW it belongs to.</td><td class="ref">§A2.6, p.41</td></tr>
+          <tr><td>First transaction after warm reset lost</td><td>VALID raised on the same edge ARESETn deasserted; partner still in reset.</td><td class="ref">§A2.1.2, p.27</td></tr>
+          <tr><td>Timing fails only after two IPs are connected</td><td>READY computed combinationally from VALID on both sides of a boundary.</td><td class="ref">§A2.1.1, p.27</td></tr>
+          <tr><td>Peripheral returns a read nobody asked for</td><td>RVALID tied to "FIFO not empty" instead of an accepted AR.</td><td class="ref">§A3.2.2, p.55 · §A2.3.2.2, p.32</td></tr>
+          <tr><td>System deadlock under heavy DMA</td><td>DMA issues more read data than its buffers can take while its drain depends on other traffic.</td><td class="ref">§A2.6, p.41</td></tr>
+          <tr><td>Credited link loses a transfer after reset</td><td>Credit counter not cleared in reset, or CRDT pulsing during reset.</td><td class="ref">§A2.4.1, p.34</td></tr>
+          <tr><td>Gated receiver misses a transfer</td><td>Pipeline stage delays VALID but not PENDING, so PENDING no longer leads VALID.</td><td class="ref">§A2.4.4, p.38 · §A2.5, p.40</td></tr>
+          <tr><td>Same-ID responses out of order on a credited link</td><td>Manager used one AWID on two Resource Planes.</td><td class="ref">§A2.4.2, p.35</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 11 CHANGES -->
+<section id="changes">
+  <div class="wrap">
+    <h2>11 · What changed from AXI3 and AXI4 to Issue L</h2>
+    <p class="sub">Side by side: what the previous-generation spec (Issue H.c, which still defined AXI3 and AXI4) said, and what Issue L says now. <span class="ver old">H.c</span> is the old text and <span class="ver new">L</span> is the current one.</p>
+    <div class="tbl-wrap cmp">
+      <table>
+        <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI3 / AXI4</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>What the document covers</td><td class="then">AXI3, AXI4, AXI4-Lite, AXI5, AXI5-Lite, ACE, ACE5 and ACE5-Lite variants, in Parts A–F.</td><td>AXI5, AXI5-Lite, ACE5-Lite, ACE5-LiteDVM, ACE5-LiteACP. AXI3, AXI4 and AXI4-Lite were removed in Issue J as "not recommended for new designs, superseded by AXI5". ACE went too; CHI is recommended for full coherency.</td><td class="ref">Table B4.1, p.307 · H.c Contents</td></tr>
+          <tr><td>Names</td><td class="then">"Write address channel", "source/destination". Issue H.b replaced master/slave with Manager/Subordinate.</td><td>"Write request channel", "transmitter (Tx)/receiver (Rx)". Signal names unchanged.</td><td class="ref">p.ii · §A1.2, p.22 · §A2.3, p.29 · H.c §A3.2.1, p.A3-41</td></tr>
+          <tr><td>Flow control</td><td class="then">VALID/READY only.</td><td>VALID/READY (default) or Credited, chosen by AXI_Transport; Credited is AXI5-only. Adds PENDING, CRDT, CRDTSH, RP, SHAREDCRD and Resource Planes.</td><td class="ref">§A2.2, p.28 · Table B4.3, p.311</td></tr>
+          <tr><td>Write response dependency</td><td class="then"><strong>AXI3:</strong> BVALID only after WVALID, WREADY and WLAST. Address not required. <strong>AXI4/AXI5:</strong> also after AWVALID and AWREADY.</td><td>Same as AXI4: BVALID after AWVALID, AWREADY, WVALID, WREADY and the WLAST beat.</td><td class="ref">H.c §A3.3.1, p.A3-45–A3-46 · §A2.3.2.1, p.31</td></tr>
+          <tr><td>AXI3 legacy Subordinates</td><td class="then">Not compliant with AXI4/AXI5 if they respond before taking the address; need a wrapper. Every AXI3 Manager complies.</td><td>AXI3 not described at all.</td><td class="ref">H.c §A3.3.2, p.A3-47</td></tr>
+          <tr><td>Reset</td><td class="then">Manager drives ARVALID, AWVALID, WVALID LOW; Subordinate drives RVALID, BVALID LOW. The Manager's earliest VALID is the edge after ARESETn is HIGH.</td><td>Stated for every "signal required to be deasserted during reset", including credits. Clarified in Issue L that all such signals wait until at least the edge after ARESETn is HIGH.</td><td class="ref">H.c §A3.1.2, p.A3-40 · §A2.1.2, p.27 · Table B4.3, p.311</td></tr>
+          <tr><td>Default READY</td><td class="then">Per channel: AWREADY and ARREADY recommended HIGH (LOW forces at least two cycles). WREADY HIGH only if write data can always be accepted in one cycle. BREADY and RREADY similarly.</td><td>One general rule: READY may default HIGH or LOW; HIGH recommended on request channels, and then any valid request must be accepted.</td><td class="ref">H.c §A3.2.2, p.A3-42–A3-43 · §A2.3, p.30</td></tr>
+          <tr><td>Channel relationships</td><td class="then">Write response follows last W; read data follows the read address; the Manager can supply all write data and accept all read data.</td><td>Adds: the Manager must accept write responses on its own; either side may serialise transactions; a Subordinate must not block data-less write requests behind leading write data (Issue K).</td><td class="ref">H.c §A3.3, p.A3-44 · §A2.6, p.41 · Table B4.2, p.309</td></tr>
+          <tr><td>WLAST and RLAST</td><td class="then">Always present on AXI3/AXI4.</td><td>May be omitted: WLAST_Present and RLAST_Present properties, default True.</td><td class="ref">Tables A3.21 and A3.25, p.53–55</td></tr>
+          <tr><td>Register stages</td><td class="then">A short description: a register slice can go at almost any point in any channel.</td><td>Explicit rules: any number of stages on VALID, READY and CRDT; VALID delayed with its payload, RP and SHAREDCRD; PENDING stays one cycle ahead.</td><td class="ref">H.c §A1.2.3, p.A1-29 · §A2.5, p.40</td></tr>
+          <tr><td>Wording dropped, rule kept</td><td class="then">The Caution about the AW/W deadlock, and "by issuing a write response, the Subordinate takes responsibility for hazard checking".</td><td>The rules are the same; the explanation is no longer in the text. This guide keeps it, citing H.c.</td><td class="ref">H.c p.A3-46 · §A2.3.2.1, p.31</td></tr>
+          <tr><td>Data width</td><td class="then">8 to 1024 bits.</td><td>Unchanged: DATA_WIDTH 8 to 1024.</td><td class="ref">H.c §A1.2, p.A1-27 · Table A3.19, p.53</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>One more historical change, covered in the IDs &amp; Ordering guide:</strong> AXI3 had a WID signal and allowed write data of different transactions to be interleaved. AXI4 removed both. Issue L brings back interleaving of write data in one specific case only: different transactions on different Resource Planes of a credited interface.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.4.2, p.35 · §A5.5, p.100</p>
+    </div>
+  </div>
+</section>
+
+<!-- 12 VERIFY -->
+<section id="verify">
+  <div class="wrap">
+    <h2>12 · Verification</h2>
+    <p class="sub">Build one channel-level agent per direction and compose it into Manager, Subordinate and passive (monitor) interface agents. Every timing choice the spec leaves free should be a random knob, because each one is a place where a partner can make a different choice than the one you tested against.</p>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Agent knobs that find bugs</h3>
+        <ul class="tight">
+          <li>Per channel: VALID delay, READY delay, probability READY is HIGH before VALID, READY toggling while VALID is LOW.</li>
+          <li>Subordinate policy: wait for AWVALID only, WVALID only, or both before each READY.</li>
+          <li>W lead/lag versus AW: -16 to +16 beats.</li>
+          <li>Back-to-back with zero idle cycles, and long idles to check gating.</li>
+          <li>Credited mode: credit count per plane (1 to 15), CRDT return delay, shared-credit pool, PENDING tied HIGH vs exact.</li>
+          <li>0 to N register stages between agent and DUT, per channel.</li>
+        </ul>
+        <p class="src"><span class="kind bg">Background</span>agent architecture · knobs mirror §A2.3–A2.5</p>
+      </div>
+      <div class="card">
+        <h3>Assertions</h3>
+        <ul class="tight">
+          <li>Each VALID LOW in reset and on the first edge after ARESETn rises. <span class="ref">§A2.1.2, p.27</span></li>
+          <li>VALID HIGH and READY LOW ⇒ VALID HIGH and payload unchanged next cycle. <span class="ref">§A2.3, p.29</span></li>
+          <li>No X on VALID or READY out of reset; no X on payload while VALID. <span class="ref">Background</span></li>
+          <li>BVALID only after an accepted AW and an accepted WLAST beat for that write. <span class="ref">§A2.3.2.1, p.31</span></li>
+          <li>RVALID only with an outstanding accepted AR. <span class="ref">§A2.3.2.2, p.32</span></li>
+          <li>WLAST exactly on beat AWLEN+1; RLAST exactly on beat ARLEN+1. <span class="ref">§A3.2.1, p.53 · §A3.2.2, p.55</span></li>
+          <li>Credited: VALID only with credit &gt; 0 on that plane (or a shared credit with SHAREDCRD); counters never exceed 15; CRDT LOW in reset. <span class="ref">§A2.4.1, p.34</span></li>
+          <li>Credited: $rose(VALID) ⇒ $past(PENDING); !PENDING ⇒ ##1 !VALID. <span class="ref">§A2.4.4, p.38</span></li>
+          <li>Credited: RP &lt; Num_RP; AW and W of one write share an RP; no same-ID across planes while outstanding. <span class="ref">§A2.4.2, p.35</span></li>
+          <li>Liveness: VALID HIGH ⇒ eventually READY (bounded in simulation). <span class="ref">Glossary "in a timely manner", p.316</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <h3>SVA sketches</h3>
+<pre>// VALID is sticky and the payload is stable until the handshake
+a_aw_stable: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  AWVALID &amp;&amp; !AWREADY |=&gt; AWVALID &amp;&amp; $stable(aw_payload));
+
+// nothing valid on the first edge out of reset
+a_rst_exit: assert property (@(posedge ACLK)
+  $rose(ARESETn) |-&gt; !AWVALID &amp;&amp; !WVALID &amp;&amp; !ARVALID
+                  &amp;&amp; !BVALID &amp;&amp; !RVALID);
+
+// B only after AW accepted and WLAST accepted (per-ID counters in aux code)
+a_b_after_aw_w: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  BVALID |-&gt; (aw_acc_cnt[BID] &gt; b_cnt[BID]) &amp;&amp; (wlast_acc_cnt &gt; b_cnt_total));
+
+// R only for an outstanding read
+a_r_req: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  RVALID |-&gt; ar_outstanding[RID] &gt; 0);
+
+// credited: PENDING leads VALID, never send without a credit
+a_pend: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  ARVALID |-&gt; $past(ARPENDING));
+a_crdt: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  ARVALID &amp;&amp; !ARSHAREDCRD |-&gt; crd_cnt[ARRP] &gt; 0);</pre>
+        <p class="src"><span class="sl">Spec</span>§A2.1.2, p.27 · §A2.3, p.29 · §A2.3.2, p.31–32 · §A2.4.1, p.34 · §A2.4.4, p.38. Counters and aw_payload are auxiliary checker code. a_b_after_aw_w is simplified: write data has no ID, so match W to AW in arrival order.</p>
+      </div>
+      <div class="card">
+        <h3>Scenarios that find real bugs</h3>
+        <ul class="tight">
+          <li>Whole W burst before AW, with the Subordinate also holding AWREADY LOW until WLAST. <span class="ref">§A2.6, p.41</span></li>
+          <li>AW with no W for many cycles, while a data-less write follows. <span class="ref">§A2.6, p.41</span></li>
+          <li>READY pulses while VALID is LOW; READY LOW for exactly one cycle in every burst. <span class="ref">§A2.3, p.29</span></li>
+          <li>ARESETn asserted in the middle of bursts on every channel, released, traffic restarts. <span class="ref">§A2.1.2, p.27</span></li>
+          <li>BREADY and RREADY held LOW for long periods with many transactions outstanding. <span class="ref">§A2.6, p.41</span></li>
+          <li>Credited: exactly 1 credit per plane; shared credit only; 15 credits returned in a burst. <span class="ref">§A2.4.1–A2.4.3, p.34–36</span></li>
+          <li>Credited: one plane's receiver stalled forever, other planes must keep moving. <span class="ref">§A2.4.2, p.35</span></li>
+        </ul>
+        <h3 style="margin-top:10px">Functional coverage</h3>
+        <ul class="tight">
+          <li>Per channel: VALID-before-READY × READY-before-VALID × same-cycle; stall length bins.</li>
+          <li>W lead/lag bins vs AW; BREADY before vs after BVALID.</li>
+          <li>Outstanding depth per channel up to the DUT's limit.</li>
+          <li>Credited: credit count 0, 1, mid, max at each VALID; dedicated vs shared spend per plane; plane × channel.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 QUIZ -->
+<section id="quiz">
+  <div class="wrap">
+    <h2>13 · Test yourself</h2>
+    <p class="sub">Questions in the style of a DV interview, from basic to advanced. Answer in your head first, then open the card. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+
+    <details><summary>Name the five AXI channels and say which side drives VALID on each. <span class="lvl">Basic</span></summary><div>
+      <p>AW (write request), W (write data) and AR (read request): VALID from the Manager. B (write response) and R (read data and response): VALID from the Subordinate. READY always comes from the other side.</p>
+      <p class="src"><span class="sl">Spec</span>§A1.2, p.22–23 · Table A2.2, p.30</p></div></details>
+
+    <details><summary>When exactly does a transfer happen, and can the transmitter drop VALID if READY doesn't come? <span class="lvl">Basic</span></summary><div>
+      <p>On a rising ACLK edge where VALID and READY are both HIGH. No: once VALID is asserted it stays asserted, with stable information, until that handshake.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.3, p.29</p></div></details>
+
+    <details><summary>Can write data arrive at the Subordinate before the write request? <span class="lvl">Basic</span></summary><div>
+      <p>Yes. The protocol defines no relationship between AW and W beyond the dependency rules, so W may come before AW or in the same cycle, for example when AW has more register stages. An interconnect must realign them before routing data.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.6, p.41</p></div></details>
+
+    <details><summary>What is the recommended default for AWREADY and ARREADY, and what does it commit the Subordinate to? <span class="lvl">Basic</span></summary><div>
+      <p>HIGH, to save a cycle per request. With it HIGH, the Subordinate must be able to accept any valid request presented. H.c adds that LOW forces every transfer to take at least two cycles.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.3, p.30 · H.c §A3.2.2, p.A3-42</p></div></details>
+
+    <details><summary>Your Manager waits for AWREADY before asserting WVALID. It works with every Subordinate in your testbench. Is it compliant? <span class="lvl">Intermediate</span></summary><div>
+      <p>No. The Manager must not wait for AWREADY or WREADY before asserting AWVALID or WVALID. A Subordinate is allowed to wait for WVALID before AWREADY; paired with such a Subordinate, your Manager deadlocks. Your testbench Subordinates simply never used that freedom. Add a Subordinate policy knob that does.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.3.2.1, p.31 · H.c Caution, p.A3-46</p></div></details>
+
+    <details><summary>Why must BVALID wait for the AW handshake in AXI4 and AXI5 when AXI3 didn't require it? <span class="lvl">Intermediate</span></summary><div>
+      <p>A write response hands responsibility for hazard checking against later transactions to the Subordinate, and it can't check hazards without the address. AXI3 didn't state the dependency, but no real component was expected to answer before taking the address. AXI4 made it a rule, so an AXI3 Subordinate that answered early needs a wrapper.</p>
+      <p class="src"><span class="sl">Spec</span>H.c §A3.3.1, p.A3-46 · §A3.3.2, p.A3-47 · §A2.3.2.1, p.31</p></div></details>
+
+    <details><summary>Can a Subordinate generate AWREADY combinationally from AWVALID? <span class="lvl">Intermediate</span></summary><div>
+      <p>It may <em>wait</em> for AWVALID, but §A2.1.1 forbids combinational paths between inputs and outputs on an interface. So a READY that depends on VALID has to go through a flop and can rise at the earliest in the cycle after VALID. The alternative is to drive READY from internal state alone, for example HIGH while space is free. Many real IPs do have such paths and get away with it only until they meet a partner that does the same.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.1.1, p.27 · §A2.3, p.29</p></div></details>
+
+    <details><summary>Why must a Subordinate keep accepting data-less write requests while it holds early write data? <span class="lvl">Intermediate</span></summary><div>
+      <p>The AW that matches the early data may be queued behind the data-less write. If the Subordinate waits for that AW before taking the data-less one, neither ever arrives. Issue K added this as an explicit rule.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.6, p.41 · Table B4.2, p.309</p></div></details>
+
+    <details><summary>On a credited channel, when can a credit given in cycle N first be used, and what are the limits on credits? <span class="lvl">Intermediate</span></summary><div>
+      <p>In cycle N+1 at the earliest: no combinational path between credit signals and the rest of the channel. At least 1 and at most 15 credits per Resource Plane, plus up to 15 shared. In reset the transmitter has none and CRDT is LOW.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.4.1, p.34</p></div></details>
+
+    <details><summary>What does PENDING promise, and what doesn't it promise? <span class="lvl">Intermediate</span></summary><div>
+      <p>It promises that VALID is never HIGH without PENDING HIGH in the previous cycle, so a receiver may gate its clock while PENDING is LOW. It does not promise that a transfer follows: PENDING may be HIGH with no credit, may rise and fall with no transfer, and may be tied HIGH permanently, including in reset.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.4.4, p.38</p></div></details>
+
+    <details><summary>Can a Manager use the same AWID on two Resource Planes? Can it interleave write data? <span class="lvl">Advanced</span></summary><div>
+      <p>Not while a transaction with that ID is outstanding on the other plane: planes have no ordering between them. It may interleave write data of different transactions if they are on different planes. That is the only write-data interleaving AXI has allowed since AXI3's WID was removed in AXI4.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.4.2, p.35 · §A5.5, p.100</p></div></details>
+
+    <details><summary>Your credited link has 3 VALID stages, 2 cycles of receiver turnaround and 3 CRDT stages, and the receiver has 6 buffer entries. What throughput do you get, and what would you change? <span class="lvl">Advanced</span></summary><div>
+      <p>Loop = 3 + 2 + 3 = 8 cycles from spending a credit to being able to spend it again (Figure A2.7 is the same sum: 1 + 2 + 1 = 4). With 6 credits the channel carries at most 6 transfers per 8 cycles, 75%. For full rate the receiver needs at least 8 entries and credits (up to 15 are allowed), or fewer pipeline stages. Shared credits don't help a single plane's throughput; they only rebalance between planes.</p>
+      <p class="src"><span class="sl">Spec</span><span class="kind derived">Derived</span> from §A2.4.1, p.34 and §A2.4.3, p.36</p></div></details>
+
+    <details><summary>Why does a register slice that registers READY need two entries to run at full rate? <span class="lvl">Advanced</span></summary><div>
+      <p>With registered READY, the slice tells upstream "ready" based on last cycle's state. If downstream stalls this cycle, the transfer accepted this cycle still needs a place to go. One entry holds the transfer on offer downstream, one is the skid. With one entry you either lose every other cycle or need a combinational READY path, which is what the slice was meant to remove.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.5, p.40 · <span class="kind bg">Background</span>skid-buffer design</p></div></details>
+
+    <details><summary>Which signals must be LOW in reset, and which can be anything? Did that change in Issue L? <span class="lvl">Advanced</span></summary><div>
+      <p>LOW: every VALID, and on credited interfaces every CRDT and CRDTSH. Anything: READY, payload, and PENDING (which may stay HIGH). H.c listed the VALIDs per side. Issue L states the rule for every signal that must be deasserted in reset, and clarifies that all of them wait until at least the rising edge after ARESETn is HIGH.</p>
+      <p class="src"><span class="sl">Spec</span>§A2.1.2, p.27 · §A2.3, p.29 · §A2.4.1, p.34 · §A2.4.4, p.38 · Table B4.3, p.311 · H.c §A3.1.2, p.A3-40</p></div></details>
+  </div>
+</section>
+
+<!-- 14 REFS -->
+<section id="refs">
+  <div class="wrap">
+    <h2>14 · Spec reference index</h2>
+    <p class="sub">Every section, table and figure this page cites. "Used in" lists the sections of this page that rely on it.</p>
+    <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>Release information</td><td>Issue history (H.b terminology, J, K, L)</td><td class="num">ii</td><td>1, 11</td></tr>
+          <tr><td>§A1.1</td><td>About the AXI protocol</td><td class="num">21</td><td>1, 9</td></tr>
+          <tr><td>§A1.2, Figures A1.1–A1.2</td><td>AXI Architecture</td><td class="num">22–23</td><td>1, 2, 11, 13</td></tr>
+          <tr><td>§A1.2.1, §A1.2.1.1</td><td>Interface and interconnect; Typical system topologies</td><td class="num">24</td><td>1, 2</td></tr>
+          <tr><td>§A1.3.2</td><td>AXI transactions and transfers</td><td class="num">25</td><td>2</td></tr>
+          <tr><td>§A2.1.1</td><td>Clock</td><td class="num">27</td><td>3, 5, 8, 10, 13</td></tr>
+          <tr><td>§A2.1.2, Figure A2.1</td><td>Reset; Exit from reset</td><td class="num">27</td><td>3, 4, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A2.2, Table A2.1</td><td>AXI transport options; AXI_Transport property</td><td class="num">28</td><td>3, 8, 11</td></tr>
+          <tr><td>§A2.3, Figures A2.2–A2.4</td><td>Valid-Ready transport</td><td class="num">29–30</td><td>4, 5, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>Table A2.2</td><td>Valid and Ready signals</td><td class="num">30</td><td>2, 4, 13</td></tr>
+          <tr><td>§A2.3.2.1, Figure A2.5</td><td>Write transaction dependencies</td><td class="num">31</td><td>4, 6, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A2.3.2.2, Figure A2.6</td><td>Read transaction dependencies</td><td class="num">32</td><td>4, 6, 8, 9, 10, 12</td></tr>
+          <tr><td>§A2.4, Table A2.3</td><td>Credited transport; Credited channel signals</td><td class="num">33</td><td>4, 7</td></tr>
+          <tr><td>§A2.4.1, Figure A2.7</td><td>Credited flow control; Example Transfers</td><td class="num">34</td><td>3, 4, 7, 8, 9, 10, 12, 13</td></tr>
+          <tr><td>§A2.4.2, Table A2.5</td><td>Resource Planes; Resource plane number properties</td><td class="num">35</td><td>4, 7, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A2.4.3, Tables A2.6–A2.7, Figure A2.8</td><td>Shared credits</td><td class="num">36–37</td><td>4, 7, 9, 12, 13</td></tr>
+          <tr><td>§A2.4.4, Figure A2.9</td><td>Transfer-level clock gating</td><td class="num">38</td><td>3, 4, 7, 8, 9, 10, 12, 13</td></tr>
+          <tr><td>§A2.4.5, Table A2.9</td><td>Credited transport signals</td><td class="num">39</td><td>4, 7</td></tr>
+          <tr><td>§A2.5</td><td>Pipelining and register stages</td><td class="num">40</td><td>1, 8, 9, 10, 11, 13</td></tr>
+          <tr><td>§A2.6</td><td>AXI transactions and transfers</td><td class="num">41</td><td>4, 6, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A3.2, Table A3.19</td><td>Write and read data; DATA_WIDTH property</td><td class="num">53</td><td>10, 11</td></tr>
+          <tr><td>§A3.2.1, Tables A3.20–A3.21</td><td>Write data channel (W); WLAST_Present</td><td class="num">53</td><td>2, 4, 9, 11, 12</td></tr>
+          <tr><td>§A3.2.2, Tables A3.24–A3.25</td><td>Read data channel (R); RLAST_Present</td><td class="num">55</td><td>2, 4, 8, 9, 10, 11, 12</td></tr>
+          <tr><td>§A5.5</td><td>Write data and response ordering</td><td class="num">100</td><td>11, 13</td></tr>
+          <tr><td>§A14.2</td><td>Interface gating with credited transport</td><td class="num">225</td><td>7</td></tr>
+          <tr><td>Table B4.1</td><td>Differences between Issue H.c and Issue J</td><td class="num">307</td><td>11</td></tr>
+          <tr><td>Table B4.2</td><td>Differences between Issue J and Issue K</td><td class="num">309</td><td>6, 8, 11, 13</td></tr>
+          <tr><td>Table B4.3</td><td>Differences between Issue K and Issue L</td><td class="num">311</td><td>8, 9, 11, 13</td></tr>
+          <tr><td>Glossary</td><td>"in a timely manner"</td><td class="num">316</td><td>12</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c (AXI3 / AXI4 comparison)</h3>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>§A1.2</td><td>AXI Architecture (data bus widths)</td><td class="num">A1-27</td><td>11</td></tr>
+          <tr><td>§A1.2.3</td><td>Register slices</td><td class="num">A1-29</td><td>11</td></tr>
+          <tr><td>§A3.1.2</td><td>Reset</td><td class="num">A3-40</td><td>11, 13</td></tr>
+          <tr><td>§A3.2.1</td><td>Handshake process</td><td class="num">A3-41</td><td>11</td></tr>
+          <tr><td>§A3.2.2</td><td>Channel signaling requirements (default READY per channel)</td><td class="num">A3-42–A3-43</td><td>8, 11, 13</td></tr>
+          <tr><td>§A3.3</td><td>Relationships between the channels</td><td class="num">A3-44</td><td>11</td></tr>
+          <tr><td>§A3.3.1, Figures A3-5 to A3-7</td><td>Dependencies between channel handshake signals; AXI3 vs AXI4/AXI5 writes; Caution</td><td class="num">A3-44–A3-46</td><td>6, 8, 9, 11, 13</td></tr>
+          <tr><td>§A3.3.2</td><td>Legacy considerations</td><td class="num">A3-47</td><td>8, 10, 11, 13</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>What is not from the spec.</strong> Items tagged <span class="kind derived">Derived</span> are arithmetic on spec values or direct consequences of spec rules, such as bandwidth and credit-loop sizing. <span class="kind illus">Illustrative</span> items are example numbers chosen to make a point (frequencies, pipeline depths, IP behaviour). <span class="kind bg">Background</span> items are general engineering knowledge such as register-slice and skid-buffer design and AXI history. Cycle positions in the live scenarios are illustrative except the two credited ones, which follow Figures A2.7 and A2.8.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><nav class="pager" aria-label="Guides"><a class="nx" href="bursts-addressing.html"><small>Next guide →</small><strong>Bursts &amp; Addressing</strong></a><a class="all" href="../index.html">All guides and the request map</a></nav></div></main>
+
+<footer>
+  <div class="wrap">Built from the AMBA AXI Protocol Specification, ARM IHI 0022 Issue L (27 Aug 2025): Chapters A1 and A2, with A3.2 for WLAST/RLAST and B4 for revision history. AXI3 and AXI4 comparisons from ARM IHI 0022 Issue H.c (Jan 2021), Chapters A1 and A3. Section 14 lists every cited section, table and figure with its page. The guide explains and indexes the spec; for sign-off, check the spec itself at the cited page.</div>
+</footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  function list(s) { return s.split(" "); }
+
+  window.PAGE = {
+    CW: 46,
+    dirName: { lp: "Manager", pl: "Subordinate", tx: "Channel Tx", rx: "Channel Rx", both: "both", sys: "System" },
+    dirCls: { tx: "lp", rx: "pl", both: "", sys: "sb" },
+    groups: [["all", "All"], ["clk", "Clock & reset"], ["vr", "Valid-Ready"], ["last", "Framing"], ["cr", "Credited transport"]],
+    sigs: [
+      ["clk", "ACLK", "sys", "clock", "The one clock of the interface", "Every input is sampled on its rising edge; outputs change only after it. No combinational path from any input to any output.", "§A2.1.1, p.27"],
+      ["clk", "ARESETn", "sys", "level", "Active-LOW reset", "May assert asynchronously; must deassert on a rising ACLK edge. Signals held LOW in reset stay LOW until the edge after ARESETn is HIGH.", "§A2.1.2, p.27"],
+      ["vr", "AWVALID", "lp", "level", "Write request is valid", "LOW in reset. Never waits for AWREADY. Once HIGH, stays HIGH with stable payload until the AW handshake.", "Table A2.2, p.30 · §A2.3, p.29 · §A2.3.2.1, p.31"],
+      ["vr", "AWREADY", "pl", "level", "Subordinate can take a write request", "May wait for AWVALID, WVALID or both, or be HIGH early. Recommended default HIGH; then any valid request must be accepted.", "Table A2.2, p.30 · §A2.3, p.30 · §A2.3.2.1, p.31"],
+      ["vr", "WVALID", "lp", "level", "Write data is valid", "Never waits for AWREADY or WREADY, for every beat. May come before, with or after AWVALID.", "Table A2.2, p.30 · §A2.3.2.1, p.31 · §A2.6, p.41"],
+      ["vr", "WREADY", "pl", "level", "Subordinate can take a write data beat", "May wait for AWVALID, WVALID or both, or be HIGH before either.", "Table A2.2, p.30 · §A2.3.2.1, p.31"],
+      ["vr", "BVALID", "pl", "level", "Write response is valid", "Only after AW handshake and the WLAST beat handshake. Never waits for BREADY.", "Table A2.2, p.30 · §A2.3.2.1, p.31"],
+      ["vr", "BREADY", "lp", "level", "Manager can take a write response", "May wait for BVALID or be HIGH early. A Manager that has sent request and data must be able to take the response without depending on other transactions.", "Table A2.2, p.30 · §A2.3.2.1, p.31 · §A2.6, p.41"],
+      ["vr", "ARVALID", "lp", "level", "Read request is valid", "LOW in reset. Never waits for ARREADY.", "Table A2.2, p.30 · §A2.3.2.2, p.32"],
+      ["vr", "ARREADY", "pl", "level", "Subordinate can take a read request", "May wait for ARVALID or be HIGH early. Recommended default HIGH.", "Table A2.2, p.30 · §A2.3, p.30 · §A2.3.2.2, p.32"],
+      ["vr", "RVALID", "pl", "level", "Read data beat is valid", "Only after the AR handshake, only in response to a request, and never waits for RREADY.", "Table A2.2, p.30 · §A2.3.2.2, p.32 · §A3.2.2, p.55"],
+      ["vr", "RREADY", "lp", "level", "Manager can take a read data beat", "May wait for RVALID. A Manager must be able to take all read data of a request it issued without depending on other transactions.", "Table A2.2, p.30 · §A2.3.2.2, p.32 · §A2.6, p.41"],
+      ["last", "WLAST", "lp", "level", "Final write beat of the transaction", "HIGH with the last beat only. BVALID waits for this beat. Can be omitted when WLAST_Present is False.", "Table A3.20, p.53 · §A2.3.2.1, p.31"],
+      ["last", "RLAST", "pl", "level", "Final read beat of the transaction", "HIGH with the last beat only. Can be omitted when RLAST_Present is False.", "Table A3.24, p.55"],
+      ["cr", "xPENDING (AW, W, B, AR, R)", "tx", "level", "A transfer might occur next cycle", "Must be HIGH the cycle before VALID. May stay HIGH forever, even in reset; default tie-off 0b1.", "Table A2.3, p.33 · §A2.4.4, p.38 · Table A2.9, p.39"],
+      ["cr", "AWCRDT, WCRDT [Num_RP_AWW-1:0]", "rx", "pulse", "One credit per bit per cycle, per Resource Plane", "LOW in reset. Driven by the Subordinate (the receiver of AW and W).", "§A2.4.1, p.34 · Table A2.9, p.39"],
+      ["cr", "ARCRDT [Num_RP_AR-1:0]", "rx", "pulse", "One AR credit per bit per cycle", "LOW in reset. Driven by the Subordinate.", "§A2.4.1, p.34 · Table A2.9, p.39"],
+      ["cr", "BCRDT, RCRDT", "rx", "pulse", "One response credit per cycle", "Driven by the Manager, the receiver of B and R. One Resource Plane only.", "§A2.4.2, p.35 · Table A2.9, p.39"],
+      ["cr", "xCRDTSH (AW, W, AR)", "rx", "pulse", "One shared credit, usable on any RP", "Only when Shared_Credits_x is True. May be given without any CRDT.", "§A2.4.3, p.36 · Table A2.9, p.39"],
+      ["cr", "xRP (AW, W, AR)", "tx", "bus", "Resource Plane of this transfer", "clog2(Num_RP) bits; absent when Num_RP is 1. AW and W of one transaction use the same RP.", "§A2.4.2, p.35 · Table A2.9, p.39"],
+      ["cr", "xSHAREDCRD (AW, W, AR)", "tx", "level", "This transfer spends a shared credit", "Sent with VALID. Recommended only when no dedicated credit for that RP is left.", "§A2.4.3, p.36 · Table A2.9, p.39"]
+    ],
+
+    wgroups: [["all", "All"], ["hs", "Handshake"], ["dep", "Dependencies"], ["rst", "Clock & reset"], ["pipe", "Register stages"], ["txn", "Transactions"], ["cr", "Credited transport"]],
+
+    minis: [
+      { tag: "Case 1", title: "VALID before READY", text: "The transmitter raises VALID and holds the payload. The receiver takes its time; the transfer happens in the cycle where both are HIGH. Figure A2.2.", ref: "§A2.3 and Figure A2.2, p.29",
+        w: { n: 6, aria: "VALID rises at cycle 1, READY at cycle 3, transfer at cycle 3", sig: [
+          { name: "INFO", d: "lp", t: "bus", v: seq([["", 1], ["A", 3], ["", 2]]) },
+          { name: "VALID", d: "lp", t: "bit", v: bits(6, [[1, 3]]) },
+          { name: "READY", d: "pl", t: "bit", v: bits(6, [[3, 3]]) },
+          { name: "transfer", d: "sb", t: "note", v: seq([["", 3], ["▲", 1], ["", 2]]) } ] } },
+      { tag: "Case 2", title: "READY before VALID", text: "The receiver is ready first, so the transfer takes a single cycle once VALID arrives. This is why the spec recommends READY HIGH by default on request channels. Figure A2.3.", ref: "§A2.3 and Figure A2.3, p.29 · p.30",
+        w: { n: 6, aria: "READY rises at cycle 1, VALID at cycle 2, transfer at cycle 2", sig: [
+          { name: "INFO", d: "lp", t: "bus", v: seq([["", 2], ["A", 1], ["", 3]]) },
+          { name: "VALID", d: "lp", t: "bit", v: bits(6, [[2, 2]]) },
+          { name: "READY", d: "pl", t: "bit", v: bits(6, [[1, 3]]) },
+          { name: "transfer", d: "sb", t: "note", v: seq([["", 2], ["▲", 1], ["", 3]]) } ] } },
+      { tag: "Case 3", title: "VALID with READY", text: "Both rise in the same cycle and the transfer happens there. Nothing waits on anything combinationally; each side decided on its own. Figure A2.4.", ref: "§A2.3 and Figure A2.4, p.30",
+        w: { n: 6, aria: "VALID and READY rise together at cycle 1, transfer at cycle 1", sig: [
+          { name: "INFO", d: "lp", t: "bus", v: seq([["", 1], ["A", 1], ["", 4]]) },
+          { name: "VALID", d: "lp", t: "bit", v: bits(6, [[1, 1]]) },
+          { name: "READY", d: "pl", t: "bit", v: bits(6, [[1, 1]]) },
+          { name: "transfer", d: "sb", t: "note", v: seq([["", 1], ["▲", 1], ["", 4]]) } ] } },
+      { tag: "Legal", title: "READY may drop before VALID", text: "A receiver may raise READY and lower it again while VALID is still LOW. It may not lower VALID: once VALID is HIGH it stays HIGH, with the same payload, until the cycle READY is also HIGH.", ref: "§A2.3, p.29",
+        w: { n: 8, aria: "READY pulses at cycles 1 and 2 with VALID low, VALID rises at 3 and holds until READY at 5", sig: [
+          { name: "INFO", d: "lp", t: "bus", v: seq([["", 3], ["A", 3], ["B", 1], ["", 1]]) },
+          { name: "VALID", d: "lp", t: "bit", v: bits(8, [[3, 6]]) },
+          { name: "READY", d: "pl", t: "bit", v: bits(8, [[1, 2], [5, 6]]) },
+          { name: "transfer", d: "sb", t: "note", v: seq([["", 5], ["▲A", 1], ["▲B", 1], ["", 1]]) } ] } }
+    ],
+
+    scenarios: [
+      {
+        id: "wr", tab: "Write burst", title: "One write: AW, four W beats, one B",
+        desc: "A 4-beat INCR write (AWLEN = 3). The request and the first beat go out together; the Subordinate stalls one data beat; the response waits for both the request and the last beat.",
+        ref: "§A2.3, p.29–30 · §A2.3.2.1 and Figure A2.5, p.31 · §A3.2.1, p.53",
+        n: 11, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(11, [[1, 2]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(11, [[2, 10]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 1], ["0x1000 len 3", 2], ["", 8]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(11, [[2, 6]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(11, [[2, 3], [5, 6]]) },
+          { name: "WDATA", d: "lp", t: "bus", v: seq([["", 2], ["D0", 1], ["D1", 1], ["D2", 2], ["D3", 1], ["", 4]]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(11, [[6, 6]]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(11, [[8, 9]]) },
+          { name: "BREADY", d: "lp", t: "bit", v: bits(11, [[9, 10]]) },
+          { name: "BRESP", d: "pl", t: "bus", v: seq([["", 8], ["OKAY", 2], ["", 1]]) },
+          { name: "handshakes", d: "sb", t: "note", v: seq([["", 2], ["AW+W0", 1], ["W1", 1], ["", 1], ["W2", 1], ["W3", 1], ["", 2], ["B", 1], ["", 1]]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "The request goes out; the Subordinate is not ready yet", x: "AWVALID rises with the address, ID and length. AWREADY is LOW for one cycle, which the Subordinate is allowed to do. The Manager holds AWVALID and the payload exactly as they are.", w: "VALID that could drop would let a transmitter withdraw a request the receiver had already started acting on. Holding it makes 'VALID and READY both HIGH' an unambiguous point of transfer.", s: "§A2.3, p.29 · §A2.3.2.1, p.31" },
+          { r: [2, 2], t: "Request and first data beat in the same cycle", x: "AWREADY rises and so does WVALID with D0. Both channels handshake in cycle 2. The Manager did not wait for AWREADY before starting write data; data could even have come first.", w: "If a Manager could wait for AWREADY before WVALID, and a Subordinate (legally) waits for WVALID before AWREADY, both wait forever. The rule removes one side of that cycle.", s: "§A2.3.2.1, p.31 · §A2.6, p.41" },
+          { r: [3, 5], t: "A stalled beat", x: "D1 moves in cycle 3. In cycle 4 WREADY is LOW, so D2 stays on WDATA with WVALID HIGH; it moves in cycle 5. The Subordinate decides beat by beat.", s: "§A2.3, p.29" },
+          { r: [6, 6], t: "Last beat carries WLAST", x: "D3 is the fourth beat of AWLEN = 3, so WLAST is HIGH with it. The Subordinate now has everything it needs to respond.", s: "§A3.2.1, p.53" },
+          { r: [7, 9], t: "Response: after AW and WLAST, never after BREADY", x: "BVALID rises in cycle 8, after both the AW handshake and the WLAST handshake. The Manager holds BREADY LOW for a cycle (it may wait for BVALID); BVALID and BRESP stay put and the response moves in cycle 9.", w: "BVALID must never wait for BREADY, for the same reason as every VALID: the receiver is allowed to wait for VALID, so the transmitter must not wait for READY.", s: "§A2.3.2.1, p.31" }
+        ]
+      },
+      {
+        id: "wfirst", tab: "Data before address", title: "Write data arrives before the request",
+        desc: "Legal and common when the AW path has more register stages than the W path. The Subordinate takes the data early but must hold its response until it has also accepted the request. AXI3 did not require that.",
+        ref: "§A2.6, p.41 · §A2.3.2.1, p.31 · H.c §A3.3.1, p.A3-45–A3-46",
+        n: 12, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(12, [[5, 6]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(12, [[6, 6]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 5], ["0x2040 len 1", 2], ["", 5]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(12, [[1, 2]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(12, [[1, 2]]) },
+          { name: "WDATA", d: "lp", t: "bus", v: seq([["", 1], ["D0", 1], ["D1", 1], ["", 9]]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(12, [[2, 2]]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(12, [[7, 7]]) },
+          { name: "BREADY", d: "lp", t: "bit", v: bits(12, [[0, 11]]) },
+          { name: "BRESP", d: "pl", t: "bus", v: seq([["", 7], ["OKAY", 1], ["", 4]]) },
+          { name: "rule", d: "sb", t: "note", v: seq([["", 3], ["AXI3 could respond here", 2], ["", 1], ["AW ok", 1], ["B", 1], ["", 4]]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "Two beats arrive with no request", x: "WVALID rises before any AWVALID. The Subordinate may raise WREADY before AWVALID, and does. D1 carries WLAST.", w: "AXI fixes no timing between channels, so each channel can be registered independently. The price is that receivers must cope with any arrival order.", s: "§A2.6, p.41 · §A2.3.2.1, p.31 · §A2.5, p.40" },
+          { r: [3, 4], t: "All data is in, but no response yet", x: "The Subordinate has the whole burst. In AXI4 and AXI5 it must still wait for AWVALID and AWREADY before BVALID. An AXI3 Subordinate was allowed to respond here.", w: "By responding, a Subordinate takes responsibility for hazard checking this write against every later transaction. Without the address it cannot do that check.", s: "§A2.3.2.1, p.31 · H.c §A3.3.1, p.A3-46" },
+          { r: [5, 6], t: "The request turns up", x: "AWVALID rises in cycle 5; the Subordinate accepts it in cycle 6. An interconnect in the path would have had to hold the W beats until it had decoded this address, so it knew which Subordinate to show them to.", s: "§A2.6, p.41" },
+          { r: [7, 7], t: "Response in one cycle", x: "BVALID rises and BREADY was already HIGH (a Manager may assert BREADY before BVALID), so the response completes in a single cycle.", s: "§A2.3.2.1, p.31" }
+        ]
+      },
+      {
+        id: "rd", tab: "Read burst", title: "Two outstanding reads, then backpressure on R",
+        desc: "Two 2-beat reads with the same ID (a at 0x3000, b at 0x3040, both ARID 2, ARLEN 1), issued back to back. Read data follows in request order (same ID). The Manager throttles the second burst with RREADY.",
+        ref: "§A2.3.2.2 and Figure A2.6, p.32 · §A3.2.2, p.55 · §A2.6, p.41",
+        n: 14, gaps: [],
+        sig: [
+          { name: "ARVALID", d: "lp", t: "bit", v: bits(14, [[1, 2]]) },
+          { name: "ARREADY", d: "pl", t: "bit", v: bits(14, [[0, 13]]) },
+          { name: "AR payload", d: "lp", t: "bus", v: seq([["", 1], ["a", 1], ["b", 1], ["", 11]]) },
+          { name: "RVALID", d: "pl", t: "bit", v: bits(14, [[4, 9]]) },
+          { name: "RREADY", d: "lp", t: "bit", v: bits(14, [[0, 5], [8, 13]]) },
+          { name: "RDATA", d: "pl", t: "bus", v: seq([["", 4], ["a0", 1], ["a1", 1], ["b0", 3], ["b1", 1], ["", 4]]) },
+          { name: "RLAST", d: "pl", t: "bit", v: bits(14, [[5, 5], [9, 9]]) },
+          { name: "handshakes", d: "sb", t: "note", v: seq([["", 1], ["AR a", 1], ["AR b", 1], ["", 1], ["R a0", 1], ["R a1", 1], ["", 2], ["R b0", 1], ["R b1", 1], ["", 4]]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "Two requests, back to back", x: "ARREADY sits HIGH (the recommended default for request channels), so each ARVALID cycle is one accepted request. The Manager does not wait for the first read to finish before issuing the second.", w: "Multiple outstanding requests are how AXI hides memory latency: the Subordinate can work on b while a's data is still in flight.", s: "§A2.3, p.30 · §A1.1, p.21" },
+          { r: [3, 3], t: "Latency", x: "No RVALID yet. RVALID may only follow an accepted AR, and only in response to a request, even for a Subordinate with a single data source.", s: "§A2.3.2.2, p.32 · §A3.2.2, p.55" },
+          { r: [4, 5], t: "Burst a returns", x: "a0 and a1 move in consecutive cycles; RLAST marks a1. Same ID, so a's data comes before b's.", s: "§A3.2.2, p.55 · §A2.6, p.41" },
+          { r: [6, 8], t: "The Manager throttles", x: "RREADY drops for two cycles. RVALID stays HIGH and b0 stays on RDATA; it moves in cycle 8. The Subordinate did not wait for RREADY to raise RVALID.", w: "A Manager may slow R down, but it must be able to accept all the read data of a request it issued without waiting on any other transaction. Otherwise a slow R channel could block the very traffic that would free it.", s: "§A2.3.2.2, p.32 · §A2.6, p.41" },
+          { r: [9, 9], t: "Last beat", x: "b1 with RLAST completes the second read.", s: "§A3.2.2, p.55" }
+        ]
+      },
+      {
+        id: "dead", tab: "Deadlock", title: "The classic AW/W deadlock, then the fix",
+        desc: "Left of the break: a Manager waits for AWREADY before driving WVALID, while the Subordinate waits for both VALIDs before AWREADY. Nothing ever moves. Right of the break: the same pair with a compliant Manager.",
+        ref: "§A2.3.2.1, p.31 · H.c §A3.3.1 Caution, p.A3-46",
+        n: 16, gaps: [7],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(16, [[1, 6], [9, 10]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(16, [[10, 10]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(16, [[9, 10]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(16, [[10, 10]]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(16, [[9, 10]]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(16, [[12, 12]]) },
+          { name: "BREADY", d: "lp", t: "bit", v: bits(16, [[0, 15]]) },
+          { name: "Manager", d: "lp", t: "note", v: seq([["", 1], ["waits for AWREADY before WVALID ✗", 6], ["", 1], ["", 1], ["AW + W, no waiting ✓", 2], ["", 5]]) },
+          { name: "Subordinate", d: "pl", t: "note", v: seq([["", 1], ["waits for AWVALID and WVALID (legal)", 6], ["", 3], ["takes both", 1], ["", 1], ["B", 1], ["", 3]]) }
+        ],
+        steps: [
+          { r: [1, 6], t: "Both sides wait, forever", x: "AWVALID is HIGH. The Manager holds WVALID LOW until it sees AWREADY. The Subordinate's design waits for AWVALID and WVALID before it raises AWREADY. Each is waiting for the other, so the bus hangs with no protocol error to point at.", w: "The Subordinate's behaviour is explicitly allowed. The Manager's is explicitly forbidden: it must not wait for AWREADY or WREADY before asserting AWVALID or WVALID. The spec puts the burden on the transmitter so that receivers are free to wait.", s: "§A2.3.2.1, p.31 · H.c §A3.3.1, p.A3-46" },
+          { r: [8, 10], t: "The fix: drive both without waiting", x: "A compliant Manager raises AWVALID and WVALID independently. The Subordinate sees both and takes them in cycle 10.", s: "§A2.3.2.1, p.31" },
+          { r: [11, 12], t: "Response", x: "BVALID follows the AW and last-W handshakes; BREADY is already HIGH.", s: "§A2.3.2.1, p.31" }
+        ]
+      },
+      {
+        id: "reset", tab: "Reset exit", title: "Leaving reset",
+        desc: "ARESETn may assert at any time but deasserts on a clock edge. Every VALID (and every CRDT on a credited interface) stays LOW until at least the rising edge after ARESETn is HIGH.",
+        ref: "§A2.1.2 and Figure A2.1, p.27 · §A2.3, p.29 · §A2.4.1, p.34 · §A2.4.4, p.38",
+        n: 10, gaps: [],
+        sig: [
+          { name: "ARESETn", d: "sb", t: "bit", v: bits(10, [[4, 9]]) },
+          { name: "AWVALID / ARVALID", d: "lp", t: "bit", v: bits(10, [[5, 6]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(10, [[5, 5]]) },
+          { name: "RVALID / BVALID", d: "pl", t: "bit", v: bits(10, []) },
+          { name: "xREADY", d: "pl", t: "note", v: seq([["any value", 4], ["", 6]]) },
+          { name: "xCRDT (credited)", d: "pl", t: "bit", v: bits(10, [[6, 6]]) },
+          { name: "xPENDING (credited)", d: "lp", t: "bit", v: bits(10, [[0, 9]]) }
+        ],
+        steps: [
+          { r: [0, 3], t: "In reset", x: "All VALID signals are LOW. On a credited interface every CRDT and CRDTSH is LOW too: the transmitter has no credits and the receiver holds them all. READY and payload signals can be anything. PENDING may sit HIGH, even through reset.", s: "§A2.1.2, p.27 · §A2.3, p.29 · §A2.4.1, p.34 · §A2.4.4, p.38" },
+          { r: [4, 4], t: "ARESETn deasserts on an edge", x: "ARESETn goes HIGH synchronously with ACLK. VALIDs are still LOW in this cycle: the earliest a deasserted-in-reset signal may rise is the rising edge after ARESETn is HIGH.", w: "Reset is released to many flops through a tree with skew. One cycle of margin guarantees that both sides have left reset before anything moves, so no transfer is lost into a flop still held in reset.", s: "§A2.1.2 and Figure A2.1, p.27 · Table B4.3, p.311" },
+          { r: [5, 6], t: "First traffic", x: "The Manager may now raise AWVALID, ARVALID and WVALID. On a credited link the receiver hands out its first credit; no request can move on a credited channel until one arrives.", s: "§A2.1.2, p.27 · §A2.4.1, p.34" }
+        ]
+      },
+      {
+        id: "crdt", tab: "Credits", title: "Credited channel with two credits (Figure A2.7)",
+        desc: "An AR channel on a credited interface. The Subordinate (receiver) owns two buffer entries and hands one credit out per entry. PENDING announces each transfer a cycle ahead.",
+        ref: "§A2.4.1 and Figure A2.7, p.34 · §A2.4.4, p.38",
+        n: 11, gaps: [],
+        sig: [
+          { name: "ARESETn", d: "sb", t: "bit", v: bits(11, [[1, 10]]) },
+          { name: "ARCRDT", d: "pl", t: "bit", v: bits(11, [[3, 4], [7, 7]]) },
+          { name: "ARPENDING", d: "lp", t: "bit", v: bits(11, [[3, 4], [7, 7]]) },
+          { name: "ARVALID", d: "lp", t: "bit", v: bits(11, [[4, 5], [8, 8]]) },
+          { name: "AR payload", d: "lp", t: "bus", v: seq([["", 4], ["r0", 1], ["r1", 1], ["", 2], ["r2", 1], ["", 2]]) },
+          { name: "Manager credits", d: "sb", t: "note", v: list("0 0 0 0 1 1 0 0 1 0 0") }
+        ],
+        steps: [
+          { r: [0, 2], t: "No credits", x: "After reset the transmitter has no credits and the receiver has all of them. ARVALID must stay LOW.", s: "§A2.4.1, p.34" },
+          { r: [3, 3], t: "First credit", x: "ARCRDT pulses: one credit. It cannot be spent in the same cycle it arrives, because there must be no combinational path between credit signals and the rest of the channel.", w: "That rule is the whole point of credits: both directions are registered, so a credited channel closes timing at high frequency where a READY path that fans out across a die would not.", s: "§A2.4.1, p.34 · §A2.2, p.28" },
+          { r: [4, 5], t: "Spend, refill, spend", x: "Cycle 4: the credit is spent on r0 and a second credit arrives. Cycle 5: r1 spends it. ARPENDING was HIGH in the cycle before each ARVALID, so a gated receiver could wake its clock in time.", s: "§A2.4.1, p.34 · §A2.4.4, p.38" },
+          { r: [6, 7], t: "Buffer frees, credit returns", x: "The Subordinate drains r0 from its buffer and returns the credit in cycle 7. The Manager has nothing to send until then.", s: "§A2.4.1 and Figure A2.7, p.34" },
+          { r: [8, 10], t: "Credit spent again", x: "r2 goes out in cycle 8. The credit spent in cycle 4 is usable again only in cycle 8, a 4-cycle loop. With 2 credits this channel can never carry more than 2 transfers every 4 cycles: credits, not READY, now set the throughput.", w: "Sizing: to stream one transfer every cycle you need at least as many credits as the credit loop's round-trip latency in cycles. The spec caps it at 15 per Resource Plane.", s: "Derived from §A2.4.1, p.34" }
+        ]
+      },
+      {
+        id: "rp", tab: "Resource Planes", title: "Three Resource Planes and shared credits (Figure A2.8)",
+        desc: "A channel with Num_RP = 3 and shared credits. Each plane has its own credits; a shared credit can carry a transfer on any plane. Count rows show credits held at the start of each cycle.",
+        ref: "§A2.4.2, p.35 · §A2.4.3 and Figure A2.8, p.36–37",
+        n: 11, gaps: [],
+        sig: [
+          { name: "CRDT[0]", d: "pl", t: "bit", v: bits(11, [[1, 1], [9, 9]]) },
+          { name: "CRDT[1]", d: "pl", t: "bit", v: bits(11, [[1, 1], [3, 3]]) },
+          { name: "CRDT[2]", d: "pl", t: "bit", v: bits(11, [[1, 1], [7, 7]]) },
+          { name: "CRDTSH", d: "pl", t: "bit", v: bits(11, [[1, 1], [7, 7], [9, 9]]) },
+          { name: "VALID", d: "lp", t: "bit", v: bits(11, [[2, 2], [5, 6], [8, 8]]) },
+          { name: "SHAREDCRD", d: "lp", t: "bit", v: bits(11, [[6, 6]]) },
+          { name: "RP[1:0]", d: "lp", t: "bus", v: seq([["", 2], ["RP1", 1], ["", 2], ["RP2", 2], ["", 1], ["RP0", 1], ["", 2]]) },
+          { name: "RP0 credits", d: "sb", t: "note", v: list("0 0 1 1 1 1 1 1 1 0 1") },
+          { name: "RP1 credits", d: "sb", t: "note", v: list("0 0 1 0 1 1 1 1 1 1 1") },
+          { name: "RP2 credits", d: "sb", t: "note", v: list("0 0 1 1 1 1 0 0 1 1 1") },
+          { name: "shared credits", d: "sb", t: "note", v: list("0 0 1 1 1 1 1 0 1 1 2") }
+        ],
+        steps: [
+          { r: [0, 1], t: "One credit per plane, plus one shared", x: "The receiver gives each Resource Plane one dedicated credit and one shared credit in cycle 1. One dedicated credit per RP is the minimum it must be able to give.", s: "§A2.4.2, p.35 · §A2.4.3, p.36" },
+          { r: [2, 3], t: "RP1 transfer", x: "A transfer on RP1 spends RP1's dedicated credit. The receiver returns it in cycle 3.", s: "Figure A2.8, p.37" },
+          { r: [5, 6], t: "Two RP2 transfers: dedicated, then shared", x: "Cycle 5 spends RP2's only dedicated credit. Cycle 6 sends a second RP2 transfer with SHAREDCRD HIGH, spending the shared credit.", w: "Use dedicated credits first. A shared credit can rescue any plane; spending it when a dedicated one was available could starve a plane later.", s: "§A2.4.3, p.36" },
+          { r: [7, 8], t: "Refill and an RP0 transfer", x: "Cycle 7 returns RP2's dedicated credit and the shared credit. Cycle 8 sends on RP0.", s: "Figure A2.8, p.37" },
+          { r: [9, 10], t: "Why planes exist", x: "If RP2's consumer stalled, RP2 would run out of credits while RP0 and RP1 kept moving: transfers on different planes must not block one another. That independence is what lets a system put deadlock-sensitive traffic on its own plane.", s: "§A2.4.2, p.35" }
+        ]
+      },
+      {
+        id: "slice", tab: "Register slice", title: "A full register slice: one cycle more latency, no lost throughput",
+        desc: "A 2-entry slice between Manager and Subordinate on AW. Its READY to the Manager comes from a flop, not from the Subordinate's READY. The Subordinate stalls for two cycles; the slice absorbs it.",
+        ref: "§A2.5, p.40 · slice design is background",
+        n: 14, gaps: [],
+        sig: [
+          { name: "M side AWVALID", d: "lp", t: "bit", v: "01111111100000" },
+          { name: "M side AWREADY", d: "pl", t: "bit", v: "11111100111111" },
+          { name: "M side payload", d: "lp", t: "bus", v: seq([["", 1], ["A", 1], ["B", 1], ["C", 1], ["D", 1], ["E", 1], ["F", 3], ["", 5]]) },
+          { name: "S side AWVALID", d: "lp", t: "bit", v: "00111111110000" },
+          { name: "S side AWREADY", d: "pl", t: "bit", v: "11111001111111" },
+          { name: "S side payload", d: "lp", t: "bus", v: seq([["", 2], ["A", 1], ["B", 1], ["C", 1], ["D", 3], ["E", 1], ["F", 1], ["", 4]]) },
+          { name: "slice entries", d: "sb", t: "note", v: list("0 0 1 1 1 1 2 2 1 1 0 0 0 0") }
+        ],
+        steps: [
+          { r: [1, 4], t: "Streaming: +1 cycle, full rate", x: "A enters the slice in cycle 1 and appears on the Subordinate side in cycle 2. Every cycle one request goes in and one comes out.", w: "Because AXI ties no channel to another, the spec lets you put any number of register stages on VALID, READY and CRDT paths. This is how long wires across a big SoC meet timing.", s: "§A2.5, p.40" },
+          { r: [5, 7], t: "Subordinate stalls; the slice fills", x: "S side AWREADY is LOW in cycles 5 and 6. D waits on the S side, E still enters, and the slice now holds two entries. Only then does M side AWREADY drop (cycles 6 and 7), so F waits on the Manager side.", w: "The Manager-facing READY comes from the slice's own state, so there is no combinational path from the Subordinate's READY through the slice. A single-entry slice would need one, or lose every other cycle.", s: "§A2.1.1, p.27 · §A2.5, p.40 · design is background" },
+          { r: [7, 9], t: "Drain", x: "The Subordinate is ready again; D, E and F leave one per cycle (cycles 7 to 9), and the slice accepts F from the Manager in cycle 8.", s: "§A2.5, p.40" },
+          { r: [11, 13], t: "What the spec requires of the slice", x: "VALID is delayed by the same number of cycles as its payload; a credited channel would also delay RP and SHAREDCRD with it and keep PENDING one cycle ahead of VALID.", s: "§A2.5, p.40" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact, part, plw) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = part === "wave" ? 4 : part === "labels" ? plw : (compact ? 150 : LW);
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    if (part === "labels") {
+      var ls = "<svg viewBox=\"0 0 " + lw + " " + H + "\" width=\"" + lw + "\" height=\"" + H + "\" aria-hidden=\"true\">", mc = Math.floor((lw - 14) / 7.25);
+      rows.forEach(function (r, ri) {
+        var y0 = TOP + ri * RH, mid = (y0 + 6 + y0 + RH - 7) / 2, nm = r.name;
+        if (nm.length > mc) nm = nm.slice(0, mc - 1) + "…";
+        ls += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\"><title>" + esc(r.name) + "</title>" + esc(nm) + "</text>";
+      });
+      return ls + "</svg>";
+    }
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      if (part !== "wave") s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      var longest = 0; s.sig.forEach(function (r) { longest = Math.max(longest, r.name.length); });
+      var narrow = waveEl.clientWidth && waveEl.clientWidth < 560;
+      var plw = Math.max(64, Math.min(Math.round(longest * 7.25 + 18), narrow ? Math.round(waveEl.clientWidth * 0.36) : 230));
+      waveEl.innerHTML = "<div class=\"wfix\">" + renderWave(s, null, false, "labels", plw) + "</div>" + renderWave(s, st.r, false, "wave");
+      var vis = waveEl.clientWidth - plw, a = 4 + st.r[0] * CW, b = 4 + (st.r[1] + 1) * CW;
+      if (vis > 0) waveEl.scrollLeft = (b - a >= vis) ? Math.max(0, a - 6) : Math.max(0, Math.min(a - CW * 0.6, (a + b) / 2 - vis / 2 + 0));
+      if (vis > 0 && b <= vis - 6) waveEl.scrollLeft = 0;
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { go(step); }, 150); });
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- tables: label cells so they can stack into cards on phones ---------- */
+  (function () {
+    function label(t) {
+      var ths = t.querySelectorAll("thead th"); if (!ths.length) return;
+      var heads = Array.prototype.map.call(ths, function (h) { return h.textContent.trim(); });
+      Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] !== undefined) td.setAttribute("data-label", heads[i]); });
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("table"), function (t) {
+      if (!t.tHead || t.querySelector("[rowspan],[colspan]") || t.classList.contains("nostack")) return;
+      t.classList.add("stack"); label(t);
+      if (window.MutationObserver && t.tBodies[0]) new MutationObserver(function () { label(t); }).observe(t.tBodies[0], { childList: true });
+    });
+  })();
+
+  /* ---------- section nav: mark the section being read; series nav: show the current guide ---------- */
+  (function () {
+    var here = document.querySelector(".series .here"), ser = $("series");
+    if (here && ser && ser.scrollWidth > ser.clientWidth) ser.scrollLeft = Math.max(0, here.offsetLeft - ser.offsetLeft - 60);
+    var bar = document.querySelector("nav.toc .wrap");
+    if (!bar || !window.IntersectionObserver) return;
+    var links = {}, cur = null;
+    Array.prototype.forEach.call(bar.querySelectorAll("a[href^='#']"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = links[e.target.id]; if (!a || a === cur) return;
+        if (cur) cur.removeAttribute("aria-current");
+        cur = a; a.setAttribute("aria-current", "true");
+        bar.scrollLeft = Math.max(0, a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2);
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(links).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+
+</script>
+
+</body>
+</html>

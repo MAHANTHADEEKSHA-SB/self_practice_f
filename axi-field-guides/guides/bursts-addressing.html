@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXI Bursts &amp; Addressing Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* AXI field guides. Color encodes who drives a signal: amber = Manager (class lp), teal = Subordinate (class pl),
+   violet = credits, interface-level signals and annotations (class sb). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+
+/* ---- AXI additions ---- */
+.ver { display:inline-block; font-family:var(--font-mono); font-size:10.5px; line-height:16px; padding:0 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; vertical-align:1px; }
+.ver.new { color:var(--pl); border-color:var(--pl); }
+.ver.old { color:var(--lp); border-color:var(--lp); }
+.ver.gone { color:var(--bad); border-color:var(--bad); }
+.cmp td:first-child { font-weight:500; min-width:150px; }
+.cmp td.then { color:var(--muted); }
+.dep text { font-family:var(--font-mono); font-size:12px; }
+.kbd { font-family:var(--font-mono); font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 5px; background:var(--code); }
+
+/* ---- phone and touch upgrades ---- */
+.calc, .tool { grid-template-columns: minmax(0, 1fr); }
+.calc > *, .tool > * { min-width: 0; }
+#wave { display: flex; align-items: flex-start; padding-left: 0; scroll-behavior: auto; }
+#wave > svg { flex: none; }
+.wfix { position: sticky; left: 0; z-index: 1; flex: none; background: var(--bg); border-right: 1px solid var(--line); }
+nav.toc a[aria-current] { background: var(--hl); color: var(--ink); font-weight: 500; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 28px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--pl); }
+.pager a small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pager a.nx { text-align: right; grid-column: 2; }
+.pager a strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.pager .all { grid-column: 1 / -1; text-align: center; font-size: 14px; padding: 10px; }
+@media (pointer: coarse) {
+  .chip, .tab, .btn, nav.toc a { min-height: 40px; display: inline-flex; align-items: center; }
+  .dot { min-width: 38px; min-height: 38px; }
+  summary { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (max-width: 640px) {
+  .hero { padding-top: 18px; padding-bottom: 16px; }
+  .lede { font-size: 15.5px; }
+  .series { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px 14px; padding: 6px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .series::-webkit-scrollbar { display: none; }
+  .series > * { flex: none; }
+  figure { overflow-x: auto; }
+  figure svg { min-width: 560px; max-width: none; }
+  figure svg.dep, figure svg.lmap { min-width: 700px; }
+  figcaption { position: sticky; left: 0; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: auto; }
+  table.stack tr { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  table.stack td:empty { display: none; }
+  table.stack td::before { content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+  table.stack td:first-child { font-size: 15px; font-weight: 600; }
+  table.stack td:first-child::before { display: none; }
+  table.stack caption { display: block; }
+  table.stack td.dir, table.stack td.dir + td { display: inline-block; margin-right: 10px; vertical-align: middle; }
+  table.stack td.dir::before, table.stack td.dir + td::before { display: none; }
+  .pager { grid-template-columns: 1fr; }
+  .pager a.nx { grid-column: 1; text-align: left; }
+  .bitfield { grid-auto-columns: minmax(22px, 1fr); overflow-x: auto; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>AXI Field Guides (Issue L):</span><a href="../index.html"><strong>All guides</strong></a><a href="channels-handshake.html">Channels &amp; Handshake</a><span class="here">Bursts &amp; Addressing</span><a href="request-attributes.html">Request Attributes</a><a href="ids-ordering.html">IDs &amp; Ordering</a><a href="responses-exclusives-atomics.html">Responses, Exclusives &amp; Atomics</a><a href="caches-cmos.html">Caches &amp; CMOs</a><a href="qualifiers-debug-user.html">Qualifiers, Debug &amp; User</a><a href="untranslated-dvm.html">Untranslated &amp; DVM</a><span title="coming soon" style="opacity:.55">Power, Reset &amp; Protection</span><span title="coming soon" style="opacity:.55">Signals &amp; Interface Classes</span><span title="coming soon" style="opacity:.55">Interconnect &amp; Bridges</span><span title="coming soon" style="opacity:.55">AXI-Stream</span></div>
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapter A3.1–A3.2 · request fields and data lanes</div>
+    <h1>AXI Bursts &amp; Addressing Field Guide</h1>
+    <p class="lede">One AXI request describes up to 4 KB of data with a start address and three small fields: Size, Length and Burst. This guide covers how those fields turn into an address and a set of byte lanes for every beat, why WRAP and FIXED exist, the 4 KB rule, narrow, unaligned and byte-invariant transfers, and the write strobes. It includes a burst calculator, step-through waveforms, verification checks, interview questions, and a comparison with AXI3 and AXI4.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = printed page of ARM IHI 0022 <strong>Issue L</strong> (27 Aug 2025). "H.c" = Issue H.c (Jan 2021), the last issue describing AXI3 and AXI4; its pages are numbered per chapter, for example p.A3-48. Tags: <span class="kind spec">Spec</span>stated in the spec, <span class="kind derived">Derived</span>worked out from spec rules, <span class="kind illus">Illustrative</span>example values, <span class="kind bg">Background</span>general practice, not spec text.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a>
+    <a href="#where">2 · One request, many beats</a>
+    <a href="#fields">3 · Size, Length, Burst</a>
+    <a href="#signals">4 · Signals</a>
+    <a href="#eq">5 · Address equations</a>
+    <a href="#calc">6 · Burst calculator</a>
+    <a href="#lanes">7 · Lanes and strobes</a>
+    <a href="#rationale">8 · Why each rule</a>
+    <a href="#live">9 · Live scenarios</a>
+    <a href="#silicon">10 · Real silicon</a>
+    <a href="#changes">11 · AXI3/AXI4 → Issue L</a>
+    <a href="#verify">12 · Verification</a>
+    <a href="#quiz">13 · Test yourself</a>
+    <a href="#refs">14 · Spec index</a>
+  </div>
+</nav>
+
+<style>
+  .calc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 14px; }
+  .calc .in { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .calc label { display: grid; gap: 4px; font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .calc input, .calc select { font-family: var(--font-mono); font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); min-width: 0; }
+  .calc input#c-addr { width: 150px; } .calc input#c-len { width: 80px; }
+  .calc ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+  .calc ul.checks li.ok .ic { color: var(--pl); font-weight: 600; }
+  .calc ul.checks li.bad { color: var(--bad); } .calc ul.checks li.bad .ic { font-weight: 600; }
+  .calc ul.checks li.info { color: var(--muted); }
+  .lanes { display: grid; gap: 1px; }
+  .lanes i { display: block; height: 14px; background: var(--code); border-radius: 2px; }
+  .lanes i.on { background: var(--lp); }
+  .calc-t td { vertical-align: middle; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .bytes { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; font-family: var(--font-mono); font-size: 12.5px; text-align: center; }
+  .bytes div { padding: 6px 2px; border-right: 1px solid var(--line); }
+  .bytes div:last-child { border-right: 0; }
+  .bytes .h { background: var(--code); color: var(--muted); font-size: 11px; }
+</style>
+
+<main>
+
+<!-- 1 WHY -->
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why AXI moves data in bursts</h2>
+    <p class="sub">The request fields are small on purpose. Each rule about them protects one of these four things.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Request bandwidth</div>
+        <h3>One address for up to 4 KB</h3>
+        <p>A request carries only the first address, plus attributes. The Subordinate calculates every later address itself. A 256-beat burst costs one request transfer.</p>
+        <p class="src"><span class="sl">Spec</span>§A1.1, p.21 · §A3.1, p.43</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Simple decoders</div>
+        <h3>Never cross a 4 KB boundary</h3>
+        <p>A transaction stays inside one 4 KB-aligned block. Address decoders route on whole 4 KB pages, so no transaction can straddle two Subordinates, and a Subordinate only needs a 12-bit incrementer.</p>
+        <p class="src"><span class="sl">Spec</span>§A3.1, p.43 · §A3.1.3, p.45</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Caches</div>
+        <h3>WRAP for cache lines</h3>
+        <p>A line fill starts at the word the CPU needs and wraps round the line, so the CPU restarts after the first beat. FIXED does the opposite job: many transfers to one address, for FIFOs.</p>
+        <p class="src"><span class="sl">Spec</span>§A3.1.4, p.47</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Any data, any width</div>
+        <h3>Byte lanes, strobes and byte invariance</h3>
+        <p>Narrow, unaligned and mixed-endian accesses all use the same rule: byte k of memory always travels on lane k modulo the channel width. Strobes say which of those bytes a write really changes.</p>
+        <p class="src"><span class="sl">Spec</span>§A3.2.1.1, p.54 · §A3.2.3–A3.2.5, p.55–58</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 WHERE -->
+<section id="where">
+  <div class="wrap">
+    <h2>2 · One request, many beats</h2>
+    <p class="sub">Example: an INCR write of four 8-byte beats on a 64-bit channel, starting at 0x2008. One AW transfer, four W transfers, one B.</p>
+    <figure>
+      <svg viewBox="0 0 860 230" role="img" aria-label="One AW request with address 0x2008, size 8 bytes, length 4, INCR, expands into four W beats at addresses 0x2008, 0x2010, 0x2018 and 0x2020, each on all eight byte lanes, followed by one B response.">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+        <g font-family="var(--font-body)">
+          <rect x="20" y="30" width="220" height="150" rx="10" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.5"/>
+          <text x="36" y="56" font-size="15" font-weight="600" fill="var(--lp)" style="font-family:var(--font-display)">AW: one request</text>
+          <g font-family="var(--font-mono)" font-size="12.5" fill="var(--ink)">
+            <text x="36" y="82">AWADDR  0x2008</text>
+            <text x="36" y="102">AWSIZE  0b011 (8 B)</text>
+            <text x="36" y="122">AWLEN   0x03 (4 beats)</text>
+            <text x="36" y="142">AWBURST 0b01 (INCR)</text>
+            <text x="36" y="166" fill="var(--muted)">+ ID, attributes</text>
+          </g>
+          <line x1="244" y1="105" x2="300" y2="105" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="248" y="96" font-size="11" fill="var(--muted)">Subordinate</text>
+          <text x="248" y="124" font-size="11" fill="var(--muted)">computes</text>
+          <g font-family="var(--font-mono)" font-size="12">
+            <text x="310" y="24" fill="var(--muted)">beat  address   lanes 7 … 0</text>
+            <text x="310" y="58" fill="var(--ink)">W1    0x2008</text><rect x="440" y="44" width="200" height="20" rx="3" fill="color-mix(in srgb, var(--lp) 25%, transparent)" stroke="var(--lp)"/>
+            <text x="310" y="90" fill="var(--ink)">W2    0x2010</text><rect x="440" y="76" width="200" height="20" rx="3" fill="color-mix(in srgb, var(--lp) 25%, transparent)" stroke="var(--lp)"/>
+            <text x="310" y="122" fill="var(--ink)">W3    0x2018</text><rect x="440" y="108" width="200" height="20" rx="3" fill="color-mix(in srgb, var(--lp) 25%, transparent)" stroke="var(--lp)"/>
+            <text x="310" y="154" fill="var(--ink)">W4    0x2020</text><rect x="440" y="140" width="200" height="20" rx="3" fill="color-mix(in srgb, var(--lp) 25%, transparent)" stroke="var(--lp)"/><text x="650" y="154" fill="var(--lp)">WLAST</text>
+          </g>
+          <rect x="700" y="80" width="140" height="50" rx="10" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.5"/>
+          <text x="716" y="104" font-size="15" font-weight="600" fill="var(--pl)" style="font-family:var(--font-display)">B: one response</text>
+          <text x="716" y="122" font-size="12" fill="var(--muted)" font-family="var(--font-mono)">BRESP OKAY</text>
+          <line x1="690" y1="150" x2="740" y2="134" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#ar)"/>
+          <text x="310" y="200" font-size="12" fill="var(--muted)">Container 0x2008–0x2027 (Size × Length = 32 bytes), all inside the 4 KB block 0x2000–0x2FFF.</text>
+        </g>
+      </svg>
+      <figcaption>The same three fields drive every read too: AR carries them and R returns Length beats.<span class="ref">Spec: §A3.1, p.43 · §A3.1.6, p.50 · §A2.3.2.1, p.31</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- 3 FIELDS -->
+<section id="fields">
+  <div class="wrap">
+    <h2>3 · Size, Length and Burst</h2>
+    <p class="sub">Three fields, three questions: how wide is each beat, how many beats, and how does the address move.</p>
+    <div class="grid g3">
+      <div class="card">
+        <div class="k">AxSIZE[2:0]: bytes per beat</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>AxSIZE</th><th class="num">Bytes</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px">
+            <tr><td>0b000</td><td class="num">1</td></tr><tr><td>0b001</td><td class="num">2</td></tr><tr><td>0b010</td><td class="num">4</td></tr><tr><td>0b011</td><td class="num">8</td></tr>
+            <tr><td>0b100</td><td class="num">16</td></tr><tr><td>0b101</td><td class="num">32</td></tr><tr><td>0b110</td><td class="num">64</td></tr><tr><td>0b111</td><td class="num">128</td></tr>
+          </tbody></table></div>
+        <p style="font-size:14.5px">A maximum, not a promise. For reads, Size bytes must be valid per beat; for writes, Size lanes may be active and WSTRB says which really are. Size must not exceed the channel width.</p>
+        <p class="src"><span class="sl">Spec</span>§A3.1.1, Tables A3.1–A3.2, p.43</p>
+      </div>
+      <div class="card">
+        <div class="k">AxLEN[7:0]: beats − 1</div>
+        <ul class="tight">
+          <li>Length = AxLEN + 1: 1 to 256.</li>
+          <li>Size × Length is the most bytes the transaction can move; unaligned starts and LOW strobes move fewer.</li>
+          <li>The Manager sends exactly Length W beats; the Subordinate sends exactly Length R beats.</li>
+          <li>WRAP: Length 2, 4, 8 or 16. FIXED: up to 16. INCR: up to 256, within 4 KB.</li>
+          <li>No early termination. Unwanted write beats go out with WSTRB all LOW; unwanted read beats are accepted and dropped.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A3.1.2, Table A3.4, p.44</p>
+      </div>
+      <div class="card">
+        <div class="k">AxBURST[1:0]: address pattern</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Code</th><th>Type</th><th>Address</th><th>Use</th></tr></thead>
+          <tbody style="font-size:13px">
+            <tr><td class="mono">0b00</td><td>FIXED</td><td>Same every beat</td><td>FIFO, data port</td></tr>
+            <tr><td class="mono">0b01</td><td>INCR</td><td>+Size each beat</td><td>Normal memory</td></tr>
+            <tr><td class="mono">0b10</td><td>WRAP</td><td>+Size, wraps at the container</td><td>Cache lines</td></tr>
+            <tr><td class="mono">0b11</td><td>-</td><td>Reserved</td><td>-</td></tr>
+          </tbody></table></div>
+        <p class="src"><span class="sl">Spec</span>§A3.1.4, Tables A3.8–A3.9, p.46–47</p>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:16px">
+      <table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A3.1.4, p.46–48 · §A3.1.8, p.52 · Tables A3.11, A3.13, p.47–48</caption>
+        <thead><tr><th>Rule</th><th>FIXED</th><th>INCR</th><th>WRAP</th></tr></thead>
+        <tbody>
+          <tr><td>Length</td><td>1–16</td><td>1–256</td><td>2, 4, 8, 16</td></tr>
+          <tr><td>Start address</td><td>Any</td><td>Any (unaligned allowed)</td><td>Aligned to Size</td></tr>
+          <tr><td>Byte lanes per beat</td><td>Same lanes every beat</td><td>Move with the address</td><td>Move with the address, wrap with it</td></tr>
+          <tr><td>Container</td><td>One Size slot</td><td>Aligned_Addr to Aligned_Addr + Size × Length</td><td>Wrap_Boundary to Wrap_Boundary + Size × Length</td></tr>
+          <tr><td>Opcode limits</td><td>WriteNoSnoop / ReadNoSnoop only</td><td>-</td><td>With Wrap_CLS_Modifiable: cache-line sized and Modifiable</td></tr>
+          <tr><td>Optional support</td><td>Fixed_Burst_Disable may refuse it</td><td>Always supported (the tie-off when AxBURST is absent)</td><td>Always supported</td></tr>
+          <tr><td>Regular?</td><td>Never</td><td>If Length 1/2/4/8/16, full width when Length &gt; 1, aligned to the container</td><td>If Length 2/4/8/16, full width, aligned to Size</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 4 SIGNALS -->
+<section id="signals">
+  <div class="wrap">
+    <h2>4 · Signals and properties</h2>
+    <p class="sub">The request fields and data-channel signals this guide covers, plus the interface properties that restrict them. The "Live behavior" column says what you see on a waveform or in a configuration.</p>
+    <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>Tie-offs when a field is absent.</strong> A Manager that never needs a field can leave it off its interface; the Subordinate's input is then tied: AxSIZE to the full data width, AxLEN to 0x00, AxBURST to INCR (0b01), WSTRB to all ones. That is how a simple Manager stays compatible with a full-featured Subordinate.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.1.1, p.44 · §A3.1.2, p.44 · §A3.1.4, p.46 · §A3.2.1.1, p.54</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 EQUATIONS -->
+<section id="eq">
+  <div class="wrap">
+    <h2>5 · The address equations</h2>
+    <p class="sub">Every Subordinate, interconnect and checker implements these. Size and Length are in bytes and beats; Data_Bytes = DATA_WIDTH / 8; INT() rounds down; N counts beats from 1.</p>
+    <div class="twocol">
+<pre>Start_Addr     = AxADDR
+Aligned_Addr   = INT(Start_Addr / Size) * Size
+Address_1      = Start_Addr
+Address_N      = Aligned_Addr + (N - 1) * Size      // INCR, and WRAP before it wraps
+
+Wrap_Boundary  = INT(Start_Addr / (Size * Length)) * Size * Length
+if Address_N == Wrap_Boundary + Size * Length:
+    Address_N  = Wrap_Boundary                      // this beat
+    Address_N  = Aligned_Addr + (N - 1) * Size
+                 - Size * Length                    // later beats
+
+// first beat
+Lower_Byte_Lane = Start_Addr - INT(Start_Addr / Data_Bytes) * Data_Bytes
+Upper_Byte_Lane = Aligned_Addr + (Size - 1)
+                  - INT(Start_Addr / Data_Bytes) * Data_Bytes
+// later beats
+Lower_Byte_Lane = Address_N - INT(Address_N / Data_Bytes) * Data_Bytes
+Upper_Byte_Lane = Lower_Byte_Lane + Size - 1
+data on DATA[8*Upper_Byte_Lane + 7 : 8*Lower_Byte_Lane]
+
+Container_Size  = Size * Length
+INCR: Container = Aligned_Addr  .. Aligned_Addr  + Container_Size
+WRAP: Container = Wrap_Boundary .. Wrap_Boundary + Container_Size</pre>
+      <div class="grid" style="gap:12px">
+        <div class="card">
+          <h3>Worked example: unaligned INCR</h3>
+          <p style="font-size:15px">AxADDR 0x1F0B, Size 4, Length 3, 64-bit channel (Data_Bytes 8).</p>
+          <ul class="tight">
+            <li>Aligned_Addr = 0x1F08.</li>
+            <li>Beat 1: lanes 3 (0x1F0B − 0x1F08) to 3 (0x1F08 + 3 − 0x1F08). One byte.</li>
+            <li>Beat 2: Address 0x1F0C, lanes 4–7.</li>
+            <li>Beat 3: Address 0x1F10, lanes 0–3.</li>
+            <li>Container 0x1F08–0x1F13; bytes moved 1 + 4 + 4 = 9 of a possible 12.</li>
+          </ul>
+          <p class="src"><span class="kind derived">Derived</span> from §A3.1.6, p.50. Try it in the calculator.</p>
+        </div>
+        <div class="callout">
+          <p><strong>Corrected in Issue L.</strong> The equation for the beats after a WRAP wraps now reads Aligned_Addr + (N − 1) × Size − Size × Length. H.c wrote Start_Address in the same place. For a legal WRAP the two are equal, because a WRAP start must be aligned to Size.</p>
+          <p class="src"><span class="sl">Spec</span>Table B4.3, p.311 · H.c §A3.4.1, p.A3-51 · <span class="kind derived">Derived</span> equivalence</p>
+        </div>
+        <div class="card">
+          <h3>The pseudocode in one paragraph</h3>
+          <p style="font-size:15px">Start at the given address. While the address is unaligned, the upper lane is capped at the end of the aligned Size slot. After the first beat, jump to Aligned_Addr + Size, and from then on every beat is aligned. FIXED never moves the address. WRAP resets to the lower wrap boundary when it reaches the upper one.</p>
+          <p class="src"><span class="sl">Spec</span>§A3.1.7, p.51</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 CALC -->
+<section id="calc">
+  <div class="wrap">
+    <h2>6 · Burst calculator</h2>
+    <p class="sub">Enter a request; the calculator follows the §A3.1.7 pseudocode to give every beat's address and byte lanes, and checks the rules from §A3.1. Use it to build expected values for a scoreboard or to check an interview answer.</p>
+    <div class="calc">
+      <div class="presets">
+        <button class="chip" type="button" data-preset="0x0,4,0,INCR,32,w">Figure A3.1 narrow</button>
+        <button class="chip" type="button" data-preset="0x07,4,2,INCR,32,w">Figure A3.6 unaligned</button>
+        <button class="chip" type="button" data-preset="0x04,3,2,WRAP,64,w">Figure A3.8 WRAP</button>
+        <button class="chip" type="button" data-preset="0x1030,3,4,WRAP,128,r">Cache line, critical word first</button>
+        <button class="chip" type="button" data-preset="0x1F0B,2,2,INCR,64,w">Worked example</button>
+        <button class="chip" type="button" data-preset="0xFF0,7,2,INCR,32,w">Crosses 4 KB</button>
+        <button class="chip" type="button" data-preset="0x06,3,2,WRAP,32,r">Illegal WRAP</button>
+      </div>
+      <div class="in">
+        <label>AxADDR (hex)<input id="c-addr" value="0x1F0B" spellcheck="false"></label>
+        <label>AxLEN (0–255)<input id="c-len" type="number" min="0" max="255" value="2"></label>
+        <label>AxSIZE<select id="c-size"><option value="0">0b000 · 1 B</option><option value="1">0b001 · 2 B</option><option value="2" selected>0b010 · 4 B</option><option value="3">0b011 · 8 B</option><option value="4">0b100 · 16 B</option><option value="5">0b101 · 32 B</option><option value="6">0b110 · 64 B</option><option value="7">0b111 · 128 B</option></select></label>
+        <label>AxBURST<select id="c-burst"><option>INCR</option><option>WRAP</option><option>FIXED</option></select></label>
+        <label>DATA_WIDTH<select id="c-width"><option>8</option><option>16</option><option>32</option><option selected>64</option><option>128</option><option>256</option><option>512</option><option>1024</option></select></label>
+        <label>Direction<select id="c-dir"><option value="w">Write (show WSTRB)</option><option value="r">Read</option></select></label>
+      </div>
+      <ul class="checks" id="c-checks"></ul>
+      <div id="c-out"></div>
+    </div>
+    <p class="src" style="margin-top:8px"><span class="kind derived">Derived</span> Beats follow §A3.1.7, p.51. The 4 KB check uses the first byte the burst can touch and the top of its container. WSTRB shown is the widest legal pattern for that beat; a Manager may clear any of those strobes.</p>
+  </div>
+</section>
+
+<!-- 7 LANES -->
+<section id="lanes">
+  <div class="wrap">
+    <h2>7 · Lanes, strobes, endianness and alignment</h2>
+    <p class="sub">The address and Size decide which lanes a beat may use. WSTRB then says which of those bytes a write actually changes.</p>
+    <div class="grid g2">
+      <div class="card">
+        <div class="tagline">Write strobes</div>
+        <h3>WSTRB[n] covers WDATA[8n+7:8n]</h3>
+        <ul class="tight">
+          <li>While WVALID is HIGH: a byte to be written has its strobe HIGH.</li>
+          <li>Inside the transaction container, any pattern is allowed, including all LOW (that beat writes nothing).</li>
+          <li>Outside the container, every strobe must be LOW.</li>
+          <li>While WVALID is LOW, strobes may be anything; recommended LOW or held. WDATA is recommended 0 where the strobe is LOW.</li>
+          <li>A Manager that only writes full width may omit WSTRB; the Subordinate ties its input HIGH.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A3.2.1.1, Tables A3.22–A3.23, p.54</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Narrow transfers</div>
+        <h3>Size smaller than the channel</h3>
+        <p>INCR and WRAP move to a different set of lanes each beat, following the address. FIXED reuses the same lanes every beat. Figure A3.2: three 32-bit beats from address 4 on a 64-bit channel use the upper half, then the lower half, then the upper half.</p>
+        <p class="src"><span class="sl">Spec</span>§A3.2.3, Figures A3.1–A3.2, p.55–56</p>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <div class="tagline">Byte invariance</div>
+        <h3>A byte never changes wires</h3>
+        <p style="font-size:15px">The 32-bit value 0x0A0B0C0D stored at address A on a 32-bit channel:</p>
+        <div class="bytes"><div class="h">lane 3 · A+3</div><div class="h">lane 2 · A+2</div><div class="h">lane 1 · A+1</div><div class="h">lane 0 · A</div><div>0x0A</div><div>0x0B</div><div>0x0C</div><div>0x0D</div></div>
+        <p style="font-size:13px;color:var(--muted);margin:4px 0">little-endian: LSB 0x0D at the lowest address</p>
+        <div class="bytes"><div>0x0D</div><div>0x0C</div><div>0x0B</div><div>0x0A</div></div>
+        <p style="font-size:13px;color:var(--muted);margin:4px 0">big-endian: MSB 0x0A at the lowest address</p>
+        <p style="font-size:15px">In both cases the byte at address A rides lane 0. Endianness decides which byte of the value sits at A, not which wire A uses. That is why little- and big-endian structures can share one memory, and why a big-endian-only component needs a conversion function.</p>
+        <p class="src"><span class="sl">Spec</span>§A3.2.4, Figures A3.3–A3.5, p.56–58</p>
+      </div>
+      <div class="card">
+        <div class="tagline">Unaligned transfers</div>
+        <h3>Two ways to start mid-word</h3>
+        <ul class="tight">
+          <li>Send the unaligned address in the low address bits, or send an aligned address and clear the leading strobes.</li>
+          <li>Address and strobes must agree.</li>
+          <li>The Subordinate need not take any special action based on alignment information.</li>
+          <li>Only the first beat is unaligned. After it, every beat is aligned (see section 5).</li>
+          <li>WRAP may not start unaligned to Size.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>§A3.2.5, Figures A3.6–A3.7, p.58–60 · §A3.1.4, p.47</p>
+        <div class="callout" style="margin-top:6px">
+          <p><strong>Different address widths.</strong> ADDR_WIDTH is 1 to 64 bits (default 32). A component with a smaller address space sits in an aligned window of the larger one. The interconnect adds the high bits on the way out, strips them on the way in, and suppresses transactions outside the window.</p>
+          <p class="src"><span class="sl">Spec</span>§A3.1.5, Table A3.16, p.49</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 RATIONALE -->
+<section id="rationale">
+  <div class="wrap">
+    <h2>8 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Each card gives a rule, the reason behind it, a worked example, and what breaks when a design ignores it. Numbers assume a 128-bit channel at 1 GHz unless stated.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="len">
+        <div class="meta"><span>Length &amp; 4 KB</span><span>§A3.1 p.43 · §A3.1.3 p.45</span></div>
+        <h3>Never cross a 4 KB boundary</h3>
+        <p class="rule">No transaction may touch bytes on both sides of a 4 KB-aligned boundary. 4 KB is also the largest Size × Length.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Address maps assign Subordinates in multiples of 4 KB, the smallest common page size. If no burst crosses 4 KB, the interconnect decodes a burst once, from its start address, and never has to split it between two Subordinates. Inside the Subordinate, burst address logic only has to increment the low 12 bits.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DMA copies 10 000 bytes from 0x8000_0F40 with 64-byte beats. The first burst may go only to 0x8000_0FFF: 192 bytes, 3 beats. Then 0x8000_1000 starts a fresh 4 KB block that can take one 64-beat (4096-byte) burst, and so on.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>The part above the boundary goes to whichever Subordinate the start address decoded to, which may be the wrong one. Or a Subordinate's 12-bit incrementer wraps and overwrites the start of its own page.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1, p.43 · §A3.1.3, p.45</li><li><span class="kind bg">Background</span>4 KB page granularity</li><li><span class="kind illus">Illustrative</span>DMA numbers</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="len">
+        <div class="meta"><span>Length &amp; 4 KB</span><span>§A3.1.2 p.44</span></div>
+        <h3>No early termination, ever</h3>
+        <p class="rule">Every component sends or accepts exactly Length beats. Write beats you don't need go out with all strobes LOW; read beats you don't need are accepted and dropped.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Every stage on the path (interconnect, width converter, Subordinate) counts beats against AxLEN to find the end of the burst. A shortened burst would leave all of them waiting. Keeping the beat count fixed means "LAST" is never needed to recover state, only to confirm it.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A network DMA reads a 16-beat descriptor block but finds after beat 4 that it's an end-of-chain marker. It still takes beats 5–16 at 1 per cycle: 12 ns at 1 GHz. H.c warns that this can lose data from read-sensitive Subordinates like FIFOs, so such Managers must request exactly what they need.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager that drops WVALID after a "cancel" hangs the W channel for every later write.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.2, p.44</li><li><span class="kind spec">Spec</span>H.c §A3.4.1 Note, p.A3-48</li><li><span class="kind illus">Illustrative</span>descriptor example</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="len">
+        <div class="meta"><span>Length &amp; 4 KB</span><span>§A3.1.2 p.44 · §A4.2.2 p.69</span></div>
+        <h3>INCR up to 256 beats, everything else up to 16</h3>
+        <p class="rule">AxLEN is 8 bits, so INCR reaches 256 beats. WRAP is 2, 4, 8 or 16 beats; FIXED at most 16. A Non-modifiable INCR longer than 16 may still be split.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Long INCR bursts amortise request overhead for DMA and streaming. WRAP and FIXED stay short because their use cases (cache lines, FIFOs) are short. The AXI3 limit was 16 for everything; the special permission to split long Non-modifiable bursts exists so they can still pass through AXI3 and to protect QoS.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 256-beat burst on a 16-byte channel moves 4 KB in 256 ns at 1 GHz and holds the W channel for all of it. A bridge to an AXI3 Subordinate splits it into sixteen 16-beat bursts, keeping every other attribute.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>WRAP with Length 3 or 32 is illegal; a Subordinate's wrap logic computes a boundary that doesn't exist.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.2, p.44 · §A4.2.2, p.69</li><li><span class="kind spec">Spec</span>H.c §A3.4.1, p.A3-48–A3-49</li><li><span class="kind derived">Derived</span>timing</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="type">
+        <div class="meta"><span>Burst types</span><span>§A3.1.4 p.47</span></div>
+        <h3>WRAP: aligned start, power-of-two length</h3>
+        <p class="rule">A WRAP start address is aligned to Size and its Length is 2, 4, 8 or 16. The address wraps at the container, which is aligned to Size × Length.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Those two rules make Size × Length a power of two and the container naturally aligned, exactly like a cache line. The wrap is then one mask operation on the low address bits, and the first beat can be the one the CPU is waiting for.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64-byte line on a 128-bit channel, miss on 0x1038: ARADDR 0x1030, Size 16, Length 4, WRAP. Beats 0x1030, 0x1000, 0x1010, 0x1020. The CPU restarts after the first beat; a DDR controller can map the burst to one BL8 access with the same critical-chunk order.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>An unaligned WRAP start gives a first beat that straddles the wrap point. Subordinates handle it differently, so the data ends up in different places.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.4, p.47</li><li><span class="kind bg">Background</span>critical-word-first, DDR burst order</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="type">
+        <div class="meta"><span>Burst types</span><span>§A3.1.4 p.47–48</span></div>
+        <h3>FIXED: one address, one set of lanes</h3>
+        <p class="rule">The address and active lanes are the same every beat, Length ≤ 16, and only WriteNoSnoop/ReadNoSnoop may use FIXED. A Subordinate may refuse FIXED altogether (Fixed_Burst_Disable).</p>
+        <div class="part"><span class="l l-why">Why</span><p>FIXED exists for addresses with side effects, like pushing into a FIFO data register. Such accesses never mean anything to a cache, so FIXED has no place in the coherent and cache-maintenance opcodes. Since few Managers use it, Issue K let Subordinates declare it unsupported and save the logic.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A crypto engine's input FIFO at 0x4000_0040. A DMA writes 16 × 4-byte beats with FIXED, one request instead of sixteen.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>FIXED to a cacheable or Shareable opcode, or to a Subordinate that declared Fixed_Burst_Disable, is an illegal combination. A downsizer that doesn't special-case FIXED will increment the address it should hold.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.4, Tables A3.13–A3.14, p.47–48</li><li><span class="kind illus">Illustrative</span>crypto FIFO</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="type">
+        <div class="meta"><span>Burst types</span><span>§A3.1.8 p.52</span></div>
+        <h3>Regular transactions</h3>
+        <p class="rule">Regular: Length 1, 2, 4, 8 or 16; full width if Length &gt; 1; INCR or WRAP; INCR aligned to its container, WRAP aligned to Size.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Most real traffic is cache lines and aligned power-of-two blocks. A Subordinate that only ever sees those can drop the unaligned, narrow and FIXED logic. The property makes that a declared, checkable contract instead of an assumption.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A last-level cache port that only accepts 64-byte aligned lines declares Regular_Transactions_Only = True. Connecting a DMA that issues unaligned 7-beat bursts directly to it is "not compatible", and the spec warns of data corruption or deadlock.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Corruption or deadlock. An interconnect must convert non-Regular traffic before such a Subordinate.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.8, Tables A3.17–A3.18, p.52</li><li><span class="kind illus">Illustrative</span>LLC example</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="lane">
+        <div class="meta"><span>Lanes &amp; strobes</span><span>§A3.2.1.1 p.54</span></div>
+        <h3>Strobes free inside the container, LOW outside</h3>
+        <p class="rule">Any strobe pattern is allowed within the transaction container, including all LOW. Outside the container every strobe must be LOW.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Sparse writes (packing, read-modify-write avoidance) need arbitrary strobes. But bytes outside the container belong to addresses the request never named, possibly in another Subordinate's region after width conversion. Writing them would corrupt memory nobody asked to touch.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 4-byte write to 0x1006 on a 64-bit channel: lanes 4–7 form the Size slot (0x1004–0x1007). WSTRB 0x40 or 0xC0 is fine. WSTRB 0x0F would write 0x1000–0x1003, outside the container: illegal.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Silent corruption of neighbouring bytes, often only visible after a width converter remaps lanes.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.2.1.1, p.54 · Table B4.2, p.309</li><li><span class="kind derived">Derived</span>lane arithmetic</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="lane">
+        <div class="meta"><span>Lanes &amp; strobes</span><span>§A3.2.4 p.56</span></div>
+        <h3>Byte invariance</h3>
+        <p class="rule">A byte transfer to a given address always uses the same data wires, whatever the endianness or size of the access it is part of.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A network packet can have a little-endian header and a big-endian payload in the same buffer. If lanes moved with endianness, a big-endian payload write could corrupt the header. With byte invariance only the producer's interpretation of the bytes changes, never the memory layout.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A big-endian DSP writes 0x0A0B0C0D to 0x100; a little-endian CPU reads byte 0x100 and gets 0x0A. Both used lane 0 for address 0x100; the DSP's bridge did the byte swap inside the DSP, not on the bus.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A component that swaps lanes on the bus for big-endian accesses breaks every other agent's view of memory.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.2.4, p.56–58</li><li><span class="kind illus">Illustrative</span>DSP example</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="lane">
+        <div class="meta"><span>Lanes &amp; strobes</span><span>§A3.1.1 p.43</span></div>
+        <h3>Size is a ceiling on lanes, not a byte count</h3>
+        <p class="rule">For reads, Size bytes per beat must be valid. For writes, Size lanes may be active; strobes pick the bytes. Size never exceeds DATA_WIDTH.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Reads have no strobes, so the Manager can only say "give me this slot". Writes have strobes, so Size bounds the slot and strobes refine it. A beat can't use lanes that don't exist, hence the cap.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64-bit Manager reading a 32-bit register at 0x2004 issues ARSIZE 4 bytes. The Subordinate returns valid data on lanes 4–7; lanes 0–3 should be 0 (recommended), and the Manager ignores them.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>AxSIZE wider than the channel happens after careless width conversion. A Subordinate that computes lanes with it wraps into the wrong lanes.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.1, p.43 · §A3.2.2, p.55</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="addr">
+        <div class="meta"><span>Addresses</span><span>§A3.2.5 p.58</span></div>
+        <h3>Unaligned: address and strobes must agree</h3>
+        <p class="rule">An unaligned start can be signalled by low address bits or by an aligned address with leading strobes LOW; the two must be consistent. Subordinates need not act on alignment.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Memories write by strobe, not by address bits. Allowing both encodings lets a simple Manager always send aligned addresses. Requiring consistency means a Subordinate that does look at address bits (for example to compute the next beat) never gets contradictory information.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>memcpy of 13 bytes from 0x3003 on a 32-bit channel: AWADDR 0x3003, Size 4, Length 4. First beat WSTRB 1000 (0x3003), then 0x3004–0x300F full. Equivalent: AWADDR 0x3000 with the same strobes.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>AWADDR 0x3003 with WSTRB 1111 on beat 1 tells two stories; a Subordinate that trusts strobes writes 0x3000–0x3002, which the request never named.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.2.5, p.58</li><li><span class="kind derived">Derived</span>memcpy layout</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="addr">
+        <div class="meta"><span>Addresses</span><span>§A3.1.5 p.49</span></div>
+        <h3>Smaller address spaces sit in windows</h3>
+        <p class="rule">A component with fewer address bits lives in an aligned window of the larger space. The interconnect adds high bits outbound, strips them inbound, and suppresses transactions outside the window.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A 32-bit peripheral subsystem and a 48-bit CPU share one system. Without a defined rule, each bridge would invent its own mapping, and an access outside the window could alias onto a real register.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 32-bit DMA in a 40-bit system is placed at window 0x40_0000_0000. Its outgoing 0x8000_0000 becomes 0x40_8000_0000. An incoming access to 0x12_0000_0000 is suppressed rather than truncated to 0x0000_0000.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Truncation instead of suppression aliases a stray access onto real memory: a security problem as well as a bug.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.5, p.49</li><li><span class="kind illus">Illustrative</span>window address</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="prop">
+        <div class="meta"><span>Properties</span><span>§A3.1.3 p.45</span></div>
+        <h3>Max_Transaction_Bytes: a smaller promise than 4 KB</h3>
+        <p class="rule">A Manager declares that Size × Length never exceeds X and never crosses an X boundary (64 to 4096). A Manager with a larger value than its Subordinate is not compatible.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Many Managers only ever issue cache lines. An interconnect that stripes memory across channels at 256 B granules would otherwise have to split any burst that crosses a stripe. Knowing the Manager stays within 256 B lets it skip the splitter entirely.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU port with Max_Transaction_Bytes 64 connects to an HBM fabric that interleaves channels every 256 bytes. No request can straddle two channels, so routing is a decode of address bits [10:8].</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager declaring 64 that issues a 128-byte burst lands half its data in the wrong channel.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.3, Tables A3.6–A3.7, p.45</li><li><span class="kind illus">Illustrative</span>HBM striping</li></ul></div>
+      </article>
+
+      <article class="wcard" data-g="prop">
+        <div class="meta"><span>Properties</span><span>§A3.1.4 p.47</span></div>
+        <h3>Wrap_CLS_Modifiable</h3>
+        <p class="rule">When True, every WRAP must be exactly cache-line sized and Modifiable (AxCACHE[1] = 1). New in Issue L.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Arbitrary WRAP sizes are hard to convert across data widths or into protocols like CHI that think in cache lines. If WRAP is always a full Modifiable line, a bridge can freely turn it into any equivalent line access.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An AXI-to-CHI bridge with this property set treats every WRAP as a 64-byte line read with critical-chunk order, without a fallback path for 8-byte Non-modifiable WRAPs.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager without the guarantee connected to a Subordinate that requires it is not compatible (Table A3.12). A wrapping AtomicCompare is exempt.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.1.4, Tables A3.11–A3.12, p.47 · Table B4.3, p.311</li><li><span class="kind illus">Illustrative</span>bridge example</li></ul></div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- 9 LIVE -->
+<section id="live">
+  <div class="wrap">
+    <h2>9 · Live scenarios</h2>
+    <p class="sub">Each column is one ACLK cycle. The "beat address" row is what the Subordinate computes; it is not a signal on the wire. Step through each scenario; shaded columns are the cycles a step describes.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead">
+        <h3 id="sc-title"></h3>
+        <p id="sc-desc"></p>
+        <p class="src" id="sc-src"></p>
+      </div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar">
+          <button class="btn" id="prev" type="button">← Previous</button>
+          <button class="btn primary" id="next" type="button">Next →</button>
+          <div class="dots" id="dots" aria-label="Steps"></div>
+          <span class="cycles" id="cyc"></span>
+        </div>
+        <div class="stepbody">
+          <h3 id="st-title"></h3>
+          <p id="st-text"></p>
+          <p class="why" id="st-why"></p>
+          <p class="src" id="st-src"></p>
+        </div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px">Payload labels read "start address, Size in bytes, Length in beats, burst type". The three figure-based scenarios reproduce Figures A3.1, A3.6 and A3.8. Handshake timing is idealised (READY always HIGH) so the address pattern stands out.</p>
+  </div>
+</section>
+
+<!-- 10 SILICON -->
+<section id="silicon">
+  <div class="wrap">
+    <h2>10 · Real silicon: what the theory turns into</h2>
+    <p class="sub">How the rules shape DMA engines, converters and memory controllers.</p>
+    <div class="twocol">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind derived">Derived</span> request share = 1 ÷ (1 + beats) of all transfers for a write (AW + W beats, ignoring B). <span class="kind illus">Illustrative</span> traffic types.</caption>
+          <thead><tr><th>Traffic</th><th>Typical request</th><th class="num">Bytes</th><th class="num">Beats</th><th class="num">AW share</th></tr></thead>
+          <tbody>
+            <tr><td>Register write</td><td>INCR, Size 4, Length 1</td><td class="num">4</td><td class="num">1</td><td class="num">50%</td></tr>
+            <tr><td>CPU line evict, 128-bit</td><td>INCR, Size 16, Length 4</td><td class="num">64</td><td class="num">4</td><td class="num">20%</td></tr>
+            <tr><td>CPU line fill, 128-bit</td><td>WRAP, Size 16, Length 4</td><td class="num">64</td><td class="num">4</td><td class="num">20%</td></tr>
+            <tr><td>DMA, 128-bit</td><td>INCR, Size 16, Length 256</td><td class="num">4096</td><td class="num">256</td><td class="num">0.4%</td></tr>
+            <tr><td>DMA, 512-bit</td><td>INCR, Size 64, Length 64</td><td class="num">4096</td><td class="num">64</td><td class="num">1.5%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>DMA burst generation</h3>
+        <p style="font-size:15px">A DMA engine's address generator splits a copy into bursts that respect three limits at once:</p>
+        <ul class="tight">
+          <li>The next 4 KB boundary: bytes_to_boundary = 4096 − (addr mod 4096). <span class="ref">§A3.1, p.43</span></li>
+          <li>The Subordinate's Max_Transaction_Bytes boundary, if smaller. <span class="ref">§A3.1.3, p.45</span></li>
+          <li>Its own buffer space for outstanding data. <span class="ref">§A2.6, p.41</span></li>
+        </ul>
+        <p style="font-size:15px">Typical sequence: one short unaligned head burst to reach alignment, full-size bursts, then a tail. Many DMAs also stop each burst at a 64-byte line boundary to help caches downstream.</p>
+        <p class="src"><span class="kind bg">Background</span>DMA design practice</p>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 6px">What width converters have to do with a burst</h3>
+    <div class="tbl-wrap">
+      <table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Modifiable and Non-modifiable rules: §A4.2.2, p.69 (detailed in the Request Attributes guide). Converter design is <span class="kind bg">Background</span>.</caption>
+        <thead><tr><th>Converter</th><th>Example</th><th>What changes</th><th>Allowed when</th></tr></thead>
+        <tbody>
+          <tr><td>Downsizer, Size ≤ narrow width</td><td>Size 4 on 128 → 32-bit</td><td>Nothing in the request; lanes are remapped</td><td>Always</td></tr>
+          <tr><td>Downsizer, Size &gt; narrow width</td><td>Size 16, Length 4 on 128 → 32-bit</td><td>Size 4, Length 16</td><td>Even if Non-modifiable: the spec says downsizing below Size must modify</td></tr>
+          <tr><td>Upsizer, packing</td><td>Size 4 × 16 beats on 32 → 128-bit</td><td>Size 16, Length 4</td><td>Only if Modifiable; otherwise pass Size 4 beats as narrow transfers</td></tr>
+          <tr><td>AXI4 → AXI3 bridge</td><td>INCR Length 64</td><td>Four bursts of 16</td><td>Even if Non-modifiable (Length &gt; 16 split rule)</td></tr>
+          <tr><td>Any converter, WRAP</td><td>WRAP Size 4, Length 16 on 32 → 64-bit</td><td>Either keep it narrow or turn into an equivalent WRAP or two INCRs</td><td>Wrap_CLS_Modifiable makes this easier by guaranteeing line size</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+        <tbody>
+          <tr><td>Data appears at the start of the wrong page</td><td>DMA did not split at 4 KB; the Subordinate's 12-bit counter wrapped.</td><td class="ref">§A3.1, p.43</td></tr>
+          <tr><td>Bytes below the start address overwritten</td><td>First beat of an unaligned write had WSTRB all ones.</td><td class="ref">§A3.2.1.1, p.54 · §A3.2.5, p.58</td></tr>
+          <tr><td>Cache line returned in the wrong order</td><td>Subordinate treated WRAP as INCR and ran past the line.</td><td class="ref">§A3.1.4, p.47 · §A3.1.6, p.50</td></tr>
+          <tr><td>W channel hangs after an aborted DMA</td><td>Manager stopped sending beats before AWLEN + 1.</td><td class="ref">§A3.1.2, p.44</td></tr>
+          <tr><td>FIFO register gets half its data</td><td>Downsizer incremented the address of a FIFO burst.</td><td class="ref">§A3.1.4, p.47</td></tr>
+          <tr><td>Peripheral FIFO loses entries on reads</td><td>Manager read a longer burst than it needed and dropped the extra.</td><td class="ref">§A3.1.2, p.44 · H.c Note, p.A3-48</td></tr>
+          <tr><td>Wrong data on narrow reads after an upsizer</td><td>Upsizer packed a Non-modifiable narrow burst.</td><td class="ref">§A4.2.2, p.69</td></tr>
+          <tr><td>Address aliasing into low memory</td><td>Bridge truncated high address bits instead of suppressing.</td><td class="ref">§A3.1.5, p.49</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 11 CHANGES -->
+<section id="changes">
+  <div class="wrap">
+    <h2>11 · What changed from AXI3 and AXI4 to Issue L</h2>
+    <p class="sub"><span class="ver old">H.c</span> = Issue H.c text covering AXI3/AXI4; <span class="ver new">L</span> = Issue L.</p>
+    <div class="tbl-wrap cmp">
+      <table>
+        <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI3 / AXI4</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>Burst length</td><td class="then"><strong>AXI3:</strong> 1–16 for all types, Length = AxLEN[3:0] + 1. <strong>AXI4:</strong> INCR 1–256 with AxLEN[7:0]; others stay 1–16.</td><td>Same as AXI4. AxLEN is 8 bits; WRAP 2/4/8/16, FIXED ≤ 16.</td><td class="ref">H.c §A3.4.1, p.A3-48 · §A3.1.2, p.44</td></tr>
+          <tr><td>Splitting long bursts</td><td class="then">AXI4 INCR longer than 16 may be split even if Non-modifiable, "required for AXI3 compatibility" and for QoS.</td><td>Same rule, now in the Modifiable section.</td><td class="ref">H.c p.A3-49 · §A4.2.2, p.69</td></tr>
+          <tr><td>Name of the unit</td><td class="then">"Burst", "beat", "burst length".</td><td>"Transaction", "transfer", "Length". Same signals.</td><td class="ref">H.c §A3.4.1, p.A3-48 · §A3.1, p.43</td></tr>
+          <tr><td>Size limit</td><td class="then">Size must not exceed the data bus width of either agent.</td><td>Size must not exceed DATA_WIDTH of the interface.</td><td class="ref">H.c p.A3-49 · §A3.1.1, p.43</td></tr>
+          <tr><td>FIXED</td><td class="then">Any AXI3/AXI4 read or write could be FIXED, up to 16 beats.</td><td>Only WriteNoSnoop/ReadNoSnoop; Fixed_Burst_Disable (Issue K) lets interfaces opt out.</td><td class="ref">H.c p.A3-49 · §A3.1.4, p.48 · Table B4.2, p.309</td></tr>
+          <tr><td>WRAP</td><td class="then">Aligned start, Length 2/4/8/16.</td><td>Same, plus optional Wrap_CLS_Modifiable (Issue L).</td><td class="ref">H.c p.A3-50 · §A3.1.4, p.47 · Table B4.3, p.311</td></tr>
+          <tr><td>WRAP equation</td><td class="then">Later beats: Start_Address + (N − 1) × Number_Bytes − Number_Bytes × Burst_Length.</td><td>Aligned_Addr + (N − 1) × Size − Size × Length (correction in Issue L). Same result for a legal WRAP.</td><td class="ref">H.c p.A3-51 · §A3.1.6, p.50 · Table B4.3, p.311</td></tr>
+          <tr><td>Write strobes</td><td class="then">Strobes HIGH only for lanes with valid data.</td><td>Any pattern inside the container (including all LOW); all LOW outside it. Clarified in Issue K.</td><td class="ref">H.c p.A3-54 · §A3.2.1.1, p.54 · Table B4.2, p.309</td></tr>
+          <tr><td>Max transaction size</td><td class="then">4 KB only for AXI3/AXI4. Max_Transaction_Bytes existed as an AMBA 5 property.</td><td>Max_Transaction_Bytes is a core property of every interface; clarified in Issue K.</td><td class="ref">H.c §E1.18, p.E1-400 · §A3.1.3, p.45 · Table B4.2, p.309</td></tr>
+          <tr><td>Regular transactions</td><td class="then">Defined, but the property could be True only on AXI5/ACE5-family interfaces. Criteria were written as "AxLEN is 1, 2, 4, 8, or 16".</td><td>Same criteria, written as "Length is 1, 2, 4, 8, or 16", which is what was meant (AxLEN = Length − 1).</td><td class="ref">H.c §A3.4.3, p.A3-53 · §A3.1.8, p.52</td></tr>
+          <tr><td>Optional request fields</td><td class="then">AxSIZE, AxLEN, AxBURST, WSTRB had default values for interoperability.</td><td>Explicit SIZE_Present, LEN_Present, BURST_Present, WSTRB_Present properties with tie-off values.</td><td class="ref">H.c §A9.3, p.A9-110 · Tables A3.3, A3.5, A3.10, A3.23</td></tr>
+          <tr><td>Address width</td><td class="then">ADDR_WIDTH 1–64 listed as an AMBA 5 signal width property.</td><td>ADDR_WIDTH 1–64, default 32, with the window rules for mixed widths.</td><td class="ref">H.c §E1.19, p.E1-403 · §A3.1.5, p.49</td></tr>
+          <tr><td>Read-sensitive note</td><td class="then">Note: discarding read data can lose data from FIFOs; such Managers must use an exact burst length.</td><td>Not in the text; the rule that every beat must be completed remains.</td><td class="ref">H.c p.A3-48 · §A3.1.2, p.44</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 12 VERIFY -->
+<section id="verify">
+  <div class="wrap">
+    <h2>12 · Verification</h2>
+    <p class="sub">Two things to build: a reference model of §A3.1.7 that predicts every beat's address and lanes, and constraints that generate legal, nasty requests.</p>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Assertions</h3>
+        <ul class="tight">
+          <li>AxBURST ≠ 0b11. <span class="ref">Table A3.9, p.46</span></li>
+          <li>WRAP ⇒ Length ∈ {2, 4, 8, 16} and AxADDR aligned to Size. <span class="ref">§A3.1.4, p.47</span></li>
+          <li>FIXED ⇒ Length ≤ 16; and not issued if Fixed_Burst_Disable. <span class="ref">§A3.1.4, p.47–48</span></li>
+          <li>2^AxSIZE ≤ DATA_WIDTH/8. <span class="ref">§A3.1.1, p.43</span></li>
+          <li>INCR: AxADDR[ADDR_WIDTH-1:12] == (Aligned_Addr + Size × Length − 1)[ADDR_WIDTH-1:12]. <span class="ref">§A3.1, p.43</span></li>
+          <li>Size × Length ≤ Max_Transaction_Bytes and no MTB-boundary crossing. <span class="ref">§A3.1.3, p.45</span></li>
+          <li>W beat count == AWLEN + 1 with WLAST on the last only; same for R. <span class="ref">§A3.1.2, p.44</span></li>
+          <li>WSTRB ⊆ legal lanes of the beat (from the model). <span class="ref">§A3.2.1.1, p.54</span></li>
+          <li>FIXED: active lane set identical on every beat. <span class="ref">§A3.1.4, p.47</span></li>
+          <li>Regular_Transactions_Only ⇒ every request is Regular. <span class="ref">§A3.1.8, p.52</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>SVA sketches</h3>
+<pre>// 4 KB for INCR: first and last byte in the same page
+let last_byte(a, s, l) = ((a &gt;&gt; s) &lt;&lt; s) + ((l + 1) &lt;&lt; s) - 1;
+a_4k: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  AWVALID &amp;&amp; AWBURST == INCR |-&gt;
+  (AWADDR[ADDR_W-1:12] ==
+   last_byte(AWADDR, AWSIZE, AWLEN)[ADDR_W-1:12]));
+
+// WRAP legality
+a_wrap: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  ARVALID &amp;&amp; ARBURST == WRAP |-&gt;
+  ARLEN inside {1, 3, 7, 15} &amp;&amp;
+  ((ARADDR &amp; ((1 &lt;&lt; ARSIZE) - 1)) == 0));
+
+// strobes stay inside the beat's legal lanes (mask from the model)
+a_strb: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  WVALID |-&gt; ((WSTRB &amp; ~legal_mask) == 0));
+
+// beat count
+a_wlast: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  WVALID &amp;&amp; WREADY |-&gt; (WLAST == (wbeat == cur_awlen)));</pre>
+        <p class="src"><span class="sl">Spec</span>§A3.1, p.43 · §A3.1.4, p.47 · §A3.2.1.1, p.54 · §A3.1.2, p.44. legal_mask, wbeat and cur_awlen come from auxiliary code that pairs W with AW in order.</p>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <h3>Constraints and scenarios that find bugs</h3>
+        <ul class="tight">
+          <li>Bursts ending exactly at 0x…FFF, and 1 byte past it (negative test). <span class="ref">§A3.1, p.43</span></li>
+          <li>Unaligned starts at every offset within Size and within the channel. <span class="ref">§A3.2.5, p.58</span></li>
+          <li>Narrow Size on every channel width, including Size 1 on 1024-bit. <span class="ref">§A3.2.3, p.55</span></li>
+          <li>WRAP starting at every legal slot of the container, all four lengths. <span class="ref">§A3.1.4, p.47</span></li>
+          <li>FIXED unaligned (lanes from the aligned formula on every beat). <span class="ref">§A3.1.7, p.51</span></li>
+          <li>Write beats with all strobes LOW, at the start, middle and end. <span class="ref">§A3.2.1.1, p.54</span></li>
+          <li>Length 256 INCR, and Length 1 with every Size. <span class="ref">Table A3.4, p.44</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Functional coverage</h3>
+        <ul class="tight">
+          <li>AxBURST × AxSIZE × length bins (1, 2, 3–15, 16, 17–255, 256).</li>
+          <li>Start offset within Size × within channel × burst type.</li>
+          <li>WRAP: wrap position (beat at which the wrap happens) × Length.</li>
+          <li>Distance from the burst end to the next 4 KB boundary: 0, 1 to Size, larger.</li>
+          <li>Strobe patterns: full, partial, sparse, all LOW, per beat position.</li>
+          <li>Regular vs not Regular; Max_Transaction_Bytes boundary distance.</li>
+        </ul>
+        <p class="src"><span class="kind bg">Background</span> coverage plan · rules from §A3.1–A3.2</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 QUIZ -->
+<section id="quiz">
+  <div class="wrap">
+    <h2>13 · Test yourself</h2>
+    <p class="sub">DV-interview style, basic to advanced. Use the calculator to check your arithmetic. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+
+    <details><summary>AWLEN is 0x0F. How many beats is that, and which burst types can use it? <span class="lvl">Basic</span></summary><div>
+      <p>16 beats (Length = AxLEN + 1). All three: INCR (1–256), WRAP (2, 4, 8, 16) and FIXED (≤ 16).</p>
+      <p class="src"><span class="sl">Spec</span>Table A3.4, p.44 · §A3.1.4, p.47</p></div></details>
+
+    <details><summary>Why can't an AXI transaction cross a 4 KB boundary? <span class="lvl">Basic</span></summary><div>
+      <p>So a transaction can never span two Subordinates (address maps allocate at 4 KB granularity) and so a Subordinate's address incrementer is bounded to 12 bits. 4 KB is also the maximum Size × Length.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.1, p.43 · §A3.1.3, p.45</p></div></details>
+
+    <details><summary>What are the rules for a WRAP burst, and why does WRAP exist? <span class="lvl">Basic</span></summary><div>
+      <p>Start aligned to Size; Length 2, 4, 8 or 16; the address wraps at Wrap_Boundary + Size × Length back to Wrap_Boundary, which is the start aligned to Size × Length. It exists for cache line accesses: critical word first, then the rest of the line.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.1.4, p.47 · §A3.1.6, p.50</p></div></details>
+
+    <details><summary>A Manager wants to stop a write burst halfway. What may it do? <span class="lvl">Basic</span></summary><div>
+      <p>It may not end the burst early. It sends the remaining beats with all strobes LOW and WLAST on the last one. For reads it accepts the remaining beats and discards them.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.1.2, p.44</p></div></details>
+
+    <details><summary>Give the beat addresses of WRAP, ARADDR 0x38, Size 8, Length 4. <span class="lvl">Intermediate</span></summary><div>
+      <p>Container 32 bytes; Wrap_Boundary = INT(0x38 / 32) × 32 = 0x20. Beats 0x38, then 0x40 = 0x20 + 32 wraps to 0x20, then 0x28, 0x30.</p>
+      <p class="src"><span class="sl">Spec</span><span class="kind derived">Derived</span> from §A3.1.6, p.50</p></div></details>
+
+    <details><summary>On a 64-bit channel, AWADDR 0x1005, Size 4, Length 2, INCR. Which lanes do the two beats use? <span class="lvl">Intermediate</span></summary><div>
+      <p>Aligned_Addr 0x1004. Beat 1: Lower lane 5, Upper lane 0x1004 + 3 − 0x1000 = 7, so lanes 5–7 (3 bytes). Beat 2: Address 0x1008, lanes 0–3. 7 bytes in total.</p>
+      <p class="src"><span class="sl">Spec</span><span class="kind derived">Derived</span> from §A3.1.6, p.50</p></div></details>
+
+    <details><summary>Is WSTRB = 0000 legal on a write beat? Is a strobe set outside the container legal? <span class="lvl">Intermediate</span></summary><div>
+      <p>All LOW is legal: inside the container any pattern is allowed, and that beat writes nothing. A strobe outside the container is never legal: those strobes must be LOW.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.2.1.1, p.54</p></div></details>
+
+    <details><summary>Explain byte invariance with an example. <span class="lvl">Intermediate</span></summary><div>
+      <p>A byte at a given address always rides the same lane, whatever the endianness of the access. 0x0A0B0C0D stored big-endian at A puts 0x0A at A, on lane 0 of a 32-bit channel; stored little-endian it puts 0x0D at A, also on lane 0. Mixed-endian structures share memory without corrupting each other.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.2.4, p.56–58</p></div></details>
+
+    <details><summary>What is a Regular transaction, and who benefits from the property? <span class="lvl">Intermediate</span></summary><div>
+      <p>Length 1, 2, 4, 8 or 16; full width if Length &gt; 1; INCR or WRAP; INCR aligned to its container, WRAP aligned to Size. Subordinates that only accept these can drop narrow, unaligned and FIXED logic. A non-Regular-only Manager may not connect to a Regular-only Subordinate.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.1.8, p.52</p></div></details>
+
+    <details><summary>A DMA must copy 6000 bytes from 0x0000_0F80 with 16-byte beats and Max_Transaction_Bytes 4096. Give the bursts. <span class="lvl">Advanced</span></summary><div>
+      <p>0x0F80 → 128 bytes to the 4 KB boundary: Length 8. Then 0x1000: 4096 bytes, Length 256. Then 0x2000: 6000 − 128 − 4096 = 1776 bytes, Length 111. Three bursts, all aligned to 16 bytes.</p>
+      <p class="src"><span class="sl">Spec</span><span class="kind derived">Derived</span> from §A3.1, p.43 and §A3.1.3, p.45</p></div></details>
+
+    <details><summary>A downsizer receives a Non-modifiable INCR, Size 16, Length 4, and its output is 32 bits wide. Is it allowed to change the request? How? <span class="lvl">Advanced</span></summary><div>
+      <p>Yes. Non-modifiable normally fixes Size and Length, but the spec recognises that downsizing below Size must modify the transaction. It becomes Size 4, Length 16 with the same address and attributes. It may optionally signal that a modification happened through an IMPLEMENTATION DEFINED mechanism.</p>
+      <p class="src"><span class="sl">Spec</span>§A4.2.2, p.69</p></div></details>
+
+    <details><summary>What changed for burst length and FIXED between AXI3, AXI4 and Issue L? <span class="lvl">Advanced</span></summary><div>
+      <p>AXI3: all types 1–16 using AxLEN[3:0]. AXI4: INCR up to 256 with AxLEN[7:0]; WRAP and FIXED stay ≤ 16; long Non-modifiable INCR may be split for AXI3 compatibility. Issue L: same lengths; FIXED only with WriteNoSnoop/ReadNoSnoop; interfaces may disable FIXED (Issue K) and constrain WRAP to Modifiable cache lines (Issue L).</p>
+      <p class="src"><span class="sl">Spec</span>H.c §A3.4.1, p.A3-48–A3-49 · §A3.1.4, p.47–48 · Tables B4.2–B4.3, p.309–311</p></div></details>
+
+    <details><summary>Your Subordinate model computes the lanes for an unaligned FIXED burst by incrementing like INCR after beat 1. Is that right? <span class="lvl">Advanced</span></summary><div>
+      <p>No. FIXED never moves the address, so in the §A3.1.7 pseudocode the "aligned" flag never becomes TRUE. Every beat uses the first-beat formula: lanes from the start address up to the end of the aligned Size slot.</p>
+      <p class="src"><span class="sl">Spec</span>§A3.1.7, p.51 · §A3.1.4, p.47</p></div></details>
+  </div>
+</section>
+
+<!-- 14 REFS -->
+<section id="refs">
+  <div class="wrap">
+    <h2>14 · Spec reference index</h2>
+    <p class="sub">Every section, table and figure this page cites. "Used in" lists the sections of this page that rely on it.</p>
+    <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>§A1.1</td><td>About the AXI protocol</td><td class="num">21</td><td>1</td></tr>
+          <tr><td>§A2.3.2.1</td><td>Write transaction dependencies</td><td class="num">31</td><td>2</td></tr>
+          <tr><td>§A2.6</td><td>AXI transactions and transfers</td><td class="num">41</td><td>10</td></tr>
+          <tr><td>§A3.1</td><td>Transaction request (4 KB rule)</td><td class="num">43</td><td>1, 2, 6, 8, 10, 12, 13</td></tr>
+          <tr><td>§A3.1.1, Tables A3.1–A3.3</td><td>Size attribute; AxSIZE; SIZE_Present</td><td class="num">43–44</td><td>3, 4, 6, 8, 12</td></tr>
+          <tr><td>§A3.1.2, Tables A3.4–A3.5</td><td>Length attribute; AxLEN; LEN_Present</td><td class="num">44</td><td>3, 4, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A3.1.3, Tables A3.6–A3.7</td><td>Maximum number of bytes in a transaction</td><td class="num">45</td><td>1, 4, 6, 8, 10, 11, 12, 13</td></tr>
+          <tr><td>§A3.1.4, Tables A3.8–A3.14</td><td>Burst attribute; Wrap_CLS_Modifiable; Fixed_Burst_Disable</td><td class="num">46–48</td><td>1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A3.1.5, Tables A3.15–A3.16</td><td>Transfer address; ADDR_WIDTH</td><td class="num">49</td><td>4, 7, 8, 10, 11</td></tr>
+          <tr><td>§A3.1.6</td><td>Transaction equations</td><td class="num">49–50</td><td>2, 5, 9, 10, 13</td></tr>
+          <tr><td>§A3.1.7</td><td>Pseudocode description of the transfers</td><td class="num">51</td><td>5, 6, 9, 12, 13</td></tr>
+          <tr><td>§A3.1.8, Tables A3.17–A3.18</td><td>Regular transactions</td><td class="num">52</td><td>3, 6, 8, 9, 11, 12, 13</td></tr>
+          <tr><td>§A3.2, Table A3.19</td><td>Write and read data; DATA_WIDTH</td><td class="num">53</td><td>4</td></tr>
+          <tr><td>§A3.2.1, Table A3.20</td><td>Write data channel (W)</td><td class="num">53</td><td>4</td></tr>
+          <tr><td>§A3.2.1.1, Tables A3.22–A3.23</td><td>Write strobes; WSTRB_Present</td><td class="num">54</td><td>1, 4, 7, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A3.2.2, Table A3.24</td><td>Read data channel (R)</td><td class="num">55</td><td>4, 8</td></tr>
+          <tr><td>§A3.2.3, Figures A3.1–A3.2</td><td>Narrow transfers</td><td class="num">55–56</td><td>1, 7, 9, 12</td></tr>
+          <tr><td>§A3.2.4, Figures A3.3–A3.5</td><td>Byte invariance</td><td class="num">56–58</td><td>1, 7, 8, 9, 13</td></tr>
+          <tr><td>§A3.2.5, Figures A3.6–A3.8</td><td>Unaligned transfers; aligned wrapping transfers</td><td class="num">58–60</td><td>1, 7, 8, 9, 10, 12</td></tr>
+          <tr><td>§A4.2.2, Table A4.3</td><td>Modifiable, AxCACHE[1]; Non-modifiable splitting</td><td class="num">69</td><td>8, 10, 11, 13</td></tr>
+          <tr><td>Table B4.2</td><td>Differences between Issue J and Issue K</td><td class="num">309</td><td>8, 9, 11, 13</td></tr>
+          <tr><td>Table B4.3</td><td>Differences between Issue K and Issue L</td><td class="num">311</td><td>5, 8, 9, 11, 13</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c (AXI3 / AXI4 comparison)</h3>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>§A3.4.1</td><td>Address structure: burst length, size, type, address</td><td class="num">A3-48–A3-51</td><td>5, 8, 10, 11, 13</td></tr>
+          <tr><td>§A3.4.3</td><td>Regular transactions</td><td class="num">A3-53</td><td>11</td></tr>
+          <tr><td>§A3.4.4</td><td>Data read and write structure: write strobes</td><td class="num">A3-54</td><td>11</td></tr>
+          <tr><td>§A9.3</td><td>Default signal values</td><td class="num">A9-110</td><td>11</td></tr>
+          <tr><td>§E1.18</td><td>Additional interface properties (Max_Transaction_Bytes)</td><td class="num">E1-400</td><td>11</td></tr>
+          <tr><td>§E1.19</td><td>Signal width properties (ADDR_WIDTH)</td><td class="num">E1-403</td><td>11</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>What is not from the spec.</strong> <span class="kind derived">Derived</span> items are arithmetic with the spec's equations (beat addresses, lanes, burst splits). <span class="kind illus">Illustrative</span> items are example systems and numbers. <span class="kind bg">Background</span> items are design practice: DMA burst generation, width-converter behaviour, coverage plans.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><nav class="pager" aria-label="Guides"><a class="pv" href="channels-handshake.html"><small>← Previous guide</small><strong>Channels &amp; Handshake</strong></a><a class="nx" href="request-attributes.html"><small>Next guide →</small><strong>Request Attributes</strong></a><a class="all" href="../index.html">All guides and the request map</a></nav></div></main>
+
+<footer>
+  <div class="wrap">Built from the AMBA AXI Protocol Specification, ARM IHI 0022 Issue L (27 Aug 2025): Chapter A3.1–A3.2, with §A4.2.2 and Appendix B4. AXI3/AXI4 comparisons from ARM IHI 0022 Issue H.c, §A3.4, §A9.3 and §E1.18–E1.19. Section 14 lists every cited section, table and figure with its page. For sign-off, check the spec at the cited page.</div>
+</footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  /* beats: array of labels placed one per cycle starting at cycle s; padded to n */
+  function at(n, s, labels) { var a = []; for (var i = 0; i < n; i++) a.push(""); labels.forEach(function (l, k) { a[s + k] = l; }); return a; }
+
+  window.PAGE = {
+    CW: 50,
+    dirName: { lp: "Manager", pl: "Subordinate", cfg: "Property", both: "both" },
+    dirCls: { cfg: "sb", both: "" },
+    groups: [["all", "All"], ["req", "Request fields"], ["data", "Data channels"], ["prop", "Properties"]],
+    sigs: [
+      ["req", "AWADDR, ARADDR [ADDR_WIDTH-1:0]", "lp", "bus", "Address of the first transfer", "Only the start address is sent; the Subordinate works out the rest. May be unaligned for INCR and FIXED.", "Table A3.15, p.49 · §A3.1, p.43"],
+      ["req", "AWLEN, ARLEN [7:0]", "lp", "bus", "Number of transfers minus one", "Length = AxLEN + 1, so 0x00 is one beat and 0xFF is 256. WRAP needs 2, 4, 8 or 16; FIXED up to 16. Tie to 0x00 if absent.", "Table A3.4, p.44"],
+      ["req", "AWSIZE, ARSIZE [2:0]", "lp", "bus", "Maximum bytes per transfer, 2^AxSIZE", "0b000 = 1 byte … 0b111 = 128 bytes. Never wider than the data channel. Tie to log2(DATA_WIDTH/8) if absent.", "Tables A3.1–A3.2, p.43"],
+      ["req", "AWBURST, ARBURST [1:0]", "lp", "bus", "How the address moves between transfers", "0b00 FIXED, 0b01 INCR, 0b10 WRAP, 0b11 reserved. Tie to 0b01 if absent.", "Tables A3.8–A3.9, p.46"],
+      ["data", "WDATA [DATA_WIDTH-1:0]", "lp", "bus", "Write data", "Only the lanes chosen by address and size carry data. Inactive lanes recommended 0.", "Table A3.20, p.53"],
+      ["data", "WSTRB [DATA_WIDTH/8-1:0]", "lp", "bus", "One strobe per byte lane", "Inside the transaction container any pattern, even all LOW; outside it all LOW. Can be absent if every write is full width (then tied HIGH).", "Table A3.22, p.54"],
+      ["data", "WLAST", "lp", "level", "Last write beat", "HIGH on beat Length, even if the last beats have no strobes set.", "Table A3.20, p.53 · §A3.1.2, p.44"],
+      ["data", "RDATA [DATA_WIDTH-1:0]", "pl", "bus", "Read data", "Size bytes must be valid on the lanes for that beat. Inactive lanes recommended 0.", "Table A3.24, p.55 · §A3.1.1, p.43"],
+      ["data", "RLAST", "pl", "level", "Last read beat", "HIGH on beat Length. The Subordinate always sends every beat.", "Table A3.24, p.55 · §A3.1.2, p.44"],
+      ["prop", "DATA_WIDTH", "cfg", "8…1024", "Bits on RDATA and WDATA", "8, 16, 32, 64, 128, 256, 512 or 1024.", "Table A3.19, p.53"],
+      ["prop", "ADDR_WIDTH", "cfg", "1…64", "Bits on AxADDR (and ACADDR)", "Default 32. Different widths meet through an aligned window.", "Table A3.16, p.49"],
+      ["prop", "Max_Transaction_Bytes", "cfg", "64…4096", "Largest Size × Length, and the boundary not to cross", "Default 4096. Manager value must not exceed the Subordinate's.", "Tables A3.6–A3.7, p.45"],
+      ["prop", "Regular_Transactions_Only", "cfg", "bool", "Only Regular transactions issued/supported", "Default False. A True Subordinate behind a False Manager is not compatible.", "Tables A3.17–A3.18, p.52"],
+      ["prop", "Fixed_Burst_Disable", "cfg", "bool", "FIXED neither generated nor supported", "Default False. Added in Issue K.", "Tables A3.13–A3.14, p.48 · Table B4.2, p.309"],
+      ["prop", "Wrap_CLS_Modifiable", "cfg", "bool", "WRAP must be cache-line sized and Modifiable", "Default False. Added in Issue L. Not applied to a wrapping AtomicCompare.", "Tables A3.11–A3.12, p.47 · Table B4.3, p.311"],
+      ["prop", "SIZE_, LEN_, BURST_, WSTRB_Present", "cfg", "bool", "Whether those signals exist", "Default True. When absent, the Subordinate input is tied to the documented value.", "Tables A3.3, A3.5, A3.10, A3.23, p.44–54"]
+    ],
+
+    wgroups: [["all", "All"], ["len", "Length & 4 KB"], ["type", "Burst types"], ["lane", "Lanes & strobes"], ["addr", "Addresses"], ["prop", "Properties"]],
+
+    scenarios: [
+      {
+        id: "narrow", tab: "Narrow INCR", title: "Five 8-bit transfers on a 32-bit channel (Figure A3.1)",
+        desc: "AWADDR 0x0, AWSIZE 0b000 (1 byte), AWLEN 4 (5 beats), INCR. Each beat uses the next byte lane, wrapping round to lane 0 on beat 5 at address 0x4.",
+        ref: "§A3.2.3 and Figure A3.1, p.55–56 · §A3.1.6, p.50",
+        n: 9, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(9, [[0, 8]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 1], ["0x0 S1 L5", 1], ["", 7]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(9, [[2, 6]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(9, [[0, 8]]) },
+          { name: "WSTRB[3:0]", d: "lp", t: "bus", v: at(9, 2, ["0001", "0010", "0100", "1000", "0001"]) },
+          { name: "WDATA lane", d: "lp", t: "bus", v: at(9, 2, ["[7:0]", "[15:8]", "[23:16]", "[31:24]", "[7:0]"]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(9, [[6, 6]]) },
+          { name: "beat address", d: "sb", t: "note", v: at(9, 2, ["0x0", "0x1", "0x2", "0x3", "0x4"]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "One request describes five transfers", x: "Only the start address 0x0 is sent, with Size 1 byte and Length 5. The Subordinate must compute addresses 0x1 to 0x4 itself.", w: "Sending one address per burst keeps the request channel narrow and lets one request cover up to 4 KB.", s: "§A3.1, p.43" },
+          { r: [2, 5], t: "Each beat moves to the next lane", x: "Address_N = Aligned_Addr + (N − 1) × Size gives 0x1, 0x2, 0x3. The byte lane is the address modulo 4 (the channel is 4 bytes wide), so the strobe walks 0001 → 0010 → 0100 → 1000.", s: "§A3.1.6, p.50 · §A3.2.3, p.55" },
+          { r: [6, 6], t: "Back to lane 0", x: "Beat 5 is address 0x4, which is lane 0 of the next 32-bit word. WLAST marks it.", w: "Byte k of memory always rides lane (k mod bus bytes). That is byte invariance in practice: a byte never changes wires depending on the access size.", s: "§A3.2.3, p.55 · §A3.2.4, p.56" }
+        ]
+      },
+      {
+        id: "unal", tab: "Unaligned INCR", title: "Unaligned start: 0x07, 4-byte transfers, 5 beats (Figure A3.6, 4th case)",
+        desc: "32-bit channel. The first transfer only reaches the end of its 4-byte word, so it carries one byte; the rest are aligned and full. Container 0x04–0x17; 17 bytes move, not Size × Length = 20.",
+        ref: "§A3.2.5 and Figure A3.6, p.58–59 · §A3.1.2, p.44 · §A3.1.6, p.50",
+        n: 9, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(9, [[0, 8]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 1], ["0x7 S4 L5", 1], ["", 7]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(9, [[2, 6]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(9, [[0, 8]]) },
+          { name: "WSTRB[3:0]", d: "lp", t: "bus", v: at(9, 2, ["1000", "1111", "1111", "1111", "1111"]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(9, [[6, 6]]) },
+          { name: "beat address", d: "sb", t: "note", v: at(9, 2, ["0x07", "0x08", "0x0C", "0x10", "0x14"]) },
+          { name: "bytes", d: "sb", t: "note", v: at(9, 2, ["1", "4", "4", "4", "4"]) }
+        ],
+        steps: [
+          { r: [2, 2], t: "First beat: from 0x07 to the end of the word", x: "Aligned_Addr = INT(0x07 / 4) × 4 = 0x04. Lower_Byte_Lane = 3, Upper_Byte_Lane = 0x04 + 3 − 0x04 = 3. Only lane 3 (address 0x07) is used.", w: "AXI moves whole Size-aligned slots per beat. Starting mid-slot just means fewer useful bytes in the first one; nothing else in the burst changes.", s: "§A3.1.6, p.50 · §A3.1.7, p.51" },
+          { r: [3, 6], t: "Every later beat is aligned", x: "Address_2 = Aligned_Addr + Size = 0x08, then 0x0C, 0x10, 0x14. All four lanes are active.", s: "§A3.1.6, p.50" },
+          { r: [2, 6], t: "Strobes and address must agree", x: "The Manager could instead have sent 0x04 with WSTRB 1000 on the first beat. Either way, the low address bits and the strobes must tell the same story. The Subordinate does not need to act on alignment at all.", s: "§A3.2.5, p.58" }
+        ]
+      },
+      {
+        id: "wrap", tab: "WRAP", title: "Wrapping burst: 0x04, 4 × 4 bytes on a 64-bit channel (Figure A3.8)",
+        desc: "Size × Length = 16, so the wrap boundary is INT(0x04 / 16) × 16 = 0x00 and the container is 0x00–0x0F. The address runs 0x04, 0x08, 0x0C, then wraps to 0x00.",
+        ref: "§A3.1.4, p.47 · §A3.1.6, p.50 · Figure A3.8, p.60",
+        n: 8, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(8, [[1, 1]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(8, [[0, 7]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 1], ["0x4 S4 L4 W", 1], ["", 6]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(8, [[2, 5]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(8, [[0, 7]]) },
+          { name: "WSTRB[7:0]", d: "lp", t: "bus", v: at(8, 2, ["0xF0", "0x0F", "0xF0", "0x0F"]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(8, [[5, 5]]) },
+          { name: "beat address", d: "sb", t: "note", v: at(8, 2, ["0x04", "0x08", "0x0C", "0x00"]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "Legal WRAP", x: "Start 0x04 is aligned to Size (4) and Length is 4, one of 2, 4, 8 or 16. Both are required for WRAP.", s: "§A3.1.4, p.47" },
+          { r: [2, 4], t: "Increment like INCR", x: "0x04 on lanes 4–7 (strobe 0xF0), 0x08 on lanes 0–3, 0x0C on lanes 4–7.", s: "§A3.1.6, p.50" },
+          { r: [5, 5], t: "Wrap at the container top", x: "The next address would be 0x10 = Wrap_Boundary + Size × Length, so it becomes Wrap_Boundary, 0x00. Any further beat would use Aligned_Addr + (N − 1) × Size − Size × Length.", w: "A cache line fill wants the word the CPU is waiting for first and the rest of the line after it. WRAP gives exactly that order with one request.", s: "§A3.1.6, p.50 · Table B4.3, p.311" }
+        ]
+      },
+      {
+        id: "cl", tab: "Cache line fill", title: "Critical word first: a 64-byte line on a 128-bit channel",
+        desc: "A CPU misses on 0x1038. It reads the whole 64-byte line with ARADDR 0x1030, ARSIZE 16 bytes, ARLEN 3, WRAP. The beat holding 0x1038 comes back first.",
+        ref: "§A3.1.4, p.47 · §A3.1.6, p.50 · §A3.1.8, p.52",
+        n: 9, gaps: [],
+        sig: [
+          { name: "ARVALID", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "ARREADY", d: "pl", t: "bit", v: bits(9, [[0, 8]]) },
+          { name: "AR payload", d: "lp", t: "bus", v: seq([["", 1], ["0x1030 S16 L4 W", 1], ["", 7]]) },
+          { name: "RVALID", d: "pl", t: "bit", v: bits(9, [[4, 7]]) },
+          { name: "RREADY", d: "lp", t: "bit", v: bits(9, [[0, 8]]) },
+          { name: "RDATA", d: "pl", t: "bus", v: at(9, 4, ["line[3]", "line[0]", "line[1]", "line[2]"]) },
+          { name: "RLAST", d: "pl", t: "bit", v: bits(9, [[7, 7]]) },
+          { name: "beat address", d: "sb", t: "note", v: at(9, 4, ["0x1030", "0x1000", "0x1010", "0x1020"]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "Request the line, starting at the needed beat", x: "The Manager aligns the miss address 0x1038 down to Size, 0x1030, and asks for a 4-beat WRAP. The wrap boundary is INT(0x1030 / 64) × 64 = 0x1000.", s: "§A3.1.4, p.47 · §A3.1.6, p.50" },
+          { r: [4, 4], t: "Critical beat first", x: "The beat containing 0x1038 arrives first. The CPU can restart the load now instead of waiting for the full line.", w: "With INCR the Manager would have to start at 0x1000 and wait for beat 4, or issue two requests. WRAP turns 'critical word first' into a protocol feature.", s: "§A3.1.4, p.47" },
+          { r: [5, 7], t: "Wrap and finish the line", x: "0x1040 would leave the container, so the address wraps to 0x1000, then 0x1010 and 0x1020. This request is also Regular: Length 4, Size = channel width, WRAP aligned to Size.", s: "§A3.1.6, p.50 · §A3.1.8, p.52" }
+        ]
+      },
+      {
+        id: "fixed", tab: "FIXED", title: "FIXED burst into a FIFO register",
+        desc: "Four 32-bit writes to the same address 0x40, a peripheral's TX FIFO. The active lanes never change; within them, strobes may differ per beat.",
+        ref: "§A3.1.4, p.47–48 · Table A3.13, p.48",
+        n: 8, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(8, [[1, 1]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(8, [[0, 7]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 1], ["0x40 S4 L4 F", 1], ["", 6]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(8, [[2, 5]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(8, [[0, 7]]) },
+          { name: "WSTRB[3:0]", d: "lp", t: "bus", v: at(8, 2, ["1111", "1111", "0011", "1111"]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(8, [[5, 5]]) },
+          { name: "beat address", d: "sb", t: "note", v: at(8, 2, ["0x40", "0x40", "0x40", "0x40"]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "Same address, up to 16 beats", x: "FIXED keeps the address for every transfer. Length may be at most 16. It may only be used with the WriteNoSnoop and ReadNoSnoop opcodes, the plain read and write.", s: "§A3.1.4, p.47–48" },
+          { r: [2, 5], t: "Constant lanes, varying strobes", x: "All four beats use lanes 0–3. Beat 3 sets only WSTRB 0011, for example a 16-bit push into a FIFO that accepts halfwords.", w: "FIXED exists for things with side effects at one address: FIFOs, data ports. Few Managers use it, which is why Issue K added Fixed_Burst_Disable so a Subordinate can declare it unsupported.", s: "§A3.1.4, p.47 · Table A3.13, p.48 · Table B4.2, p.309" }
+        ]
+      },
+      {
+        id: "strb", tab: "No early stop", title: "Changing your mind mid-burst: strobes off, beats still sent",
+        desc: "A 4-beat INCR write where the Manager decides after beat 2 that it doesn't need to write the rest. It can't shorten the burst; it sends beats 3 and 4 with every strobe LOW.",
+        ref: "§A3.1.2, p.44 · §A3.2.1.1, p.54",
+        n: 8, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(8, [[1, 1]]) },
+          { name: "AWREADY", d: "pl", t: "bit", v: bits(8, [[0, 7]]) },
+          { name: "AW payload", d: "lp", t: "bus", v: seq([["", 1], ["0x100 S4 L4 I", 1], ["", 6]]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(8, [[2, 5]]) },
+          { name: "WREADY", d: "pl", t: "bit", v: bits(8, [[0, 7]]) },
+          { name: "WSTRB[3:0]", d: "lp", t: "bus", v: at(8, 2, ["1111", "1111", "0000", "0000"]) },
+          { name: "WLAST", d: "lp", t: "bit", v: bits(8, [[5, 5]]) },
+          { name: "beat address", d: "sb", t: "note", v: at(8, 2, ["0x100", "0x104", "0x108", "0x10C"]) }
+        ],
+        steps: [
+          { r: [2, 3], t: "Two useful beats", x: "Beats 1 and 2 write 0x100–0x107.", s: "§A3.1.6, p.50" },
+          { r: [4, 5], t: "Two empty beats, still sent", x: "Early termination is not supported by any component. The Manager sends the remaining beats with WSTRB 0000, which write nothing, and WLAST on beat 4. A read is the same: the Manager may discard data but must accept every beat.", w: "Every component between Manager and Subordinate counts beats against AxLEN. A burst that ended early would leave them all waiting for beats that never come.", s: "§A3.1.2, p.44 · §A3.2.1.1, p.54" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact, part, plw) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = part === "wave" ? 4 : part === "labels" ? plw : (compact ? 150 : LW);
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    if (part === "labels") {
+      var ls = "<svg viewBox=\"0 0 " + lw + " " + H + "\" width=\"" + lw + "\" height=\"" + H + "\" aria-hidden=\"true\">", mc = Math.floor((lw - 14) / 7.25);
+      rows.forEach(function (r, ri) {
+        var y0 = TOP + ri * RH, mid = (y0 + 6 + y0 + RH - 7) / 2, nm = r.name;
+        if (nm.length > mc) nm = nm.slice(0, mc - 1) + "…";
+        ls += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\"><title>" + esc(r.name) + "</title>" + esc(nm) + "</text>";
+      });
+      return ls + "</svg>";
+    }
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      if (part !== "wave") s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      var longest = 0; s.sig.forEach(function (r) { longest = Math.max(longest, r.name.length); });
+      var narrow = waveEl.clientWidth && waveEl.clientWidth < 560;
+      var plw = Math.max(64, Math.min(Math.round(longest * 7.25 + 18), narrow ? Math.round(waveEl.clientWidth * 0.36) : 230));
+      waveEl.innerHTML = "<div class=\"wfix\">" + renderWave(s, null, false, "labels", plw) + "</div>" + renderWave(s, st.r, false, "wave");
+      var vis = waveEl.clientWidth - plw, a = 4 + st.r[0] * CW, b = 4 + (st.r[1] + 1) * CW;
+      if (vis > 0) waveEl.scrollLeft = (b - a >= vis) ? Math.max(0, a - 6) : Math.max(0, Math.min(a - CW * 0.6, (a + b) / 2 - vis / 2 + 0));
+      if (vis > 0 && b <= vis - 6) waveEl.scrollLeft = 0;
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { go(step); }, 150); });
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- tables: label cells so they can stack into cards on phones ---------- */
+  (function () {
+    function label(t) {
+      var ths = t.querySelectorAll("thead th"); if (!ths.length) return;
+      var heads = Array.prototype.map.call(ths, function (h) { return h.textContent.trim(); });
+      Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] !== undefined) td.setAttribute("data-label", heads[i]); });
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("table"), function (t) {
+      if (!t.tHead || t.querySelector("[rowspan],[colspan]") || t.classList.contains("nostack")) return;
+      t.classList.add("stack"); label(t);
+      if (window.MutationObserver && t.tBodies[0]) new MutationObserver(function () { label(t); }).observe(t.tBodies[0], { childList: true });
+    });
+  })();
+
+  /* ---------- section nav: mark the section being read; series nav: show the current guide ---------- */
+  (function () {
+    var here = document.querySelector(".series .here"), ser = $("series");
+    if (here && ser && ser.scrollWidth > ser.clientWidth) ser.scrollLeft = Math.max(0, here.offsetLeft - ser.offsetLeft - 60);
+    var bar = document.querySelector("nav.toc .wrap");
+    if (!bar || !window.IntersectionObserver) return;
+    var links = {}, cur = null;
+    Array.prototype.forEach.call(bar.querySelectorAll("a[href^='#']"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = links[e.target.id]; if (!a || a === cur) return;
+        if (cur) cur.removeAttribute("aria-current");
+        cur = a; a.setAttribute("aria-current", "true");
+        bar.scrollLeft = Math.max(0, a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2);
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(links).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+
+</script>
+<script>(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  if (!$("c-addr")) return;
+  function hex(b, w) { var s = b.toString(16).toUpperCase(); while (w && s.length < w) s = "0" + s; return "0x" + s; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+  function run() {
+    var out = $("c-out"), chk = $("c-checks");
+    var raw = $("c-addr").value.trim().replace(/_/g, "");
+    var start;
+    try { start = BigInt(/^0x/i.test(raw) ? raw : "0x" + raw); } catch (e) { chk.innerHTML = "<li class=\"bad\">Address must be hexadecimal, for example 0x1F08.</li>"; out.innerHTML = ""; return; }
+    var lenField = parseInt($("c-len").value, 10);
+    if (isNaN(lenField) || lenField < 0 || lenField > 255) { chk.innerHTML = "<li class=\"bad\">AxLEN must be 0 to 255 (8 bits).</li>"; out.innerHTML = ""; return; }
+    var L = lenField + 1;
+    var sizeEnc = parseInt($("c-size").value, 10), S = 1 << sizeEnc;
+    var burst = $("c-burst").value;
+    var DB = parseInt($("c-width").value, 10) / 8;
+    var isWrite = $("c-dir").value === "w";
+    var Sb = BigInt(S), Lb = BigInt(L), DBb = BigInt(DB);
+
+    var checks = [];
+    function ok(c, t, r) { checks.push([c ? "ok" : "bad", t, r]); }
+    function info(t, r) { checks.push(["info", t, r]); }
+
+    ok(S <= DB, "Size " + S + " B " + (S <= DB ? "fits" : "is wider than") + " the " + DB * 8 + "-bit channel", "§A3.1.1, p.43");
+    if (burst === "WRAP") {
+      ok([2, 4, 8, 16].indexOf(L) >= 0, "WRAP Length " + L + (([2, 4, 8, 16].indexOf(L) >= 0) ? " is 2, 4, 8 or 16" : " must be 2, 4, 8 or 16"), "§A3.1.4, p.47");
+      ok(start % Sb === 0n, "WRAP start " + (start % Sb === 0n ? "is" : "is not") + " aligned to Size", "§A3.1.4, p.47");
+    }
+    if (burst === "FIXED") ok(L <= 16, "FIXED Length " + L + (L <= 16 ? " ≤ 16" : " exceeds 16"), "§A3.1.4, p.47");
+    var aligned0 = (start / Sb) * Sb;
+    var cont = Sb * Lb;
+    var first = start, last;
+    if (burst === "INCR") last = aligned0 + cont - 1n;
+    else if (burst === "WRAP") { var lb = (start / cont) * cont; first = lb; last = lb + cont - 1n; }
+    else last = aligned0 + Sb - 1n;
+    ok((first >> 12n) === (last >> 12n), "Bytes " + hex(first) + "–" + hex(last) + ((first >> 12n) === (last >> 12n) ? " stay inside one 4 KB page" : " cross a 4 KB boundary at " + hex((last >> 12n) << 12n)), "§A3.1, p.43");
+    ok(S * L <= 4096, "Size × Length = " + S * L + " B" + (S * L <= 4096 ? " ≤ 4096" : " exceeds 4 KB"), "§A3.1.3, p.45");
+    var mtb = null;
+    [64, 128, 256, 512, 1024, 2048, 4096].some(function (m) { var mb = BigInt(m); if (S * L <= m && (first / mb) === (last / mb)) { mtb = m; return true; } return false; });
+    info(mtb ? "Allowed by Max_Transaction_Bytes ≥ " + mtb : "Not allowed by any Max_Transaction_Bytes value", "§A3.1.3, Table A3.6, p.45");
+    var regular = [1, 2, 4, 8, 16].indexOf(L) >= 0 && (L === 1 || S === DB) && burst !== "FIXED" &&
+      ((burst === "INCR" && start % cont === 0n) || (burst === "WRAP" && start % Sb === 0n));
+    info(regular ? "Regular transaction" : "Not Regular (a Regular_Transactions_Only Subordinate would not accept it)", "§A3.1.8, p.52");
+    if (burst === "FIXED") info("FIXED: only with WriteNoSnoop / ReadNoSnoop; a Fixed_Burst_Disable Subordinate rejects it", "§A3.1.4, p.48");
+    if (burst === "WRAP") info("If Wrap_CLS_Modifiable is True, WRAP must also be cache-line sized and Modifiable", "Table A3.11, p.47");
+
+    chk.innerHTML = checks.map(function (c) {
+      var ic = c[0] === "ok" ? "✓" : (c[0] === "bad" ? "✗" : "•");
+      return "<li class=\"" + c[0] + "\"><span class=\"ic\">" + ic + "</span> " + esc(c[1]) + " <span class=\"ref\">" + esc(c[2]) + "</span></li>";
+    }).join("");
+
+    /* beats, following the pseudocode of §A3.1.7 */
+    var addr = start, aligned = aligned0 === addr, lw = 0n, uw = 0n;
+    if (burst === "WRAP") { lw = (addr / cont) * cont; uw = lw + cont; }
+    var rows = [], total = 0, showN = Math.min(L, 64);
+    for (var n = 1; n <= L; n++) {
+      var lower = addr - (addr / DBb) * DBb, upper;
+      if (aligned) upper = lower + Sb - 1n; else upper = aligned0 + Sb - 1n - (addr / DBb) * DBb;
+      var lo = Number(lower), up = Number(upper);
+      total += up - lo + 1;
+      if (n <= showN) rows.push([n, addr, lo, up]);
+      if (burst !== "FIXED") {
+        if (aligned) { addr = addr + Sb; if (burst === "WRAP" && addr >= uw) addr = lw; }
+        else { addr = aligned0 + Sb; aligned = true; }
+      }
+    }
+    var cell = DB > 32 ? 6 : (DB > 16 ? 12 : 22);
+    var html = "<p class=\"note-s\" style=\"margin:0 0 8px\">Aligned_Addr " + hex(aligned0) + " · container " + (burst === "WRAP" ? hex(lw) + "–" + hex(uw - 1n) : hex(aligned0) + "–" + hex(aligned0 + cont - 1n)) +
+      " · Size × Length " + S * L + " B · bytes actually on the lanes " + total + (burst === "WRAP" ? " · Wrap_Boundary " + hex(lw) : "") + "</p>";
+    html += "<div class=\"tbl-wrap\"><table class=\"calc-t\"><thead><tr><th class=\"num\">Beat</th><th>Address_N</th><th class=\"num\">Lanes</th>" + (isWrite ? "<th>WSTRB (max)</th>" : "<th>Valid bytes</th>") + "<th>Byte lanes (lane 0 on the right)</th></tr></thead><tbody>";
+    rows.forEach(function (r) {
+      var mask = 0n; for (var k = r[2]; k <= r[3]; k++) mask |= (1n << BigInt(k));
+      var grid = "<div class=\"lanes\" style=\"grid-template-columns:repeat(" + DB + "," + cell + "px)\">";
+      for (var j = DB - 1; j >= 0; j--) grid += "<i class=\"" + (j >= r[2] && j <= r[3] ? "on" : "") + "\" title=\"lane " + j + "\"></i>";
+      grid += "</div>";
+      html += "<tr><td class=\"num\">" + r[0] + "</td><td class=\"mono\">" + hex(r[1]) + "</td><td class=\"num mono\">" + r[3] + ":" + r[2] + "</td><td class=\"mono\">" + (isWrite ? hex(mask, Math.ceil(DB / 4)) : (r[3] - r[2] + 1) + " B") + "</td><td>" + grid + "</td></tr>";
+    });
+    html += "</tbody></table></div>";
+    if (L > showN) html += "<p class=\"note-s\">Showing the first " + showN + " of " + L + " beats.</p>";
+    out.innerHTML = html;
+  }
+  ["c-addr", "c-len", "c-size", "c-burst", "c-width", "c-dir"].forEach(function (id) { $(id).addEventListener("input", run); $(id).addEventListener("change", run); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-preset]"), function (b) {
+    b.addEventListener("click", function () {
+      var p = b.getAttribute("data-preset").split(",");
+      $("c-addr").value = p[0]; $("c-len").value = p[1]; $("c-size").value = p[2]; $("c-burst").value = p[3]; $("c-width").value = p[4]; $("c-dir").value = p[5];
+      run();
+    });
+  });
+  run();
+})();
+</script>
+</body>
+</html>

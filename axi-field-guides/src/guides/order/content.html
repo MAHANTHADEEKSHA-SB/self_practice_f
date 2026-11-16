@@ -1,0 +1,406 @@
+<header class="top">
+  <div class="wrap hero">
+    {{SERIES}}
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapter A5 · what may overtake what</div>
+    <h1>AXI IDs &amp; Ordering Field Guide</h1>
+    <p class="lede">AXI gets its performance from letting transactions overtake each other, and its correctness from saying exactly when they may not. This guide covers transaction IDs and how interconnects extend them, the Unique ID indicator, the ordering model (Memory locations, Peripheral regions, observation, completion, early responses), write data ordering from AXI3's WID to Resource Planes, and read interleaving and chunking. It includes an ordering resolver, waveforms, a scoreboard design, verification checks and interview questions.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>interconnect, properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ and p. = section and printed page of ARM IHI 0022 <strong>Issue L</strong>. "H.c" = Issue H.c (AXI3/AXI4), pages like p.A6-88. Tags: <span class="kind spec">Spec</span> <span class="kind derived">Derived</span> <span class="kind illus">Illustrative</span> <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a><a href="#where">2 · IDs through a fabric</a><a href="#signals">3 · Signals</a><a href="#model">4 · Ordering model</a><a href="#resolver">5 · Ordering resolver</a><a href="#unq">6 · Unique ID</a><a href="#data">7 · Data ordering</a><a href="#rationale">8 · Why each rule</a><a href="#live">9 · Live scenarios</a><a href="#silicon">10 · Real silicon</a><a href="#changes">11 · AXI3/AXI4 → Issue L</a><a href="#verify">12 · Verification</a><a href="#quiz">13 · Test yourself</a><a href="#refs">14 · Spec index</a>
+  </div>
+</nav>
+
+<style>
+  .tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; }
+  .tool .in { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+  .tool label { display: grid; gap: 4px; font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .tool select { font-family: var(--font-body); font-size: 14px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+  .tool ul.res { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14.5px; }
+  .tool ul.res li.ok .ic { color: var(--pl); font-weight: 600; } .tool ul.res li.bad .ic { color: var(--bad); font-weight: 600; } .tool ul.res li.info { color: var(--muted); }
+</style>
+
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why AXI has IDs</h2>
+  <p class="sub">An ID is a promise of order for a group of transactions and a promise of freedom between groups.</p>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Performance</div><h3>Don't wait for the slow one</h3><p>Transactions with different IDs may complete in any order, so a fast SRAM read doesn't wait behind a DRAM miss. One physical port acts as several logical in-order ports.</p><p class="src"><span class="sl">Spec</span>§A5.1, p.90</p></div>
+    <div class="card"><div class="tagline">Simplicity</div><h3>In order where it matters</h3><p>Same-ID responses come back in request order, so a Manager that needs order just reuses one ID and needs no reorder logic.</p><p class="src"><span class="sl">Spec</span>§A5.3, p.93 · §A5.3.4, p.95</p></div>
+    <div class="card"><div class="tagline">Scalability</div><h3>Interconnects keep IDs unique</h3><p>Each interconnect level appends Manager-port bits, so Managers never coordinate their ID values, and responses find their way back.</p><p class="src"><span class="sl">Spec</span>§A5.4, p.99</p></div>
+    <div class="card"><div class="tagline">Memory model</div><h3>Ordering is defined by observation</h3><p>The model says what another agent can observe and when, not just which response comes first. That is what software barriers and drivers rely on.</p><p class="src"><span class="sl">Spec</span>§A5.3.3–A5.3.4, p.94–95</p></div>
+  </div>
+</div></section>
+
+<section id="where"><div class="wrap">
+  <h2>2 · IDs through a fabric</h2>
+  <p class="sub">Example: three Managers with 4-bit IDs into a 3:1 interconnect. The Subordinate sees 6-bit IDs; the top two bits name the Manager port.</p>
+  <figure>
+    <svg viewBox="0 0 860 220" role="img" aria-label="Three Managers with 4-bit AWID enter an interconnect that prepends a 2-bit port number, so the Subordinate sees a 6-bit AWID. On the way back the interconnect uses those bits to route BID and strips them.">
+      <defs><marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+      <g font-family="var(--font-body)" font-size="12.5">
+        <rect x="10" y="20" width="150" height="44" rx="8" fill="var(--surface)" stroke="var(--lp)"/><text x="24" y="40" fill="var(--lp)" font-weight="600">Manager 0 (CPU)</text><text x="24" y="56" fill="var(--muted)" font-family="var(--font-mono)">AWID 0x5</text>
+        <rect x="10" y="88" width="150" height="44" rx="8" fill="var(--surface)" stroke="var(--lp)"/><text x="24" y="108" fill="var(--lp)" font-weight="600">Manager 1 (DMA)</text><text x="24" y="124" fill="var(--muted)" font-family="var(--font-mono)">AWID 0x5</text>
+        <rect x="10" y="156" width="150" height="44" rx="8" fill="var(--surface)" stroke="var(--lp)"/><text x="24" y="176" fill="var(--lp)" font-weight="600">Manager 2 (GPU)</text><text x="24" y="192" fill="var(--muted)" font-family="var(--font-mono)">AWID 0x5</text>
+        <rect x="240" y="20" width="230" height="180" rx="10" fill="var(--surface)" stroke="var(--ink)"/><text x="355" y="46" text-anchor="middle" font-weight="600" fill="var(--ink)" font-size="14">Interconnect</text>
+        <text x="256" y="78" fill="var(--muted)">prepend port: {port, AWID}</text><text x="256" y="100" font-family="var(--font-mono)" fill="var(--sb)">M0 → 0b00_0101 = 0x05</text><text x="256" y="120" font-family="var(--font-mono)" fill="var(--sb)">M1 → 0b01_0101 = 0x15</text><text x="256" y="140" font-family="var(--font-mono)" fill="var(--sb)">M2 → 0b10_0101 = 0x25</text><text x="256" y="172" fill="var(--muted)">BID[5:4] routes back; strip</text><text x="256" y="190" fill="var(--muted)">before returning BID[3:0]</text>
+        <line x1="160" y1="42" x2="238" y2="80" stroke="var(--muted)" marker-end="url(#a4)"/><line x1="160" y1="110" x2="238" y2="110" stroke="var(--muted)" marker-end="url(#a4)"/><line x1="160" y1="178" x2="238" y2="140" stroke="var(--muted)" marker-end="url(#a4)"/>
+        <rect x="560" y="80" width="170" height="60" rx="8" fill="var(--surface)" stroke="var(--pl)"/><text x="576" y="104" fill="var(--pl)" font-weight="600">Subordinate</text><text x="576" y="124" fill="var(--muted)" font-family="var(--font-mono)">ID_W_WIDTH = 6</text>
+        <line x1="470" y1="110" x2="558" y2="110" stroke="var(--muted)" marker-end="url(#a4)"/>
+        <text x="750" y="104" fill="var(--muted)" font-size="12">three different</text><text x="750" y="120" fill="var(--muted)" font-size="12">IDs: no false</text><text x="750" y="136" fill="var(--muted)" font-size="12">ordering</text>
+      </g>
+    </svg>
+    <figcaption>All three Managers chose ID 5 without knowing about each other. The extended IDs differ, so the Subordinate never forces order between unrelated Managers.<span class="ref">Spec: §A5.4, p.99 · <span class="kind illus">Illustrative</span> widths</span></figcaption>
+  </figure>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="k">Reflection</div><p style="font-size:14.5px">A Subordinate must return BID = AWID and RID = ARID. A Subordinate without ID signals cannot be connected to a Manager that has them.</p><p class="src"><span class="sl">Spec</span>§A5.1.1, p.90 · §A5.5, p.100 · §A5.6, p.101</p></div>
+    <div class="card"><div class="k">Omitting IDs</div><p style="font-size:14.5px">A Manager that never reorders, or has one outstanding transaction, may omit IDs (ID width 0); the Subordinate ties its AxID inputs LOW. A Subordinate that never reorders need not use ID values, but must still reflect them.</p><p class="src"><span class="sl">Spec</span>§A5.1.1, p.90</p></div>
+    <div class="card"><div class="k">ID remapping</div><p style="font-size:14.5px">An interconnect may compress or remap IDs, but any manipulation must keep the ordering requirements of the original IDs.</p><p class="src"><span class="sl">Spec</span>§A5.3.6, p.96</p></div>
+  </div>
+</div></section>
+
+<section id="signals"><div class="wrap">
+  <h2>3 · Signals and properties</h2>
+  <p class="sub">ID, unique-ID and chunking signals, and the properties that change the ordering rules.</p>
+  <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead><tbody id="sigbody"></tbody></table></div>
+</div></section>
+
+<section id="model"><div class="wrap">
+  <h2>4 · The ordering model</h2>
+  <p class="sub">The model guarantees order only for requests on the same channel, with the same ID, to the same destination. Everything else is free unless the Manager waits for a response first.</p>
+  <div class="twocol">
+    <div class="grid" style="gap:12px">
+      <div class="callout"><p><strong>No ordering guarantee between:</strong></p><ul class="tight"><li>transactions from different Managers</li><li>reads and writes</li><li>transactions with different IDs</li><li>transactions to different Peripheral regions</li><li>transactions to different Memory locations</li></ul><p style="margin-top:6px">If a Manager needs order between any of these, it must wait for the first transaction's response before issuing the second.</p><p class="src"><span class="sl">Spec</span>§A5.3, p.93</p></div>
+      <div class="tbl-wrap"><table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A5.3.1, p.93</caption>
+        <thead><tr><th></th><th>Memory location</th><th>Peripheral region</th></tr></thead>
+        <tbody style="font-size:13.5px">
+          <tr><td>Read returns</td><td>The last value written</td><td>Not necessarily the last value written</td></tr>
+          <tr><td>Side effects</td><td>None on other locations</td><td>May affect other addresses in the region</td></tr>
+          <tr><td>Guarantees given</td><td>Per location</td><td>Per region</td></tr>
+          <tr><td>Size</td><td>Single-copy atomicity size</td><td>IMPLEMENTATION DEFINED, inside one Subordinate</td></tr>
+        </tbody></table></div>
+      <div class="card"><div class="k">Device vs Normal</div><p style="font-size:14.5px">Device = AxCACHE[1] LOW, Normal = AxCACHE[1] HIGH. Device may target Peripheral regions or Memory; Normal targets Memory, and a Normal access to a Peripheral completes but with an IMPLEMENTATION DEFINED result.</p><p class="src"><span class="sl">Spec</span>§A5.3.2, p.94</p></div>
+    </div>
+    <div class="grid" style="gap:12px">
+      <div class="card"><h3>Observation and completion</h3>
+        <ul class="tight" style="font-size:14.5px">
+          <li>Peripheral: DRW1 is observed by DRW2 when DRW1 reaches the Subordinate first.</li>
+          <li>Memory: W1 observed by W2 if W2 takes effect after W1; R1 observed by W2 if R1 read a write W3 that came before W2; W1 observed by R2 if R2 returns W1's data or a later write's.</li>
+          <li>Write completion: the B handshake (with BCOMP if present). Read completion: the RLAST handshake.</li>
+        </ul><p class="src"><span class="sl">Spec</span>§A5.3.3, p.94</p></div>
+      <div class="card"><h3>What a Manager is promised (same Manager, same ID)</h3>
+        <ul class="tight" style="font-size:14.5px">
+          <li><strong>Before completion:</strong> Device writes (and Device reads) to one Peripheral region arrive in order. Writes to one Memory location with the same cacheability are observed in order; reads too, once one has observed a write.</li>
+          <li><strong>From completion:</strong> a read, or a Non-bufferable write, is observable to any later request from any Manager. A Bufferable write is observable by Domain: Non-shareable (issuer only), Shareable (its Domain), System (all).</li>
+          <li><strong>Responses:</strong> same-ID reads complete in order; same-ID writes complete in order.</li>
+        </ul><p class="src"><span class="sl">Spec</span>§A5.3.4, p.94–95</p></div>
+      <div class="card"><h3>Subordinates and interconnects</h3>
+        <ul class="tight" style="font-size:14.5px">
+          <li>Peripheral execution order is IMPLEMENTATION DEFINED (normally arrival order).</li>
+          <li>Memory, same cacheability and location: W→W same ID ordered; anything received after a completion response is ordered after that transaction.</li>
+          <li>Interconnect: same-ID requests to the same/overlapping locations (or same Peripheral region for Device) are issued in order; same-ID responses returned in order.</li>
+        </ul><p class="src"><span class="sl">Spec</span>§A5.3.5–A5.3.6, p.95–96</p></div>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="tagline">Early read response</div><p style="font-size:14.5px">For Normal reads, an intermediate component may answer from local memory if it is up to date with all earlier writes to the same or overlapping address, and only after all earlier same-ID reads have been answered.</p><p class="src"><span class="sl">Spec</span>§A5.3.7, p.96</p></div>
+    <div class="card"><div class="tagline">Early write response</div><p style="font-size:14.5px">For Bufferable writes with no downstream observers. The responder must still propagate the write, keep same-ID response order, and order later accesses to the same location (Normal) or region (Device) behind it until the downstream response arrives. A Device Bufferable write must be pushed on without waiting for other traffic.</p><p class="src"><span class="sl">Spec</span>§A5.3.7, p.96–97</p></div>
+    <div class="card"><div class="tagline">Mixing memory types</div><p style="font-size:14.5px">No ordering between Cacheable and Device/Normal Non-cacheable requests, but same-ID responses are still in order. Device vs Normal Non-cacheable to the same location: ordered unless Device_Normal_Independence is True. Ordered_Write_Observation adds address-independent W→W order for same-ID writes.</p><p class="src"><span class="sl">Spec</span>§A5.3.8–A5.3.9, p.97–98</p></div>
+  </div>
+</div></section>
+
+<section id="resolver"><div class="wrap">
+  <h2>5 · Ordering resolver</h2>
+  <p class="sub">Describe two transactions, the first issued before the second, and see which promises the spec makes. This follows §A5.3.</p>
+  <div class="tool">
+    <div class="in">
+      <label>Pair<select id="o-kind"><option value="WW">write → write</option><option value="RR">read → read</option><option value="WR">write → read</option><option value="RW">read → write</option></select></label>
+      <label>Managers<select id="o-mgr"><option value="same">same Manager</option><option value="diff">different Managers</option></select></label>
+      <label>ID<select id="o-id"><option value="same">same ID</option><option value="diff">different IDs</option></select></label>
+      <label>Target<select id="o-loc"><option value="mem">same Memory location</option><option value="periph">same Peripheral region</option><option value="diff">different locations</option></select></label>
+      <label>Memory types<select id="o-types"><option value="same">same cacheability</option><option value="dev">both Device</option><option value="dev-nc">Device + Normal Non-cacheable</option><option value="cacheable-mixed">Cacheable + Device/Non-cacheable</option></select></label>
+      <label>Device_Normal_Independence<select id="o-dni"><option value="false">False (default)</option><option value="true">True</option></select></label>
+      <label>Ordered_Write_Observation<select id="o-owo"><option value="false">False (default)</option><option value="true">True</option></select></label>
+      <label>First completed before second issued?<select id="o-done"><option value="no">no, both outstanding</option><option value="yes">yes</option></select></label>
+    </div>
+    <div class="twocol">
+      <div><div class="k mono" style="font-size:12px;color:var(--muted)">Responses</div><ul class="res" id="o-resp"></ul></div>
+      <div><div class="k mono" style="font-size:12px;color:var(--muted)">Observation / arrival</div><ul class="res" id="o-obs"></ul></div>
+    </div>
+    <p class="src"><span class="kind derived">Derived</span> decision procedure from §A5.3–A5.3.9, p.93–98. For Domains see the Caches &amp; CMOs guide.</p>
+  </div>
+</div></section>
+
+<section id="unq"><div class="wrap">
+  <h2>6 · The Unique ID indicator</h2>
+  <p class="sub">A one-bit promise from the Manager: "no other transaction of mine with this ID is in flight on this channel". Downstream components can then skip ordering checks and tracking for it.</p>
+  <div class="twocol">
+    <div class="card"><h3>Rules</h3><ul class="tight" style="font-size:14.5px">
+      <li>AxIDUNQ HIGH ⇒ no outstanding same-ID transaction on that channel from this Manager.</li>
+      <li>After a request with AxIDUNQ HIGH, no new same-ID request until it completes.</li>
+      <li>BIDUNQ equals AWIDUNQ on the single or Completion response; RIDUNQ equals ARIDUNQ on every beat. For Atomics with read data, RIDUNQ follows AWIDUNQ.</li>
+      <li>Outstanding = from the AxVALID cycle until the final response is accepted (with BCOMP if present); an Atomic until both responses.</li>
+      <li>Optional unless a transaction type requires it (for example chunked reads).</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A5.2, Tables A5.3–A5.4, p.91–92 · §A5.6.2.2, p.103</p></div>
+    <div class="card"><h3>Why it helps</h3><p style="font-size:15px">An interconnect normally has to track every outstanding ID to keep same-ID responses in order across Subordinates (scenario "Same ID, two targets"). A unique request has nothing to be ordered against, so it can go straight through with no table entry, and the response can be returned as soon as it arrives. That cuts tracking logic, especially for Managers that already order at source, like many CPUs.</p><p class="src"><span class="sl">Spec</span>§A5.2, p.91 · <span class="kind bg">Background</span> on interconnect tracking</p></div>
+  </div>
+</div></section>
+
+<section id="data"><div class="wrap">
+  <h2>7 · Write data and read data ordering</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Write data</div><h3>W follows AW order</h3><ul class="tight" style="font-size:14.5px"><li>A Manager sends write data in the order it issued the requests.</li><li>On credited interfaces the rule is per Resource Plane: data on different planes may overtake and interleave.</li><li>A Subordinate returns BID equal to AWID; an interconnect returns same-AWID responses from different Subordinates in request order.</li><li>AXI3 allowed interleaving W beats of different IDs, tagged with WID. AXI4 removed WID and interleaving.</li></ul><p class="src"><span class="sl">Spec</span>§A5.5, p.100 · H.c §A5.2.2, p.A5-81</p></div>
+    <div class="card"><div class="tagline">Read data</div><h3>Reorder by ID, interleave by beat</h3><ul class="tight" style="font-size:14.5px"><li>RID equals ARID; same-ARID data from different Subordinates reaches the Manager in request order.</li><li>Read data reordering depth: how many accepted requests a Subordinate may send data for; 1 = in order. Static, documented, not discoverable.</li><li>Beats of different IDs may interleave (including Atomics). Read_Interleaving_Disabled lets an interface promise or request no interleaving.</li><li>Chunking: return 128-bit chunks of one transaction in any order (next card).</li></ul><p class="src"><span class="sl">Spec</span>§A5.6–A5.6.1, p.101</p></div>
+  </div>
+  <div class="tbl-wrap" style="margin-top:16px"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A5.6.2.2, p.103–104 · Tables A5.11–A5.12, p.103</caption>
+    <thead><tr><th>Read data chunking rule</th><th>Detail</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>Eligible requests</td><td>Size = data width (or Length 1), Size ≥ 128 bits, address 16-byte aligned, INCR or WRAP, opcode ReadNoSnoop, ReadOnce, ReadOnceCleanInvalid or ReadOnceMakeInvalid</td></tr>
+      <tr><td>Unique ID</td><td>No outstanding same-ARID read; no new same-ARID read until done; ARIDUNQ HIGH if present</td></tr>
+      <tr><td>RCHUNKV</td><td>0 if ARCHUNKEN was 0; otherwise may be 1, and the same on every beat</td></tr>
+      <tr><td>RCHUNKNUM / RCHUNKSTRB</td><td>Chunk number 0 to ARLEN; strobe never 0; chunks below an unaligned ARADDR not sent and their strobes LOW</td></tr>
+      <tr><td>RLAST</td><td>Only on the final transfer, whatever chunk it carries</td></tr>
+      <tr><td>Widths</td><td>RCHUNKNUM 8/7/6/5 bits for 128/256/512/1024-bit data; RCHUNKSTRB 2/4/8 bits for 256/512/1024</td></tr>
+      <tr><td>Bytes</td><td>Same total as without chunking; may take more beats than ARLEN implies</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>8 · Why each rule exists, with real-time examples</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="id"><div class="meta"><span>IDs</span><span>§A5.1 p.90</span></div><h3>Same ID in order, different IDs free</h3><p class="rule">All transactions with one ID stay ordered; there is no restriction between different IDs.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The Manager knows which of its transactions depend on each other. Letting it express that with an ID means the system only pays for ordering where it's needed.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU uses one ID for its in-order instruction fetch stream and a pool of IDs for data misses. An 80 ns DRAM miss doesn't block a 5 ns L3 hit on another ID.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Reordering same-ID responses hands data to the wrong load; forcing order across IDs kills memory-level parallelism.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.1, p.90 · §A5.3, p.93</li><li><span class="kind illus">Illustrative</span>latencies</li></ul></div></article>
+
+    <article class="wcard" data-g="id"><div class="meta"><span>IDs</span><span>§A5.4 p.99</span></div><h3>Interconnects widen IDs</h3><p class="rule">The interconnect appends Manager-port bits to AWID/ARID and uses them to route BID/RID back, removing them on the way.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Two Managers using the same ID value must not be ordered against each other, and the Subordinate must be able to tell them apart in its responses. Appending the port number does both without any coordination between Managers.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>8 Managers with 6-bit IDs through two levels of 4:1 crossbars: 6 + 2 + 2 = 10-bit IDs at the memory controller.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>An interconnect that truncates IDs to fit a narrow Subordinate merges unrelated streams into false ordering, or worse, misroutes responses.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.4, p.99 · §A5.3.6, p.96</li><li><span class="kind derived">Derived</span>width arithmetic</li></ul></div></article>
+
+    <article class="wcard" data-g="model"><div class="meta"><span>Ordering model</span><span>§A5.3 p.93</span></div><h3>Need order? Wait for the response</h3><p class="rule">Outside the guaranteed cases, a Manager that needs order must wait for the first transaction's response before issuing the second.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Reads and writes travel on different channels and can be routed differently; different Managers share nothing. The completion response is the only event the Manager can see that proves the first transaction is observable.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A driver writes a DMA descriptor to memory, then a doorbell register on a different Subordinate. It must wait for the descriptor write's BRESP before writing the doorbell, or the DMA may fetch the old descriptor.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Races that appear only under load, when the descriptor write sits in a queue longer than the doorbell write.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.3, p.93 · §A5.3.4, p.95</li><li><span class="kind illus">Illustrative</span>driver</li></ul></div></article>
+
+    <article class="wcard" data-g="model"><div class="meta"><span>Ordering model</span><span>§A5.3.4 p.95</span></div><h3>Bufferable completion is scoped by Domain</h3><p class="rule">A Bufferable write's completion guarantees observability only within its Domain: Non-shareable to the issuer, Shareable to its Domain, System to all.</p>
+      <div class="part"><span class="l l-why">Why</span><p>An early response comes from a point that only some observers pass through. A Non-shareable write answered by a Manager-private buffer is visible to that Manager, but another Manager reading memory directly would miss it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DMA writes a buffer as Non-shareable Normal Non-cacheable Bufferable and gets early BRESPs from its local write buffer. A CPU in another cluster may not see the data yet; marking the write System, or using a Non-bufferable final write, fixes it.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Software relying on BRESP of Non-shareable writes for cross-Manager handoff reads stale data.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.3.4, p.95</li><li><span class="kind illus">Illustrative</span>DMA example</li></ul></div></article>
+
+    <article class="wcard" data-g="model"><div class="meta"><span>Ordering model</span><span>§A5.3.8 p.97</span></div><h3>Device vs Normal Non-cacheable</h3><p class="rule">With Device_Normal_Independence False (default), Device and Normal Non-cacheable requests with the same ID to the same location are observed in issue order. True lets them pass each other.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Some systems route Device and Normal traffic through different paths (a strongly ordered peripheral path and a memory path) and cannot cheaply keep them ordered. Making it a declared property lets those systems be honest, and lets Managers that care refuse to connect.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A GPU writes a command buffer Normal Non-cacheable, then kicks it with a Device write to the same 4 KB control page using the same ID. With independence True, the kick could overtake the commands.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Manager False + Subordinate True is listed as incompatible.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.3.8, Tables A5.5–A5.6, p.97 · Table B4.2, p.309</li><li><span class="kind illus">Illustrative</span>GPU example</li></ul></div></article>
+
+    <article class="wcard" data-g="early"><div class="meta"><span>Early responses</span><span>§A5.3.7 p.96–97</span></div><h3>An early responder inherits the ordering duty</h3><p class="rule">After an early write response, the responder must order later accesses to the same location (Normal) or region (Device) behind the write, until its own downstream response arrives.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The Manager believes the write is done. If a later read to the same address overtook the buffered write, the Manager would read old data after being told its write completed.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A system cache gives an early BRESP for a write to 0x1000 and forwards it to DRAM. A read to 0x1000 arrives 10 cycles later; the cache must serve it from the buffered data or hold it until the DRAM write is done.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Read-after-write hazards that only appear when the early-response path is enabled.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.3.7, p.96–97</li><li><span class="kind illus">Illustrative</span>cache</li></ul></div></article>
+
+    <article class="wcard" data-g="early"><div class="meta"><span>Early responses</span><span>§A5.3.7 p.97</span></div><h3>Device Bufferable writes must keep moving</h3><p class="rule">A component that gave an early response to a Device Bufferable write must propagate it without waiting for any other transaction.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The Manager may be waiting for the peripheral's reaction to this write (an interrupt, a status change) before it sends anything else. If the buffer waited for more traffic to batch with, both sides would wait forever.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A driver writes "start" to a peripheral (Device Bufferable), then polls its status with reads to another region. If the buffer held "start" until another write came, the polling would never end.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Deadlock between software polling and a lazy write buffer.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.3.7, p.97</li><li><span class="kind illus">Illustrative</span>driver</li></ul></div></article>
+
+    <article class="wcard" data-g="data"><div class="meta"><span>Data ordering</span><span>§A5.5 p.100</span></div><h3>No write data interleaving</h3><p class="rule">Write data follows request order, one transaction at a time, except across Resource Planes on credited interfaces.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Without interleaving, W beats can be matched to their AW by arrival order alone, so W needs no ID. Every Subordinate gets simpler. Planes are the exception because their purpose is to stop one class of traffic blocking another.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An AXI3 memory controller with write interleaving depth 4 needed four reassembly buffers; the AXI4 version needs one W FIFO.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>An AXI3-to-AXI4 bridge must de-interleave WID-tagged data, buffering whole bursts if needed.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.5, p.100 · H.c §A5.2.2, p.A5-81</li><li><span class="kind illus">Illustrative</span>buffer counts</li></ul></div></article>
+
+    <article class="wcard" data-g="data"><div class="meta"><span>Data ordering</span><span>§A5.6.1 p.101</span></div><h3>Every multi-ID Manager must accept interleaving</h3><p class="rule">Read data of different IDs may interleave. Read_Interleaving_Disabled is an optimisation, but any Manager that issues different IDs must be designed to accept interleaved data.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Interleaving lets a Subordinate send whichever data is ready. If some Managers couldn't cope, every Subordinate and interconnect would need to know which Manager is behind each request.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DMA with 4 IDs keeps 4 small per-ID write pointers into its line buffer; RID selects which pointer advances on each beat.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager that assumes "all beats of one burst arrive together" corrupts data the first time it meets an interleaving Subordinate.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.6.1, p.101</li><li><span class="kind illus">Illustrative</span>DMA</li></ul></div></article>
+
+    <article class="wcard" data-g="opt"><div class="meta"><span>Options</span><span>§A5.2 p.91</span></div><h3>Unique ID: a promise that saves tracking</h3><p class="rule">AxIDUNQ HIGH promises no same-ID transaction is in flight, and no new one will be until this completes.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The expensive part of an AXI interconnect is tracking outstanding IDs to keep same-ID order across Subordinates. Many Managers already know their IDs are unique; the bit lets them say so.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU with 64 outstanding misses, each with its own ID and IDUNQ set. The interconnect can route all 64 to different memory channels without a 64-entry ordering table.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Asserting IDUNQ while a same-ID request is outstanding lets the interconnect reorder what should have been ordered.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.2, p.91–92</li><li><span class="kind illus">Illustrative</span>numbers</li></ul></div></article>
+
+    <article class="wcard" data-g="opt"><div class="meta"><span>Options</span><span>§A5.6.2 p.102–104</span></div><h3>Chunking needs a unique ID</h3><p class="rule">ARCHUNKEN is allowed only on a unique-in-flight ARID, for aligned, full-width, ≥128-bit INCR/WRAP reads of a few opcodes.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Chunks of one transaction arrive out of order. If another same-ID read were outstanding, the Manager could not tell where one transaction ended and the next began. The 128-bit, aligned, full-width restrictions make every chunk a whole, naturally aligned slice.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 512-bit AXI port bridged to CHI receives a 64-byte line as four 128-bit DAT flits in any order; with chunking, it forwards each as it arrives instead of buffering the line.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Chunked data mixed with a second same-ID read gets assembled into the wrong transaction.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A5.6.2.2, p.103–104</li><li><span class="kind bg">Background</span>CHI data flits</li></ul></div></article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>9 · Live scenarios</h2>
+  <p class="sub">Step through each scenario. "M" rows are at the Manager, "S0/S1" at two Subordinates.</p>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+      <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+  <p style="color:var(--muted);font-size:14px">Cycle positions are illustrative. The chunking order follows Figure A5.4; the Resource Plane sequence follows Figure A5.1.</p>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <h2>10 · Real silicon: what the theory turns into</h2>
+  <div class="twocol">
+    <div class="card"><h3>Three ways an interconnect keeps same-ID order</h3><ul class="tight" style="font-size:14.5px">
+      <li><strong>Single destination per ID:</strong> a same-ID request to a different Subordinate waits until the earlier ones finish. Cheap; costs throughput when a Manager reuses one ID across targets.</li>
+      <li><strong>Reorder buffer:</strong> forward everything, buffer early responses until older same-ID ones arrive. Fast; costs buffer area (outstanding × burst size).</li>
+      <li><strong>ID compression:</strong> map many Manager IDs onto few Subordinate IDs, keeping the original ordering. Saves Subordinate tracking; serialises the merged IDs.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> interconnect design · requirement from §A5.3.6, p.96 and §A5.6, p.101</p></div>
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind derived">Derived</span> width = Manager ID width + Σ ceil(log2(ports)) per level. <span class="kind illus">Illustrative</span> systems.</caption>
+      <thead><tr><th>System</th><th class="num">Manager ID</th><th>Levels</th><th class="num">ID at memory</th></tr></thead>
+      <tbody>
+        <tr><td>MCU: 4 Managers, 1 crossbar</td><td class="num">2</td><td>4:1</td><td class="num">4</td></tr>
+        <tr><td>Mobile: 12 Managers</td><td class="num">6</td><td>4:1 then 3:1</td><td class="num">10</td></tr>
+        <tr><td>Server I/O: 64 Managers</td><td class="num">8</td><td>8:1 then 8:1</td><td class="num">14</td></tr>
+      </tbody></table></div>
+  </div>
+  <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+    <tbody>
+      <tr><td>DMA reads wrong data after reaching a second memory channel</td><td>Interconnect forwarded same-ID reads to two Subordinates and returned data in arrival order.</td><td class="ref">§A5.6, p.101</td></tr>
+      <tr><td>Responses routed to the wrong Manager</td><td>ID truncated at a narrow Subordinate; port bits lost.</td><td class="ref">§A5.4, p.99 · §A5.1.1, p.90</td></tr>
+      <tr><td>Doorbell overtakes descriptor write</td><td>Driver didn't wait for BRESP between writes to different Subordinates.</td><td class="ref">§A5.3, p.93</td></tr>
+      <tr><td>Manager corrupts buffers under heavy load</td><td>Manager assumed no read interleaving.</td><td class="ref">§A5.6.1, p.101</td></tr>
+      <tr><td>Read returns old data after early BRESP</td><td>System cache let a later read overtake a buffered write to the same line.</td><td class="ref">§A5.3.7, p.96–97</td></tr>
+      <tr><td>Same-ID writes complete out of order on a credited link</td><td>Same AWID used on two Resource Planes.</td><td class="ref">§A2.4.2, p.35 · §A5.5, p.100</td></tr>
+      <tr><td>Chunked read assembled wrongly</td><td>ARCHUNKEN with a non-unique ARID, or RLAST placed by chunk number.</td><td class="ref">§A5.6.2.2, p.103–104</td></tr>
+      <tr><td>Kick write overtakes command buffer</td><td>Device_Normal_Independence True Subordinate behind a Manager that assumed False.</td><td class="ref">§A5.3.8, p.97</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="changes"><div class="wrap">
+  <h2>11 · What changed from AXI3 and AXI4 to Issue L</h2>
+  <div class="tbl-wrap cmp"><table>
+    <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI3 / AXI4</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>Write data interleaving</td><td class="then">AXI3: W beats of different IDs could interleave, tagged with WID. AXI4: WID removed, interleaving "deprecated in AXI4 and later".</td><td>No WID. Interleaving only across Resource Planes on a credited interface.</td><td class="ref">H.c §A5.2.2 and Table A5-1, p.A5-81 · §A5.5, p.100</td></tr>
+      <tr><td>Interconnect ID extension</td><td class="then">Appends bits to ARID, AWID and WID.</td><td>Appends bits to AWID and ARID (no WID).</td><td class="ref">H.c §A5.2.3, p.A5-81 · §A5.4, p.99</td></tr>
+      <tr><td>Ordering model location</td><td class="then">Separate Chapter A6, "AXI Ordering Model".</td><td>Merged into Chapter A5 with IDs.</td><td class="ref">H.c §A6, p.A6-84 · §A5.3, p.93</td></tr>
+      <tr><td>Guarantees before completion</td><td class="then">Writes (and reads) to the same Memory location observed in order; "implies ordering between Device and Normal accesses to the same location".</td><td>Adds "with the same cacheability". Device vs Normal Non-cacheable ordering set by Device_Normal_Independence (Issue K); none between Cacheable and Device/Non-cacheable.</td><td class="ref">H.c §A6.5.1, p.A6-88 · §A5.3.4, p.94–95 · §A5.3.8, p.97</td></tr>
+      <tr><td>Bufferable completion</td><td class="then">Observable to future transactions; system must be multi-copy atomic.</td><td>Observability scoped by Domain: Non-shareable, Shareable, System.</td><td class="ref">H.c §A6.5.2, p.A6-88 · §A5.3.4, p.95</td></tr>
+      <tr><td>Unique ID, chunking, interleave property</td><td class="then">AMBA 5 optional features in Part E.</td><td>Core sections of Chapter A5.</td><td class="ref">H.c §E1.11–E1.13, p.E1-378–E1-384 · §A5.2, §A5.6, p.91–106</td></tr>
+      <tr><td>Interleaving and Atomics</td><td class="then">Not stated.</td><td>Clarified (Issue K): Atomic read data may interleave.</td><td class="ref">Table B4.2, p.309 · §A5.6.1, p.101</td></tr>
+      <tr><td>Unique ID details</td><td class="then">Basic AxIDUNQ/xIDUNQ rules.</td><td>Rules for Atomics with both responses; BIDUNQ not required to follow AWIDUNQ on non-Completion responses (Issue J).</td><td class="ref">Table B4.1, p.307 · §A5.2, p.91–92</td></tr>
+      <tr><td>ID widths</td><td class="then">ID width properties under AMBA 5 signal width properties.</td><td>ID_W_WIDTH and ID_R_WIDTH 0–32; 0 removes the signals.</td><td class="ref">H.c §E1.19, p.E1-403 · Table A5.2, p.90</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>12 · Verification</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Scoreboard design</h3><ul class="tight" style="font-size:14.5px">
+      <li>One queue per (direction, ID) at the Manager side: push on AR/AW handshake, pop on RLAST/B. A response must match the queue head for its ID.</li>
+      <li>Read beats: per-ID beat counter; RID selects the queue, so interleaving needs no special case.</li>
+      <li>Through an interconnect: map Manager ID to Subordinate ID by the port-bit rule; check order per original ID, not per extended ID.</li>
+      <li>Memory model per location for observation checks: last-writer table updated at the point of observation, not at BRESP.</li>
+      <li>Chunked reads: collect chunks by RCHUNKNUM/RCHUNKSTRB; compare the whole transaction at RLAST.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> · rules from §A5.3–A5.6, p.93–106</p></div>
+    <div class="card"><h3>Assertions</h3><ul class="tight" style="font-size:14.5px">
+      <li>BID / RID only for an outstanding AWID / ARID. <span class="ref">§A5.5–A5.6, p.100–101</span></li>
+      <li>Same-ID: responses in request order. <span class="ref">§A5.3.4, p.95</span></li>
+      <li>W count per AW in order (no interleaving on Valid-Ready). <span class="ref">§A5.5, p.100</span></li>
+      <li>AxIDUNQ ⇒ no outstanding same ID; no same-ID issue while a unique one is outstanding; xIDUNQ echoes. <span class="ref">§A5.2, p.91–92</span></li>
+      <li>Read_Interleaving_Disabled Subordinate ⇒ RID constant from first beat to RLAST. <span class="ref">Table A5.8, p.101</span></li>
+      <li>Chunking rules: eligibility, RCHUNKV constant, RCHUNKNUM ≤ ARLEN, RCHUNKSTRB ≠ 0. <span class="ref">§A5.6.2.2, p.103–104</span></li></ul></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>SVA sketch</h3>
+<pre>// unique ID: no outstanding write with the same AWID
+a_awidunq: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  AWVALID &amp;&amp; AWIDUNQ |-&gt; wr_outstanding[AWID] == 0);
+
+// echo
+a_bidunq: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  BVALID &amp;&amp; BREADY |-&gt; BIDUNQ == unq_flag_q[BID].front());
+
+// no interleaving when disabled
+// in_burst / burst_id: set on the first beat, cleared on RLAST
+a_noilv: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  RVALID &amp;&amp; in_burst |-&gt; RID == burst_id);</pre>
+      <p class="src"><span class="sl">Spec</span>§A5.2, p.91 · Table A5.8, p.101 · wr_outstanding, unq_flag_q, in_burst and burst_id are auxiliary checker code.</p></div>
+    <div class="card"><h3>Scenarios and coverage</h3><ul class="tight" style="font-size:14.5px">
+      <li>Same ID to two Subordinates with the far one slower.</li>
+      <li>All IDs in use; ID reuse right after completion.</li>
+      <li>Maximal interleaving: a different RID on every beat.</li>
+      <li>Early-response components with read-after-write to the same line.</li>
+      <li>Device_Normal_Independence both values; Ordered_Write_Observation on and off.</li>
+      <li>Coverage: outstanding per ID (1…max), number of distinct IDs in flight, reorder distance (how many older responses a new one overtook), interleave switch count per burst.</li></ul></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>13 · Test yourself</h2>
+  <p class="sub">Use the ordering resolver to check. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+  <details><summary>What does the AXI ID guarantee, and what doesn't it? <span class="lvl">Basic</span></summary><div><p>Same-ID transactions on one channel stay ordered and their responses return in issue order. Different IDs have no ordering between them; responses may come in any order and read data may interleave.</p><p class="src"><span class="sl">Spec</span>§A5.1, p.90 · §A5.3, p.93</p></div></details>
+  <details><summary>Why are IDs wider at a Subordinate than at a Manager? <span class="lvl">Basic</span></summary><div><p>The interconnect appends bits that identify the Manager port, so IDs from different Managers are unique and responses can be routed back. It strips those bits from BID/RID on the way back.</p><p class="src"><span class="sl">Spec</span>§A5.4, p.99</p></div></details>
+  <details><summary>Can write data of two transactions be interleaved in AXI4? In AXI3? In Issue L? <span class="lvl">Basic</span></summary><div><p>AXI3: yes, using WID. AXI4: no; WID removed and W follows AW order. Issue L: no on Valid-Ready; on a credited interface, yes across different Resource Planes.</p><p class="src"><span class="sl">Spec</span>H.c §A5.2.2, p.A5-81 · §A5.5, p.100</p></div></details>
+  <details><summary>A Manager writes X to address A and then reads A with the same ID, both outstanding. Is the read guaranteed to see X? <span class="lvl">Intermediate</span></summary><div><p>No. Reads and writes have no ordering guarantee between them, even with the same ID. The Manager must wait for the write's BRESP before issuing the read.</p><p class="src"><span class="sl">Spec</span>§A5.3, p.93</p></div></details>
+  <details><summary>Same-ID reads go to two Subordinates. Whose job is it to return the data in order, and how? <span class="lvl">Intermediate</span></summary><div><p>The interconnect's. It can hold the second request until the first completes, or reorder the responses in a buffer. The Subordinates only order their own same-ID responses.</p><p class="src"><span class="sl">Spec</span>§A5.6, p.101 · §A5.3.6, p.96</p></div></details>
+  <details><summary>What does a Bufferable write's BRESP guarantee? <span class="lvl">Intermediate</span></summary><div><p>Not completion at the endpoint. It guarantees observability according to the write's Domain: to the issuing Manager (Non-shareable), to the Shareable Domain, or to everyone (System).</p><p class="src"><span class="sl">Spec</span>§A5.3.4, p.95</p></div></details>
+  <details><summary>What is the read data reordering depth? <span class="lvl">Intermediate</span></summary><div><p>The maximum number of accepted requests for which a Subordinate might send read data, a static design value. 1 means in order. A Manager has no way to discover it at run time.</p><p class="src"><span class="sl">Spec</span>§A5.6, p.101</p></div></details>
+  <details><summary>When must AxIDUNQ not be asserted, and what does BIDUNQ do? <span class="lvl">Intermediate</span></summary><div><p>Not when a same-ID transaction from this Manager is outstanding on that channel. After asserting it, the Manager must not reuse the ID until that transaction completes. BIDUNQ equals AWIDUNQ on the single or Completion response.</p><p class="src"><span class="sl">Spec</span>§A5.2, p.91</p></div></details>
+  <details><summary>A system cache gives an early BRESP. What must it still do? <span class="lvl">Advanced</span></summary><div><p>Propagate the write downstream before discarding its copy; respect same-ID response order; order later accesses to the same Memory location (or Peripheral region for Device) behind the write until the downstream response arrives; and for Device Bufferable, forward it without waiting on other traffic.</p><p class="src"><span class="sl">Spec</span>§A5.3.7, p.96–97</p></div></details>
+  <details><summary>List the conditions for ARCHUNKEN. Why must the ID be unique? <span class="lvl">Advanced</span></summary><div><p>Size = data width or Length 1; Size ≥ 128 bits; 16-byte aligned; INCR or WRAP; ReadNoSnoop, ReadOnce, ReadOnceCleanInvalid or ReadOnceMakeInvalid; unique in-flight ARID. Chunks arrive out of order, so a second same-ID read would make it impossible to tell which chunks belong to which transaction.</p><p class="src"><span class="sl">Spec</span>§A5.6.2.2, p.103</p></div></details>
+  <details><summary>How did the "guarantees before completion" change from H.c to Issue L? <span class="lvl">Advanced</span></summary><div><p>H.c ordered same-location writes regardless of memory type and said this implied Device/Normal ordering. Issue L requires the same cacheability, removes ordering between Cacheable and Device/Non-cacheable requests, and makes Device vs Normal Non-cacheable ordering depend on Device_Normal_Independence (default: ordered).</p><p class="src"><span class="sl">Spec</span>H.c §A6.5.1, p.A6-88 · §A5.3.4, p.94–95 · §A5.3.8, p.97</p></div></details>
+  <details><summary>Design a scoreboard that survives read interleaving and an interconnect that widens IDs. <span class="lvl">Advanced</span></summary><div><p>Keep one FIFO of expected transactions per original Manager ID. At the Subordinate side, strip the port bits to find the Manager and original ID. For each R beat, use RID to pick the FIFO head and its beat counter; compare data and pop at RLAST. Check that each response matches its FIFO head, which enforces same-ID order without assuming anything about different IDs.</p><p class="src"><span class="kind bg">Background</span> · §A5.4, p.99 · §A5.6.1, p.101</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>14 · Spec reference index</h2>
+  <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A2.4.2</td><td>Resource Planes</td><td class="num">35</td><td>9, 10</td></tr>
+    <tr><td>§A3.2.2</td><td>Read data channel</td><td class="num">55</td><td>9</td></tr>
+    <tr><td>§A5.1, Tables A5.1–A5.2</td><td>Transaction identifiers; ID signals; ID widths</td><td class="num">90</td><td>1, 2, 3, 8, 9, 10, 13</td></tr>
+    <tr><td>§A5.2, Tables A5.3–A5.4</td><td>Unique ID indicator</td><td class="num">91–92</td><td>3, 6, 8, 11, 12, 13</td></tr>
+    <tr><td>§A5.3</td><td>Request ordering</td><td class="num">93</td><td>1, 4, 5, 8, 9, 10, 13</td></tr>
+    <tr><td>§A5.3.1</td><td>Memory locations and Peripheral regions</td><td class="num">93</td><td>4, 5</td></tr>
+    <tr><td>§A5.3.2–A5.3.3</td><td>Device and Normal requests; observation and completion</td><td class="num">94</td><td>1, 4, 5</td></tr>
+    <tr><td>§A5.3.4</td><td>Manager ordering guarantees</td><td class="num">94–95</td><td>1, 4, 5, 8, 11, 12, 13</td></tr>
+    <tr><td>§A5.3.5–A5.3.6</td><td>Subordinate and interconnect ordering requirements</td><td class="num">95–96</td><td>2, 4, 9, 10, 13</td></tr>
+    <tr><td>§A5.3.7</td><td>Response before the endpoint</td><td class="num">96–97</td><td>4, 8, 10, 13</td></tr>
+    <tr><td>§A5.3.8, Tables A5.5–A5.6</td><td>Ordering between different memory types; Device_Normal_Independence</td><td class="num">97</td><td>3, 4, 5, 8, 10, 11, 13</td></tr>
+    <tr><td>§A5.3.9, Table A5.7</td><td>Ordered write observation</td><td class="num">97–98</td><td>3, 4, 5</td></tr>
+    <tr><td>§A5.4</td><td>Interconnect use of transaction identifiers</td><td class="num">99</td><td>1, 2, 8, 10, 11, 12, 13</td></tr>
+    <tr><td>§A5.5, Figure A5.1</td><td>Write data and response ordering</td><td class="num">100</td><td>3, 7, 8, 9, 10, 11, 12, 13</td></tr>
+    <tr><td>§A5.6</td><td>Read data ordering</td><td class="num">101</td><td>3, 7, 9, 10, 12, 13</td></tr>
+    <tr><td>§A5.6.1, Table A5.8</td><td>Read data interleaving</td><td class="num">101</td><td>3, 7, 8, 9, 10, 11, 12</td></tr>
+    <tr><td>§A5.6.2, Tables A5.9–A5.13, Figures A5.2–A5.4</td><td>Read data chunking</td><td class="num">102–106</td><td>3, 7, 8, 9, 10, 12, 13</td></tr>
+    <tr><td>Tables B4.1–B4.2</td><td>Revisions H.c→J, J→K</td><td class="num">307–309</td><td>8, 9, 11</td></tr>
+  </tbody></table></div>
+  <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A5.2, Table A5-1</td><td>ID signals; WID (AXI3 only); write data ordering</td><td class="num">A5-81</td><td>7, 8, 9, 11, 13</td></tr>
+    <tr><td>§A6.5</td><td>Manager ordering guarantees</td><td class="num">A6-88</td><td>11, 13</td></tr>
+    <tr><td>§E1.11–E1.13</td><td>Read data chunking; read interleaving property; Unique ID indicator</td><td class="num">E1-378–E1-384</td><td>11</td></tr>
+    <tr><td>§E1.19</td><td>Signal width properties</td><td class="num">E1-403</td><td>11</td></tr>
+  </tbody></table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from ARM IHI 0022 Issue L, Chapter A5, with §A2.4.2 and Appendix B4; AXI3/AXI4 comparisons from Issue H.c Chapters A5, A6 and E1. For sign-off, check the spec at the cited page.</div></footer>

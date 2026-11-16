@@ -1,0 +1,15 @@
+[
+ ["hub", "All guides", "index.html"],
+ ["chan", "Channels & Handshake", "guides/channels-handshake.html"],
+ ["burst", "Bursts & Addressing", "guides/bursts-addressing.html"],
+ ["attr", "Request Attributes", "guides/request-attributes.html"],
+ ["order", "IDs & Ordering", "guides/ids-ordering.html"],
+ ["resp", "Responses, Exclusives & Atomics", "guides/responses-exclusives-atomics.html"],
+ ["cache", "Caches & CMOs", "guides/caches-cmos.html"],
+ ["qual", "Qualifiers, Debug & User", "guides/qualifiers-debug-user.html"],
+ ["mmu", "Untranslated & DVM", "guides/untranslated-dvm.html"],
+ ["pwr", "Power, Reset & Protection", null],
+ ["sig", "Signals & Interface Classes", null],
+ ["ic", "Interconnect & Bridges", null],
+ ["axis", "AXI-Stream", null]
+]

@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXI Field Guides (Issue L)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* AXI field guides. Color encodes who drives a signal: amber = Manager (class lp), teal = Subordinate (class pl),
+   violet = credits, interface-level signals and annotations (class sb). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+
+/* ---- AXI additions ---- */
+.ver { display:inline-block; font-family:var(--font-mono); font-size:10.5px; line-height:16px; padding:0 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; vertical-align:1px; }
+.ver.new { color:var(--pl); border-color:var(--pl); }
+.ver.old { color:var(--lp); border-color:var(--lp); }
+.ver.gone { color:var(--bad); border-color:var(--bad); }
+.cmp td:first-child { font-weight:500; min-width:150px; }
+.cmp td.then { color:var(--muted); }
+.dep text { font-family:var(--font-mono); font-size:12px; }
+.kbd { font-family:var(--font-mono); font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 5px; background:var(--code); }
+
+/* ---- phone and touch upgrades ---- */
+.calc, .tool { grid-template-columns: minmax(0, 1fr); }
+.calc > *, .tool > * { min-width: 0; }
+#wave { display: flex; align-items: flex-start; padding-left: 0; scroll-behavior: auto; }
+#wave > svg { flex: none; }
+.wfix { position: sticky; left: 0; z-index: 1; flex: none; background: var(--bg); border-right: 1px solid var(--line); }
+nav.toc a[aria-current] { background: var(--hl); color: var(--ink); font-weight: 500; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 28px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--pl); }
+.pager a small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pager a.nx { text-align: right; grid-column: 2; }
+.pager a strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.pager .all { grid-column: 1 / -1; text-align: center; font-size: 14px; padding: 10px; }
+@media (pointer: coarse) {
+  .chip, .tab, .btn, nav.toc a { min-height: 40px; display: inline-flex; align-items: center; }
+  .dot { min-width: 38px; min-height: 38px; }
+  summary { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (max-width: 640px) {
+  .hero { padding-top: 18px; padding-bottom: 16px; }
+  .lede { font-size: 15.5px; }
+  .series { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px 14px; padding: 6px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .series::-webkit-scrollbar { display: none; }
+  .series > * { flex: none; }
+  figure { overflow-x: auto; }
+  figure svg { min-width: 560px; max-width: none; }
+  figure svg.dep, figure svg.lmap { min-width: 700px; }
+  figcaption { position: sticky; left: 0; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: auto; }
+  table.stack tr { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  table.stack td:empty { display: none; }
+  table.stack td::before { content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+  table.stack td:first-child { font-size: 15px; font-weight: 600; }
+  table.stack td:first-child::before { display: none; }
+  table.stack caption { display: block; }
+  table.stack td.dir, table.stack td.dir + td { display: inline-block; margin-right: 10px; vertical-align: middle; }
+  table.stack td.dir::before, table.stack td.dir + td::before { display: none; }
+  .pager { grid-template-columns: 1fr; }
+  .pager a.nx { grid-column: 1; text-align: left; }
+  .bitfield { grid-auto-columns: minmax(22px, 1fr); overflow-x: auto; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="eyebrow">AMBA AXI Protocol Specification · ARM IHI 0022 Issue L · 27 Aug 2025</div>
+    <h1>AXI Field Guides</h1>
+    <p class="lede">Twelve plain-English guides that walk the AXI spec chapter by chapter. Each one explains why a rule exists, ties every fact to a section and page, lets you step through waveforms of the flows that matter, and shows what changed from AXI3 and AXI4. Start with the request anatomy map, or jump to a topic below.</p>
+    <p class="src" style="max-width:76ch"><span class="sl">How to read them</span>Every card cites § (section) and p. (printed page) of Issue L; "H.c" marks Issue H.c, the last spec that still described AXI3 and AXI4. Tags: <span class="kind spec">Spec</span> stated in the spec, <span class="kind derived">Derived</span> worked out from spec values, <span class="kind illus">Illustrative</span> example values, <span class="kind bg">Background</span> from outside the spec.</p>
+  </div>
+</header>
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#map">Request map</a><a href="#guides">All guides</a><a href="#versions">AXI3 → AXI4 → AXI5</a><a href="#paths">Reading paths</a><a href="#topics">Topic finder</a><a href="#notes">Spec notes</a>
+</div></nav>
+<style>
+  .lmap a { cursor: pointer; }
+  .lmap a:hover rect, .lmap a:focus rect { stroke-width: 2.6; }
+  .lmap a:focus { outline: none; }
+  .lmap a.soon { opacity: 0.45; }
+  .gcard h3 a { color: inherit; text-decoration: none; }
+  .gcard h3 a:hover { text-decoration: underline; }
+  .gcard .ch { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .gcard .tools { font-size: 13.5px; color: var(--muted); margin: 8px 0 0; }
+  .gcard .go { display: inline-block; margin-top: 10px; font-weight: 500; color: var(--pl); text-decoration: none; }
+  .gcard .go:hover { text-decoration: underline; }
+  .gcard .go.soon { color: var(--muted); }
+  .path ol { margin: 6px 0 0; padding-left: 20px; }
+  .path li { margin: 4px 0; font-size: 15px; }
+  .path a, #topics td a { color: var(--pl); text-decoration: none; }
+  .path a:hover, #topics td a:hover { text-decoration: underline; }
+  .soonl { color: var(--muted); }
+</style>
+<main>
+
+<section id="map"><div class="wrap">
+  <h2>Request map: click a box to open its guide</h2>
+  <figure>
+    <svg class="lmap" viewBox="0 0 880 470" role="img" aria-label="AXI request map. The transport layer at the top links to Channels and Handshake. Below it the fields of a request are grouped by guide: addressing and bursts, IDs and ordering, request attributes, responses exclusives and atomics, caches and CMOs, qualifiers debug and user, untranslated transactions and DVM. Interface-level power and protection, signals and interface classes, interconnect and bridges, and AXI-Stream sit alongside.">
+      <g font-family="var(--font-body)" style="color:var(--ink)">
+        <a data-k="chan" href="guides/channels-handshake.html" target="_blank" rel="noopener"><rect x="20" y="16" width="600" height="58" rx="9" fill="var(--hl)" stroke="var(--pl)" stroke-width="1.6"/><text x="40" y="41" font-size="16" font-weight="600" fill="currentColor">Transport: AW · W · B · AR · R</text><text x="40" y="61" font-size="12" fill="var(--muted)">VALID/READY, credits, dependencies, reset, register stages (A1–A2)</text></a>
+
+        <text x="20" y="98" font-size="12" fill="var(--muted)" font-family="var(--font-mono)">fields of a request (AW / AR) and its data and response</text>
+        <a data-k="burst" href="guides/bursts-addressing.html" target="_blank" rel="noopener"><rect x="20" y="108" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="34" y="132" font-size="14" font-weight="600" fill="currentColor">Bursts &amp; Addressing</text><text x="34" y="152" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxADDR AxLEN AxSIZE</text><text x="34" y="168" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxBURST WSTRB (A3)</text></a>
+        <a data-k="order" href="guides/ids-ordering.html" target="_blank" rel="noopener"><rect x="225" y="108" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="239" y="132" font-size="14" font-weight="600" fill="currentColor">IDs &amp; Ordering</text><text x="239" y="152" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxID xIDUNQ, ordering</text><text x="239" y="168" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">model, chunking (A5)</text></a>
+        <a data-k="attr" href="guides/request-attributes.html" target="_blank" rel="noopener"><rect x="430" y="108" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="444" y="132" font-size="14" font-weight="600" fill="currentColor">Request Attributes</text><text x="444" y="152" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxCACHE AxPROT AxQOS</text><text x="444" y="168" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxREGION MEC (A4)</text></a>
+
+        <a data-k="resp" href="guides/responses-exclusives-atomics.html" target="_blank" rel="noopener"><rect x="20" y="198" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="34" y="222" font-size="14" font-weight="600" fill="currentColor">Responses, Exclusives</text><text x="34" y="240" font-size="14" font-weight="600" fill="currentColor">&amp; Atomics</text><text x="34" y="262" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">xRESP AxLOCK AWATOP</text></a>
+        <a data-k="cache" href="guides/caches-cmos.html" target="_blank" rel="noopener"><rect x="225" y="198" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="239" y="222" font-size="14" font-weight="600" fill="currentColor">Caches &amp; CMOs</text><text x="239" y="242" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxSNOOP AxDOMAIN</text><text x="239" y="258" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">stash, CMOs (A7–A9)</text></a>
+        <a data-k="qual" href="guides/qualifiers-debug-user.html" target="_blank" rel="noopener"><rect x="430" y="198" width="190" height="78" rx="8" fill="var(--surface)" stroke="var(--lp)" stroke-width="1.4"/><text x="444" y="222" font-size="14" font-weight="600" fill="currentColor">Qualifiers, Debug, User</text><text x="444" y="242" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">MPAM MTE TRACE LOOP</text><text x="444" y="258" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">USER NSAID (A10–A12)</text></a>
+
+        <a data-k="mmu" href="guides/untranslated-dvm.html" target="_blank" rel="noopener"><rect x="20" y="288" width="600" height="56" rx="8" fill="var(--surface)" stroke="var(--sb)" stroke-width="1.4"/><text x="34" y="312" font-size="14" font-weight="600" fill="currentColor">Untranslated Transactions &amp; DVM</text><text x="34" y="332" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AxMMU* SID SSID · snoop channels AC/CR · TLBI, DVM Sync (A13, A15)</text></a>
+        <a data-k="pwr" href="#" target="_blank" rel="noopener"><rect x="20" y="356" width="295" height="56" rx="8" fill="var(--surface)" stroke="var(--sb)" stroke-width="1.4" stroke-dasharray="5 3"/><text x="34" y="380" font-size="14" font-weight="600" fill="var(--sb)">Power, Reset &amp; Protection</text><text x="34" y="400" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">AWAKEUP ASKSTOP POISON *CHK (A14, A16)</text></a>
+        <a data-k="sig" href="#" target="_blank" rel="noopener"><rect x="325" y="356" width="295" height="56" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="339" y="380" font-size="14" font-weight="600" fill="currentColor">Signals &amp; Interface Classes</text><text x="339" y="400" font-size="11.5" fill="var(--muted)" font-family="var(--font-mono)">signal list, properties (B1–B4)</text></a>
+
+        <a data-k="ic" href="#" target="_blank" rel="noopener"><rect x="650" y="16" width="210" height="160" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/><text x="668" y="44" font-size="15" font-weight="600" fill="currentColor">Interconnect &amp; Bridges</text><text x="668" y="68" font-size="12" fill="var(--muted)">ID width extension,</text><text x="668" y="86" font-size="12" fill="var(--muted)">decode and DECERR,</text><text x="668" y="104" font-size="12" fill="var(--muted)">width and clock-domain</text><text x="668" y="122" font-size="12" fill="var(--muted)">conversion, AXI4 ↔ AXI5,</text><text x="668" y="140" font-size="12" fill="var(--muted)">AXI ↔ APB/AHB</text><text x="668" y="162" font-size="11.5" fill="var(--muted)">(spec rules + practice)</text></a>
+        <a data-k="axis" href="#" target="_blank" rel="noopener"><rect x="650" y="196" width="210" height="148" rx="9" fill="var(--surface)" stroke="var(--pl)" stroke-width="1.4"/><text x="668" y="224" font-size="15" font-weight="600" fill="currentColor">AXI-Stream</text><text x="668" y="248" font-size="12" fill="var(--muted)">TVALID/TREADY, TDATA,</text><text x="668" y="266" font-size="12" fill="var(--muted)">TSTRB/TKEEP, TLAST,</text><text x="668" y="284" font-size="12" fill="var(--muted)">TID, TDEST, TUSER,</text><text x="668" y="302" font-size="12" fill="var(--muted)">TWAKEUP</text><text x="668" y="328" font-size="11.5" fill="var(--muted)">(ARM IHI 0051B)</text></a>
+        <text x="755" y="380" text-anchor="middle" font-size="11.5" fill="var(--muted)">faded boxes: guide</text>
+        <text x="755" y="396" text-anchor="middle" font-size="11.5" fill="var(--muted)">not published yet</text>
+      </g>
+    </svg>
+    <p class="src"><span class="kind illus">Illustrative</span> grouping of AXI signals by guide. Each box opens in a new tab.</p>
+  </figure>
+</div></section>
+
+<section id="guides"><div class="wrap">
+  <h2>All guides</h2>
+  <div class="grid g2" id="glist"></div>
+</div></section>
+
+<section id="versions"><div class="wrap">
+  <h2>AXI3 → AXI4 → AXI5 at a glance</h2>
+  <p class="sub">Each guide has its own "What changed" section. This table is the short version for interviews.</p>
+  <div class="tbl-wrap cmp">
+    <table>
+      <thead><tr><th>Feature</th><th>AXI3</th><th>AXI4</th><th>AXI5 (Issue L)</th><th>Guide</th></tr></thead>
+      <tbody>
+        <tr><td>Burst length</td><td>1–16 (AxLEN 4 bits)</td><td>INCR 1–256 (8 bits); WRAP 2, 4, 8, 16; FIXED 1–16</td><td>As AXI4</td><td data-g="burst"></td></tr>
+        <tr><td>Write data interleaving</td><td>Allowed, using WID</td><td>Removed; no WID</td><td>None, except across Resource Planes on credited links</td><td data-g="order"></td></tr>
+        <tr><td>Write response dependency</td><td>After last W only</td><td>After AW and last W</td><td>As AXI4</td><td data-g="chan"></td></tr>
+        <tr><td>Locked transfers</td><td>AxLOCK 2 bits: normal, exclusive, locked</td><td>AxLOCK 1 bit: locked removed</td><td>As AXI4, plus Atomic transactions (AWATOP)</td><td data-g="resp"></td></tr>
+        <tr><td>Memory types</td><td>AxCACHE as cacheable/bufferable/allocate</td><td>AxCACHE[1] becomes Modifiable; named memory types</td><td>As AXI4, plus Domains, CMOs, stash</td><td data-g="attr"></td></tr>
+        <tr><td>QoS, Region, User</td><td>-</td><td>AxQOS, AxREGION, xUSER added</td><td>Plus QoS accept, MPAM, loopback</td><td data-g="attr"></td></tr>
+        <tr><td>Flow control</td><td>VALID/READY</td><td>VALID/READY</td><td>VALID/READY or Credited (Issue L)</td><td data-g="chan"></td></tr>
+        <tr><td>Lite variant</td><td>-</td><td>AXI4-Lite</td><td>AXI5-Lite</td><td data-g="sig"></td></tr>
+        <tr><td>Interface protection</td><td>-</td><td>-</td><td>Poison, parity check signals</td><td data-g="pwr"></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="src" style="margin-top:8px">Sources are cited in each guide. AXI3/AXI4 columns: Issue H.c Parts A and B. AXI5 column: Issue L.</p>
+</div></section>
+
+<section id="paths"><div class="wrap">
+  <h2>Reading paths</h2>
+  <div class="grid g2">
+    <div class="card path"><div class="tagline">New to AXI</div><h3>The core, in order</h3><ol>
+      <li><a data-g="chan">Channels &amp; Handshake</a>: how anything moves</li>
+      <li><a data-g="burst">Bursts &amp; Addressing</a>: what one transaction covers</li>
+      <li><a data-g="order">IDs &amp; Ordering</a>: what can overtake what</li>
+      <li><a data-g="resp">Responses, Exclusives &amp; Atomics</a>: how it ends</li>
+      <li><a data-g="attr">Request Attributes</a>: what the system may do with it</li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Verification engineer</div><h3>Checkers and corner cases first</h3><ol>
+      <li><a data-g="chan">Channels &amp; Handshake</a>: handshake and dependency assertions</li>
+      <li><a data-g="burst">Bursts &amp; Addressing</a>: WRAP, 4 KB, narrow and unaligned</li>
+      <li><a data-g="order">IDs &amp; Ordering</a>: scoreboards and reordering</li>
+      <li><a data-g="resp">Responses, Exclusives &amp; Atomics</a>: exclusive monitor, atomics</li>
+      <li><a data-g="ic">Interconnect &amp; Bridges</a>: what a fabric adds</li>
+    </ol></div>
+    <div class="card path"><div class="tagline">SoC and system</div><h3>Coherency, memory system, software</h3><ol>
+      <li><a data-g="attr">Request Attributes</a></li>
+      <li><a data-g="cache">Caches &amp; CMOs</a></li>
+      <li><a data-g="mmu">Untranslated &amp; DVM</a></li>
+      <li><a data-g="qual">Qualifiers, Debug &amp; User</a></li>
+      <li><a data-g="pwr">Power, Reset &amp; Protection</a></li>
+    </ol></div>
+    <div class="card path"><div class="tagline">Interview prep</div><h3>The quizzes</h3><p style="font-size:15px">Every guide ends with interview-style questions (Basic, Intermediate, Advanced) with answers and page references, and has a "What changed from AXI3/AXI4" table. A quick round: the quizzes of Channels &amp; Handshake, Bursts &amp; Addressing, IDs &amp; Ordering and Responses, then the version table above.</p></div>
+  </div>
+</div></section>
+
+<section id="topics"><div class="wrap">
+  <h2>Topic finder</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>If you are looking for…</th><th>Guide</th><th>Spec (Issue L)</th></tr></thead>
+    <tbody id="tbody-topics"></tbody>
+  </table></div>
+</div></section>
+
+<section id="notes"><div class="wrap">
+  <h2>Spec notes found while building the guides</h2>
+  <p class="sub">Places where the spec is easy to misread, where Issue L quietly differs from H.c, or where a later issue corrected an earlier one. Each is explained in the linked guide.</p>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Dropped explanation</div><h3>Why BVALID waits for AW is no longer in the text</h3><p>H.c explained that a write response hands hazard-checking responsibility to the Subordinate, and warned about the AW/W deadlock. Issue L keeps both rules but drops the explanations.</p><p class="src"><span class="sl">Spec</span>H.c p.A3-46 vs §A2.3.2.1, p.31 · <a data-g="chan">Channels guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>"May wait for VALID" is not "may be combinational on VALID"</h3><p>A receiver may wait for VALID before READY, but §A2.1.1 forbids combinational input-to-output paths on an interface. A READY that waits for VALID can rise one cycle later at the earliest.</p><p class="src"><span class="kind derived">Derived</span> §A2.1.1, p.27 with §A2.3, p.29 · <a data-g="chan">Channels guide</a></p></div>
+    <div class="card"><div class="tagline">Correction in Issue L</div><h3>The WRAP address formula was wrong before</h3><p>Issue L corrects the expression for the address of each transfer in a wrapping burst to Address_N = Aligned_Addr + ((N − 1) × Size) − (Size × Length).</p><p class="src"><span class="sl">Spec</span>Table B4.3, p.311 · <a data-g="burst">Bursts guide</a></p></div>
+    <div class="card"><div class="tagline">Correction in Issue K</div><h3>Read_Interleaving_Disabled on AXI5-Lite</h3><p>Issue J constrained it to True for AXI5-Lite; Issue K says that was wrong and it should be False.</p><p class="src"><span class="sl">Spec</span>Table B4.2, p.310 · <a data-g="sig">Signals guide</a></p></div>
+    <div class="card"><div class="tagline">Wording fixed in Issue J</div><h3>"AxLEN is 1, 2, 4, 8 or 16" in H.c's Regular definition</h3><p>H.c defined a Regular transaction with "AxLEN is 1, 2, 4, 8, or 16", but AxLEN is Length − 1. Issue L says "Length is 1, 2, 4, 8, or 16", which is what was meant.</p><p class="src"><span class="sl">Spec</span>H.c §A3.4.3, p.A3-53 vs §A3.1.8, p.52 · <a data-g="burst">Bursts guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>An unaligned FIXED burst never becomes aligned</h3><p>In the §A3.1.7 pseudocode only a moving address sets the "aligned" flag. FIXED never moves, so every beat uses the first-beat lane formula. Models that copy INCR behaviour after beat 1 get the lanes wrong.</p><p class="src"><span class="kind derived">Derived</span> §A3.1.7, p.51 · <a data-g="burst">Bursts guide</a></p></div>
+    <div class="card"><div class="tagline">Moved, not removed</div><h3>AxLOCK left the Non-modifiable table</h3><p>H.c's list of fields a Non-modifiable transaction must keep included the lock type. Issue L's Table A4.3 lists address, size, length, burst and protection only; AxLOCK appears instead under "must not be changed" for Modifiable transactions. Since Non-modifiable is stricter, treat AxLOCK as fixed in both.</p><p class="src"><span class="kind derived">Derived</span> H.c Table A4-2, p.A4-64 vs Table A4.3, p.69 and §A4.2.2, p.70 · <a data-g="attr">Attributes guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>One ARCACHE value, two memory types</h3><p>ARCACHE 0b1010 is both Write-Through No-Allocate and Write-Through Write-Allocate (likewise 0b1110, 0b1011, 0b1111). On a read, the write-allocate hint has nothing to act on, so the table gives both types the same read encoding.</p><p class="src"><span class="kind derived">Derived</span> Table A4.4, p.71 · <a data-g="attr">Attributes guide</a></p></div>
+    <div class="card"><div class="tagline">Quiet change</div><h3>Device vs Normal ordering became a property</h3><p>H.c said its same-location guarantees "imply" ordering between Device and Normal accesses. Issue L adds "with the same cacheability", removes any ordering between Cacheable and Device/Non-cacheable requests, and makes Device vs Normal Non-cacheable ordering depend on Device_Normal_Independence (default False, ordered).</p><p class="src"><span class="sl">Spec</span>H.c §A6.5.1, p.A6-88 vs §A5.3.4 and §A5.3.8, p.94–97 · <a data-g="order">Ordering guide</a></p></div>
+    <div class="card"><div class="tagline">Inconsistency</div><h3>Missing AxDOMAIN: Non-shareable or Shareable?</h3><p>§A8.3.4 first says that without Domain signals, Cacheable requests are assumed Non-shareable; a few lines later, after Table A8.5, it says Cacheable requests are assumed Shareable. CMOs without AxDOMAIN are assumed Non-shareable (§A9.3). Fix the assumption in your integration spec.</p><p class="src"><span class="kind derived">Derived</span> §A8.3.4, p.135 · §A9.3, p.156 · <a data-g="cache">Caches guide</a></p></div>
+    <div class="card"><div class="tagline">Typo in the spec</div><h3>UnstashTranslation text says "StashTranslation"</h3><p>In §A13.10, the bullet for a physical address reads "the StashTranslation request has a physical address and the MMU should deallocate the relevant Granule Protection Table entry". The section is about UnstashTranslation, and deallocation only makes sense for it; read it that way.</p><p class="src"><span class="sl">Spec</span>§A13.10, p.220 vs §A13.9, p.219 · <a data-g="mmu">Untranslated &amp; DVM guide</a></p></div>
+    <div class="card"><div class="tagline">Easy to misread</div><h3>AxMMUVALID defaults to 1, not 0</h3><p>An interface without AxMMUVALID is treated as always untranslated. Issue L corrected the default from 0b0 to 0b1, and added the rule that translated and untranslated requests must not share in-flight IDs, which was intended from the start but missing.</p><p class="src"><span class="sl">Spec</span>Table A13.2, p.207 · §A13.7, p.217 · Table B4.3, p.311 · <a data-g="mmu">Untranslated &amp; DVM guide</a></p></div>
+  </div>
+  <p class="src" style="margin-top:12px">More notes are added as each guide is built.</p>
+</div></section>
+</main>
+<footer><div class="wrap">Built from the AMBA AXI Protocol Specification, ARM IHI 0022 Issue L (27 Aug 2025), with AXI3/AXI4 comparisons from Issue H.c (Jan 2021) and the AXI-Stream guide from ARM IHI 0051B. The guides explain and index the spec; for sign-off, check the spec itself at the cited page.</div></footer>
+
+<script>
+(function () {
+  var S = {"hub": {"name": "All guides", "url": "index.html"}, "chan": {"name": "Channels & Handshake", "url": "guides/channels-handshake.html"}, "burst": {"name": "Bursts & Addressing", "url": "guides/bursts-addressing.html"}, "attr": {"name": "Request Attributes", "url": "guides/request-attributes.html"}, "order": {"name": "IDs & Ordering", "url": "guides/ids-ordering.html"}, "resp": {"name": "Responses, Exclusives & Atomics", "url": "guides/responses-exclusives-atomics.html"}, "cache": {"name": "Caches & CMOs", "url": "guides/caches-cmos.html"}, "qual": {"name": "Qualifiers, Debug & User", "url": "guides/qualifiers-debug-user.html"}, "mmu": {"name": "Untranslated & DVM", "url": "guides/untranslated-dvm.html"}, "pwr": {"name": "Power, Reset & Protection", "url": null}, "sig": {"name": "Signals & Interface Classes", "url": null}, "ic": {"name": "Interconnect & Bridges", "url": null}, "axis": {"name": "AXI-Stream", "url": null}};
+  function e(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function url(k) { return S[k] && S[k].url; }
+  function name(k) { return S[k] ? S[k].name : k; }
+
+  /* map boxes: fade unpublished */
+  Array.prototype.forEach.call(document.querySelectorAll(".lmap a[data-k]"), function (a) {
+    if (!url(a.getAttribute("data-k"))) { a.classList.add("soon"); a.removeAttribute("href"); a.setAttribute("aria-disabled", "true"); }
+  });
+  /* inline links by data-g */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-g]"), function (el) {
+    var k = el.getAttribute("data-g"), u = url(k);
+    if (el.tagName === "TD") { el.innerHTML = u ? "<a href=\"" + u + "\" target=\"_blank\" rel=\"noopener\">" + e(name(k)) + "</a>" : "<span class=\"soonl\">" + e(name(k)) + "</span>"; return; }
+    if (u) { el.setAttribute("href", u); el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener"); }
+    else { el.classList.add("soonl"); el.removeAttribute("href"); }
+  });
+
+  var G = [
+    ["chan", "Chapters A1–A2", "Five channels, the VALID/READY handshake and its dependencies, clock and reset, the new credited transport with Resource Planes and shared credits, and register stages.", "Dependency diagrams; 8 step-through waveforms incl. Figures A2.7 and A2.8."],
+    ["burst", "Chapter A3.1–A3.2", "AxLEN, AxSIZE, AxBURST; FIXED, INCR and WRAP; the 4 KB rule; transaction equations; narrow, unaligned and byte-invariant transfers; write strobes.", "Burst address calculator; byte-lane maps."],
+    ["attr", "Chapter A4", "Subordinate types, AxCACHE bits and memory types, Device vs Normal, buffering, protocol errors, AxPROT and physical address spaces, RME, MEC, regions and QoS.", "Memory-type decoder."],
+    ["order", "Chapter A5", "Transaction IDs, the Unique ID indicator, the ordering model (observation, completion, Device and Normal), write response and read data ordering, interleaving and chunking.", "Reordering waveforms; scoreboard design."],
+    ["resp", "Chapters A3.3, A6, A7", "OKAY, EXOKAY, SLVERR, DECERR and the other responses, Subordinate busy, single-copy atomicity, exclusive accesses and the monitor, Atomic transactions, request opcodes.", "Exclusive-monitor walk-through; atomic flows."],
+    ["cache", "Chapters A8–A9", "Caching in AXI, cache line size, Domains, I/O coherency, Shareable lines, prefetch, stashing, deallocating reads, invalidate hint, CMOs, persistence, PoPA and PoPS.", "CMO propagation flows."],
+    ["qual", "Chapters A10–A12", "NSAID, PBHA, Subsystem ID, Arm Compression Technology, WriteZero, WriteDeferrable, MPAM, MTE, trace, loopback and user signals.", "MTE tag transport examples."],
+    ["mmu", "Chapters A13, A15", "Untranslated transactions with StreamID and SubstreamID, PCIe considerations, fault flows, stash/unstash translation, DVM messages over the snoop channels, DVM Sync and Complete.", "DVM message field decoder."],
+    ["pwr", "Chapters A14, A16", "Wakeup signals, gating credited interfaces with ASKSTOP and channel states, Poison, and parity protection with the check-signal groups.", "Credited stop/start waveforms; parity group table."],
+    ["sig", "Appendix B1–B4", "The complete signal list, interface classes (AXI5, AXI5-Lite, ACE5-Lite, -DVM, -ACP), the signal and property matrices, ID constraints and every revision since H.c.", "Signal and property lookup."],
+    ["ic", "Spec rules + practice", "What an interconnect must do by the spec, and how real fabrics do it: ID extension, decode and default Subordinates, width and clock conversion, AXI3/AXI4/APB bridges.", "Bridge and fabric design notes."],
+    ["axis", "ARM IHI 0051B", "AXI-Stream: TVALID/TREADY, TDATA, TSTRB and TKEEP byte types, TLAST packets, TID and TDEST routing, TUSER, TWAKEUP, and how it differs from AXI.", "Byte-type table; stream waveforms."]
+  ];
+  var gl = document.getElementById("glist");
+  if (gl) G.forEach(function (g) {
+    var u = url(g[0]), d = document.createElement("div"); d.className = "card gcard";
+    d.innerHTML = "<div class=\"ch\">" + e(g[1]) + "</div><h3>" + (u ? "<a href=\"" + u + "\" target=\"_blank\" rel=\"noopener\">" + e(name(g[0])) + "</a>" : e(name(g[0]))) + "</h3><p style=\"font-size:15px\">" + e(g[2]) + "</p><p class=\"tools\">" + e(g[3]) + "</p>" +
+      (u ? "<a class=\"go\" href=\"" + u + "\" target=\"_blank\" rel=\"noopener\">Open the guide →</a>" : "<span class=\"go soon\">Coming soon</span>");
+    gl.appendChild(d);
+  });
+
+  var T = [
+    ["VALID/READY rules and the three handshake orderings", "chan", "§A2.3"],
+    ["Write and read channel dependencies, AW/W deadlock", "chan", "§A2.3.2"],
+    ["Clock and reset rules", "chan", "§A2.1"],
+    ["Credited transport, Resource Planes, shared credits, PENDING", "chan", "§A2.4"],
+    ["Register slices", "chan", "§A2.5"],
+    ["AxSIZE, AxLEN, maximum bytes per transaction", "burst", "§A3.1.1–A3.1.3"],
+    ["FIXED, INCR and WRAP bursts", "burst", "§A3.1.4"],
+    ["Transaction equations and pseudocode", "burst", "§A3.1.6–A3.1.7"],
+    ["Regular transactions", "burst", "§A3.1.8"],
+    ["Write strobes, narrow and unaligned transfers, byte invariance", "burst", "§A3.2"],
+    ["BRESP and RRESP encodings, Subordinate busy", "resp", "§A3.3"],
+    ["AxCACHE: Bufferable, Modifiable, Allocate", "attr", "§A4.2"],
+    ["Memory types (Device, Normal, cacheable)", "attr", "§A4.3"],
+    ["AxPROT, physical address space, RME, GDI", "attr", "§A4.5"],
+    ["Memory Encryption Contexts", "attr", "§A4.6"],
+    ["AxREGION and QoS", "attr", "§A4.7–A4.8"],
+    ["Transaction IDs and the Unique ID indicator", "order", "§A5.1–A5.2"],
+    ["Ordering model: observation, completion, Device vs Normal", "order", "§A5.3"],
+    ["Read data interleaving and chunking", "order", "§A5.6"],
+    ["Exclusive accesses and the exclusive monitor", "resp", "§A6.3"],
+    ["Atomic transactions (AtomicStore, Load, Swap, Compare)", "resp", "§A6.4"],
+    ["Request opcodes, AWSNOOP and ARSNOOP", "resp", "Chapter A7"],
+    ["Domains and Shareable lines", "cache", "§A8.3, §A8.5"],
+    ["Cache stashing and deallocating reads", "cache", "§A8.7–A8.8"],
+    ["Cache maintenance operations and persistence", "cache", "Chapter A9"],
+    ["NSAID, PBHA, Subsystem ID, compression", "qual", "Chapter A10"],
+    ["WriteZero and WriteDeferrable", "qual", "Chapter A11"],
+    ["MPAM, MTE, trace, loopback, user signals", "qual", "Chapter A12"],
+    ["Untranslated transactions (SMMU side)", "mmu", "Chapter A13"],
+    ["DVM messages and DVM Sync", "mmu", "Chapter A15"],
+    ["Wakeup signals and gating credited interfaces", "pwr", "Chapter A14"],
+    ["Poison and parity check signals", "pwr", "Chapter A16"],
+    ["Full signal list and interface classes", "sig", "Chapters B1–B2"],
+    ["What changed between H.c, J, K and L", "sig", "Chapter B4"],
+    ["AXI-Stream signals and byte types", "axis", "IHI 0051B"]
+  ];
+  var tb = document.getElementById("tbody-topics");
+  if (tb) T.forEach(function (t) {
+    var u = url(t[1]), tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + e(t[0]) + "</td><td>" + (u ? "<a href=\"" + u + "\" target=\"_blank\" rel=\"noopener\">" + e(name(t[1])) + "</a>" : "<span class=\"soonl\">" + e(name(t[1])) + " (soon)</span>") + "</td><td>" + e(t[2]) + "</td>";
+    tb.appendChild(tr);
+  });
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact, part, plw) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = part === "wave" ? 4 : part === "labels" ? plw : (compact ? 150 : LW);
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    if (part === "labels") {
+      var ls = "<svg viewBox=\"0 0 " + lw + " " + H + "\" width=\"" + lw + "\" height=\"" + H + "\" aria-hidden=\"true\">", mc = Math.floor((lw - 14) / 7.25);
+      rows.forEach(function (r, ri) {
+        var y0 = TOP + ri * RH, mid = (y0 + 6 + y0 + RH - 7) / 2, nm = r.name;
+        if (nm.length > mc) nm = nm.slice(0, mc - 1) + "…";
+        ls += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\"><title>" + esc(r.name) + "</title>" + esc(nm) + "</text>";
+      });
+      return ls + "</svg>";
+    }
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      if (part !== "wave") s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      var longest = 0; s.sig.forEach(function (r) { longest = Math.max(longest, r.name.length); });
+      var narrow = waveEl.clientWidth && waveEl.clientWidth < 560;
+      var plw = Math.max(64, Math.min(Math.round(longest * 7.25 + 18), narrow ? Math.round(waveEl.clientWidth * 0.36) : 230));
+      waveEl.innerHTML = "<div class=\"wfix\">" + renderWave(s, null, false, "labels", plw) + "</div>" + renderWave(s, st.r, false, "wave");
+      var vis = waveEl.clientWidth - plw, a = 4 + st.r[0] * CW, b = 4 + (st.r[1] + 1) * CW;
+      if (vis > 0) waveEl.scrollLeft = (b - a >= vis) ? Math.max(0, a - 6) : Math.max(0, Math.min(a - CW * 0.6, (a + b) / 2 - vis / 2 + 0));
+      if (vis > 0 && b <= vis - 6) waveEl.scrollLeft = 0;
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { go(step); }, 150); });
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- tables: label cells so they can stack into cards on phones ---------- */
+  (function () {
+    function label(t) {
+      var ths = t.querySelectorAll("thead th"); if (!ths.length) return;
+      var heads = Array.prototype.map.call(ths, function (h) { return h.textContent.trim(); });
+      Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] !== undefined) td.setAttribute("data-label", heads[i]); });
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("table"), function (t) {
+      if (!t.tHead || t.querySelector("[rowspan],[colspan]") || t.classList.contains("nostack")) return;
+      t.classList.add("stack"); label(t);
+      if (window.MutationObserver && t.tBodies[0]) new MutationObserver(function () { label(t); }).observe(t.tBodies[0], { childList: true });
+    });
+  })();
+
+  /* ---------- section nav: mark the section being read; series nav: show the current guide ---------- */
+  (function () {
+    var here = document.querySelector(".series .here"), ser = $("series");
+    if (here && ser && ser.scrollWidth > ser.clientWidth) ser.scrollLeft = Math.max(0, here.offsetLeft - ser.offsetLeft - 60);
+    var bar = document.querySelector("nav.toc .wrap");
+    if (!bar || !window.IntersectionObserver) return;
+    var links = {}, cur = null;
+    Array.prototype.forEach.call(bar.querySelectorAll("a[href^='#']"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = links[e.target.id]; if (!a || a === cur) return;
+        if (cur) cur.removeAttribute("aria-current");
+        cur = a; a.setAttribute("aria-current", "true");
+        bar.scrollLeft = Math.max(0, a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2);
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(links).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+
+</script>
+
+</body>
+</html>

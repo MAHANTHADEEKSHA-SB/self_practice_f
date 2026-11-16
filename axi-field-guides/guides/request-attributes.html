@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXI Request Attributes Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* AXI field guides. Color encodes who drives a signal: amber = Manager (class lp), teal = Subordinate (class pl),
+   violet = credits, interface-level signals and annotations (class sb). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+
+/* ---- AXI additions ---- */
+.ver { display:inline-block; font-family:var(--font-mono); font-size:10.5px; line-height:16px; padding:0 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; vertical-align:1px; }
+.ver.new { color:var(--pl); border-color:var(--pl); }
+.ver.old { color:var(--lp); border-color:var(--lp); }
+.ver.gone { color:var(--bad); border-color:var(--bad); }
+.cmp td:first-child { font-weight:500; min-width:150px; }
+.cmp td.then { color:var(--muted); }
+.dep text { font-family:var(--font-mono); font-size:12px; }
+.kbd { font-family:var(--font-mono); font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 5px; background:var(--code); }
+
+/* ---- phone and touch upgrades ---- */
+.calc, .tool { grid-template-columns: minmax(0, 1fr); }
+.calc > *, .tool > * { min-width: 0; }
+#wave { display: flex; align-items: flex-start; padding-left: 0; scroll-behavior: auto; }
+#wave > svg { flex: none; }
+.wfix { position: sticky; left: 0; z-index: 1; flex: none; background: var(--bg); border-right: 1px solid var(--line); }
+nav.toc a[aria-current] { background: var(--hl); color: var(--ink); font-weight: 500; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 28px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--pl); }
+.pager a small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pager a.nx { text-align: right; grid-column: 2; }
+.pager a strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.pager .all { grid-column: 1 / -1; text-align: center; font-size: 14px; padding: 10px; }
+@media (pointer: coarse) {
+  .chip, .tab, .btn, nav.toc a { min-height: 40px; display: inline-flex; align-items: center; }
+  .dot { min-width: 38px; min-height: 38px; }
+  summary { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (max-width: 640px) {
+  .hero { padding-top: 18px; padding-bottom: 16px; }
+  .lede { font-size: 15.5px; }
+  .series { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px 14px; padding: 6px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .series::-webkit-scrollbar { display: none; }
+  .series > * { flex: none; }
+  figure { overflow-x: auto; }
+  figure svg { min-width: 560px; max-width: none; }
+  figure svg.dep, figure svg.lmap { min-width: 700px; }
+  figcaption { position: sticky; left: 0; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: auto; }
+  table.stack tr { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  table.stack td:empty { display: none; }
+  table.stack td::before { content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+  table.stack td:first-child { font-size: 15px; font-weight: 600; }
+  table.stack td:first-child::before { display: none; }
+  table.stack caption { display: block; }
+  table.stack td.dir, table.stack td.dir + td { display: inline-block; margin-right: 10px; vertical-align: middle; }
+  table.stack td.dir::before, table.stack td.dir + td::before { display: none; }
+  .pager { grid-template-columns: 1fr; }
+  .pager a.nx { grid-column: 1; text-align: left; }
+  .bitfield { grid-auto-columns: minmax(22px, 1fr); overflow-x: auto; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>AXI Field Guides (Issue L):</span><a href="../index.html"><strong>All guides</strong></a><a href="channels-handshake.html">Channels &amp; Handshake</a><a href="bursts-addressing.html">Bursts &amp; Addressing</a><span class="here">Request Attributes</span><a href="ids-ordering.html">IDs &amp; Ordering</a><a href="responses-exclusives-atomics.html">Responses, Exclusives &amp; Atomics</a><a href="caches-cmos.html">Caches &amp; CMOs</a><a href="qualifiers-debug-user.html">Qualifiers, Debug &amp; User</a><a href="untranslated-dvm.html">Untranslated &amp; DVM</a><span title="coming soon" style="opacity:.55">Power, Reset &amp; Protection</span><span title="coming soon" style="opacity:.55">Signals &amp; Interface Classes</span><span title="coming soon" style="opacity:.55">Interconnect &amp; Bridges</span><span title="coming soon" style="opacity:.55">AXI-Stream</span></div>
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapter A4 · what the system may do with a request</div>
+    <h1>AXI Request Attributes Field Guide</h1>
+    <p class="lede">Address, size and length say <em>what</em> to access. The request attributes say <em>how</em> the system may treat the access: who may answer a write, whether it may be split, merged, cached or prefetched, which address space and privilege it belongs to, how urgent it is. This guide covers AxCACHE and the twelve memory types, protection and physical address spaces including RME, GDI and MEC, regions and QoS. It includes decoders, waveforms, verification checks, interview questions, and what changed from AXI3 and AXI4.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>interconnect, properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ and p. = section and printed page of ARM IHI 0022 <strong>Issue L</strong>. "H.c" = Issue H.c, the last issue describing AXI3 and AXI4 (pages like p.A4-63). Tags: <span class="kind spec">Spec</span> <span class="kind derived">Derived</span> <span class="kind illus">Illustrative</span> <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#why">1 · Why</a>
+    <a href="#where">2 · Who reads them</a>
+    <a href="#cache">3 · AxCACHE</a>
+    <a href="#signals">4 · Signals</a>
+    <a href="#types">5 · Memory types</a>
+    <a href="#prot">6 · Protection &amp; PAS</a>
+    <a href="#qos">7 · Region &amp; QoS</a>
+    <a href="#rationale">8 · Why each rule</a>
+    <a href="#live">9 · Live scenarios</a>
+    <a href="#silicon">10 · Real silicon</a>
+    <a href="#changes">11 · AXI3/AXI4 → Issue L</a>
+    <a href="#verify">12 · Verification</a>
+    <a href="#quiz">13 · Test yourself</a>
+    <a href="#refs">14 · Spec index</a>
+  </div>
+</nav>
+
+<style>
+  .bitbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bitbtns button { display: grid; gap: 2px; min-width: 104px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; text-align: left; font-family: var(--font-body); }
+  .bitbtns button[aria-pressed="true"] { border-color: var(--lp); background: color-mix(in srgb, var(--lp) 14%, transparent); }
+  .bitbtns .b { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .bitbtns .v { font-family: var(--font-mono); font-size: 18px; font-weight: 500; }
+  .bitbtns .n { font-size: 12.5px; }
+  .tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; }
+  .mt-hit { border-left: 3px solid var(--pl); padding: 4px 10px; margin-top: 6px; }
+  .mt-hit p { margin: 2px 0 0; font-size: 14.5px; }
+  .tool label { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; margin-right: 12px; }
+  .tool select { font-family: var(--font-mono); font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+  .yes { color: var(--pl); font-weight: 600; } .no { color: var(--muted); }
+</style>
+
+<main>
+
+<section id="why">
+  <div class="wrap">
+    <h2>1 · Why requests carry attributes</h2>
+    <p class="sub">An interconnect, a system cache and a memory controller all want to optimise traffic. The attributes tell each of them which optimisations are safe for this request.</p>
+    <div class="grid g2">
+      <div class="card"><div class="tagline">Correctness for devices</div><h3>Peripherals have side effects</h3><p>Reading a status register can clear it; writing a FIFO pushes data. These must not be prefetched, merged, split or cached. Device memory types forbid all of that.</p><p class="src"><span class="sl">Spec</span>§A4.1, p.67 · §A4.3.1, p.71–72</p></div>
+      <div class="card"><div class="tagline">Performance for memory</div><h3>Normal memory can be optimised freely</h3><p>Modifiable requests may be split, merged, widened or prefetched; cacheable ones may be served from caches; Bufferable writes may be answered early.</p><p class="src"><span class="sl">Spec</span>§A4.2, p.68–70</p></div>
+      <div class="card"><div class="tagline">Security</div><h3>Privilege and address spaces</h3><p>Privileged/unprivileged, Secure/Non-secure, and with RME the Root and Realm spaces (plus SA and NSP with GDI) let firewalls and memory encryption tell accesses apart. Same address, different space, can be different memory.</p><p class="src"><span class="sl">Spec</span>§A4.5, p.77–80 · §A4.6, p.81</p></div>
+      <div class="card"><div class="tagline">Quality of service</div><h3>Who goes first</h3><p>AxQOS ranks requests when nothing else forces an order; QoS accept lets a busy Subordinate say which requests it will take now.</p><p class="src"><span class="sl">Spec</span>§A4.8, p.86–87</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="where">
+  <div class="wrap">
+    <h2>2 · Who reads which attribute</h2>
+    <p class="sub">Every component between Manager and memory looks at a different subset.</p>
+    <figure>
+      <svg viewBox="0 0 880 210" role="img" aria-label="A request path from Manager through interconnect, write buffer, system cache and memory controller to memory, with the attributes each one uses.">
+        <defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+        <g font-family="var(--font-body)" font-size="12">
+          <rect x="10" y="40" width="120" height="70" rx="9" fill="var(--surface)" stroke="var(--lp)"/><text x="70" y="70" text-anchor="middle" font-size="14" font-weight="600" fill="var(--lp)">Manager</text><text x="70" y="90" text-anchor="middle" fill="var(--muted)">sets all</text>
+          <rect x="160" y="40" width="140" height="70" rx="9" fill="var(--surface)" stroke="var(--ink)"/><text x="230" y="64" text-anchor="middle" font-size="14" font-weight="600" fill="var(--ink)">Interconnect</text><text x="230" y="84" text-anchor="middle" fill="var(--muted)">address decode</text><text x="230" y="100" text-anchor="middle" fill="var(--muted)">arbitration</text>
+          <rect x="330" y="40" width="130" height="70" rx="9" fill="var(--surface)" stroke="var(--ink)"/><text x="395" y="64" text-anchor="middle" font-size="14" font-weight="600" fill="var(--ink)">Write buffer</text><text x="395" y="84" text-anchor="middle" fill="var(--muted)">early response,</text><text x="395" y="100" text-anchor="middle" fill="var(--muted)">merging</text>
+          <rect x="490" y="40" width="130" height="70" rx="9" fill="var(--surface)" stroke="var(--ink)"/><text x="555" y="64" text-anchor="middle" font-size="14" font-weight="600" fill="var(--ink)">System cache</text><text x="555" y="84" text-anchor="middle" fill="var(--muted)">lookup, allocate</text>
+          <rect x="650" y="40" width="130" height="70" rx="9" fill="var(--surface)" stroke="var(--pl)"/><text x="715" y="64" text-anchor="middle" font-size="14" font-weight="600" fill="var(--pl)">Memory ctrl</text><text x="715" y="84" text-anchor="middle" fill="var(--muted)">scheduling,</text><text x="715" y="100" text-anchor="middle" fill="var(--muted)">encryption</text>
+          <rect x="800" y="50" width="70" height="50" rx="8" fill="var(--surface)" stroke="var(--muted)"/><text x="835" y="80" text-anchor="middle" font-size="13" fill="var(--ink)">DRAM</text>
+          <line x1="130" y1="75" x2="158" y2="75" stroke="var(--muted)" marker-end="url(#a3)"/><line x1="300" y1="75" x2="328" y2="75" stroke="var(--muted)" marker-end="url(#a3)"/><line x1="460" y1="75" x2="488" y2="75" stroke="var(--muted)" marker-end="url(#a3)"/><line x1="620" y1="75" x2="648" y2="75" stroke="var(--muted)" marker-end="url(#a3)"/><line x1="780" y1="75" x2="798" y2="75" stroke="var(--muted)" marker-end="url(#a3)"/>
+          <g font-family="var(--font-mono)" font-size="11.5">
+            <text x="230" y="140" text-anchor="middle" fill="var(--sb)">AxPROT / AxPAS</text><text x="230" y="156" text-anchor="middle" fill="var(--sb)">→ AxREGION</text><text x="230" y="172" text-anchor="middle" fill="var(--sb)">AxQOS</text>
+            <text x="395" y="140" text-anchor="middle" fill="var(--sb)">AxCACHE[0] B</text><text x="395" y="156" text-anchor="middle" fill="var(--sb)">AxCACHE[1] M</text>
+            <text x="555" y="140" text-anchor="middle" fill="var(--sb)">AxCACHE[3:2]</text><text x="555" y="156" text-anchor="middle" fill="var(--sb)">AxCACHE[1] M</text><text x="555" y="172" text-anchor="middle" fill="var(--sb)">AxMECID</text>
+            <text x="715" y="140" text-anchor="middle" fill="var(--sb)">AxQOS, QOSACCEPT</text><text x="715" y="156" text-anchor="middle" fill="var(--sb)">AxPAS, AxMECID</text>
+          </g>
+        </g>
+      </svg>
+      <figcaption>A typical system, not a spec figure. Each attribute is a contract that every component on the path must respect, not just the one that uses it most.<span class="ref"><span class="kind illus">Illustrative</span> · attributes from §A4.2–A4.8, p.68–88</span></figcaption>
+    </figure>
+    <div class="callout" style="margin-top:12px">
+      <p><strong>Two kinds of Subordinate.</strong> A <em>Memory Subordinate</em> must handle every transaction type correctly. A <em>Peripheral Subordinate</em> documents its own access method; any other access must still complete protocol-correctly, but the peripheral need not keep working correctly afterwards.</p>
+      <p class="src"><span class="sl">Spec</span>§A4.1, p.67</p>
+    </div>
+  </div>
+</section>
+
+<section id="cache">
+  <div class="wrap">
+    <h2>3 · AxCACHE: four bits, two of them swapped</h2>
+    <p class="sub">Bits [0] and [1] mean the same on reads and writes. Bits [2] and [3] carry "Allocate" (this access should allocate) and "Other Allocate" (another kind of access might have allocated the line), in opposite positions on AR and AW.</p>
+    <div class="twocol">
+      <div class="grid" style="gap:12px">
+        <div class="k mono" style="font-size:12px;color:var(--muted)">ARCACHE</div>
+        <div class="bitfield"><div><span class="bn">3</span><span class="f lp">Other Allocate</span></div><div><span class="bn">2</span><span class="f lp">Allocate</span></div><div><span class="bn">1</span><span class="f lp">Modifiable</span></div><div><span class="bn">0</span><span class="f lp">Bufferable</span></div></div>
+        <div class="k mono" style="font-size:12px;color:var(--muted)">AWCACHE</div>
+        <div class="bitfield"><div><span class="bn">3</span><span class="f lp">Allocate</span></div><div><span class="bn">2</span><span class="f lp">Other Allocate</span></div><div><span class="bn">1</span><span class="f lp">Modifiable</span></div><div><span class="bn">0</span><span class="f lp">Bufferable</span></div></div>
+        <p class="src"><span class="sl">Spec</span>§A4.2, p.68</p>
+        <div class="card">
+          <h3>Why the swap</h3>
+          <p style="font-size:15px">In AXI3, bit 2 was Read-Allocate and bit 3 Write-Allocate on both channels. AXI4 kept the bit positions for compatibility but changed the meaning: on a read, the write-allocate bit now says "this line might be in a cache because of something else". Issue L names the bits for what they mean on each channel, which is why the names swap.</p>
+          <p class="src"><span class="sl">Spec</span>H.c §A4.2, p.A4-63 · §A4.3.2, p.A4-65–A4-66 · §A4.2, p.68</p>
+        </div>
+      </div>
+      <div class="grid" style="gap:10px">
+        <div class="card"><div class="k">[0] Bufferable</div><p style="font-size:14.5px">Write: if LOW and [3:2] are 0b00, the response comes from the final destination. If HIGH, it may come from an intermediate point once the observability rules are met. Read: matters only for Normal Non-cacheable (Modifiable, [3:2] = 0): HIGH allows data from a write still on its way.</p><p class="src"><span class="sl">Spec</span>§A4.2.1, p.68–69 · Table B4.3, p.312</p></div>
+        <div class="card"><div class="k">[1] Modifiable</div><p style="font-size:14.5px">LOW: Non-modifiable, no split or merge, Size/Length/Burst/address/protection fixed (Length &gt; 16 may still be split). HIGH: may be split, merged, prefetched, widened; never into another 4 KB space or a split atomic access.</p><p class="src"><span class="sl">Spec</span>§A4.2.2, p.69–70</p></div>
+        <div class="card"><div class="k">[2], [3] Allocate and Other Allocate</div><p style="font-size:14.5px">Either set: the line might be in a cache, so look it up. Allocate set: allocating is recommended. Only Other Allocate set: allocating is not recommended. Both clear: no lookup needed.</p><p class="src"><span class="sl">Spec</span>§A4.2.3, p.70</p></div>
+      </div>
+    </div>
+
+    <h3 style="margin:24px 0 8px">Memory-type decoder</h3>
+    <div class="tool">
+      <div class="chips" role="group" aria-label="Channel"><button class="chip" type="button" data-ch="AR" aria-pressed="true">Read (ARCACHE)</button><button class="chip" type="button" data-ch="AW" aria-pressed="false">Write (AWCACHE)</button></div>
+      <div class="bitbtns" id="mt-bits">
+        <button type="button" data-b="3"><span class="b">bit 3</span><span class="v">0</span><span class="n"></span></button>
+        <button type="button" data-b="2"><span class="b">bit 2</span><span class="v">0</span><span class="n"></span></button>
+        <button type="button" data-b="1"><span class="b">bit 1</span><span class="v">0</span><span class="n"></span></button>
+        <button type="button" data-b="0"><span class="b">bit 0</span><span class="v">0</span><span class="n"></span></button>
+      </div>
+      <div class="presets" style="display:flex;flex-wrap:wrap;gap:6px">
+        <button class="chip" type="button" data-mt="0000">0000</button><button class="chip" type="button" data-mt="0001">0001</button><button class="chip" type="button" data-mt="0010">0010</button><button class="chip" type="button" data-mt="0011">0011</button><button class="chip" type="button" data-mt="0110">0110</button><button class="chip" type="button" data-mt="0111">0111</button><button class="chip" type="button" data-mt="1010">1010</button><button class="chip" type="button" data-mt="1011">1011</button><button class="chip" type="button" data-mt="1110">1110</button><button class="chip" type="button" data-mt="1111">1111</button><button class="chip" type="button" data-mt="0101">0101</button>
+      </div>
+      <div id="mt-out"></div>
+      <p class="src"><span class="sl">Spec</span>Table A4.4, p.71 · §A4.3.1, p.71–74 · <span class="kind derived">Derived</span> decoding of the table</p>
+    </div>
+  </div>
+</section>
+
+<section id="signals">
+  <div class="wrap">
+    <h2>4 · Signals and properties</h2>
+    <p class="sub">The attribute signals on AW and AR, the protection and RME extensions, and the QoS accept outputs.</p>
+    <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="types">
+  <div class="wrap">
+    <h2>5 · The twelve memory types</h2>
+    <p class="sub">Table A4.4 encodings with the behaviour §A4.3.1 requires of each. Values in brackets are permitted but not preferred; anything not listed is reserved.</p>
+    <div class="tbl-wrap">
+      <table>
+        <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A4.4, p.71 · §A4.3.1, p.71–74. "Timely" = the write must reach the final destination in a timely manner (glossary, p.316).</caption>
+        <thead><tr><th>Memory type</th><th>ARCACHE</th><th>AWCACHE</th><th>B response from</th><th>Read data from</th><th>Modifiable</th><th>Prefetch / merge</th><th>Lookup</th></tr></thead>
+        <tbody style="font-size:13px">
+          <tr><td>Device Non-bufferable</td><td class="mono">0000</td><td class="mono">0000</td><td>Destination</td><td>Destination</td><td class="no">No</td><td class="no">No / No</td><td class="no">No</td></tr>
+          <tr><td>Device Bufferable</td><td class="mono">0001</td><td class="mono">0001</td><td>Intermediate; timely</td><td>Destination</td><td class="no">No</td><td class="no">No / No</td><td class="no">No</td></tr>
+          <tr><td>Normal Non-cacheable Non-bufferable</td><td class="mono">0010</td><td class="mono">0010</td><td>Destination</td><td>Destination</td><td class="yes">Yes</td><td>- / Yes</td><td class="no">No</td></tr>
+          <tr><td>Normal Non-cacheable Bufferable</td><td class="mono">0011</td><td class="mono">0011</td><td>Intermediate; timely</td><td>Destination or newest in-flight write</td><td class="yes">Yes</td><td>- / Yes</td><td class="no">No</td></tr>
+          <tr><td>Write-Through No-Allocate</td><td class="mono">1010</td><td class="mono">0110</td><td>Intermediate; timely</td><td>May be cached copy</td><td class="yes">Yes</td><td>Yes / Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Write-Through Read-Allocate</td><td class="mono">1110 (0110)</td><td class="mono">0110</td><td colspan="5" rowspan="3" style="color:var(--muted)">Same as Write-Through No-Allocate; only the allocation recommendation differs</td></tr>
+          <tr><td>Write-Through Write-Allocate</td><td class="mono">1010</td><td class="mono">1110 (1010)</td></tr>
+          <tr><td>Write-Through Read and Write-Allocate</td><td class="mono">1110</td><td class="mono">1110</td></tr>
+          <tr><td>Write-Back No-Allocate</td><td class="mono">1011</td><td class="mono">0111</td><td>Intermediate; need not reach destination</td><td>May be cached copy</td><td class="yes">Yes</td><td>Yes / Yes</td><td class="yes">Yes</td></tr>
+          <tr><td>Write-Back Read-Allocate</td><td class="mono">1111 (0111)</td><td class="mono">0111</td><td colspan="5" rowspan="3" style="color:var(--muted)">Same as Write-Back No-Allocate; only the allocation recommendation differs</td></tr>
+          <tr><td>Write-Back Write-Allocate</td><td class="mono">1011</td><td class="mono">1111 (1011)</td></tr>
+          <tr><td>Write-Back Read and Write-Allocate</td><td class="mono">1111</td><td class="mono">1111</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><div class="tagline">Mismatched attributes</div><p style="font-size:14.5px">All Managers must agree on <em>cacheability</em> of a region: Non-cacheable ⇒ [3:2] = 0b00 for everyone; Cacheable ⇒ at least one of [3:2] set. Allocation hints may differ. Normal Non-cacheable may be accessed as Device; a Bufferable region may be accessed without Bufferable behaviour.</p><p class="src"><span class="sl">Spec</span>§A4.3.2, p.74</p></div>
+      <div class="card"><div class="tagline">Changing attributes</div><p style="font-size:14.5px">To change a region to an incompatible type: all Managers stop, one Manager does the cache maintenance, all restart with the new attributes.</p><p class="src"><span class="sl">Spec</span>§A4.3.3, p.74</p></div>
+      <div class="card"><div class="tagline">Protocol errors</div><p style="font-size:14.5px">Software protocol error: mismatched shareability or cacheability. Data may be corrupted, but only in that 4 KB region, and the system must not deadlock. Hardware protocol error: anything else, no recovery guaranteed.</p><p class="src"><span class="sl">Spec</span>§A4.4, p.76</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="prot">
+  <div class="wrap">
+    <h2>6 · Protection, physical address spaces, RME and MEC</h2>
+    <p class="sub">Issue L offers two ways to signal protection. Older interfaces use AxPROT (plus AxNSE for RME). Newer ones use AxPRIV, AxINST and AxPAS. An interface has one set or the other, never both.</p>
+    <div class="twocol">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A4.7, p.79 · Tables A4.5–A4.6, p.77. Rules: PROT_Present ⇒ PAS_WIDTH = 0 and INSTPRIV_Present = False.</caption>
+          <thead><tr><th>Address space</th><th>AxPAS</th><th>AxPROT[1]</th><th>AxNSE</th><th>Needs</th></tr></thead>
+          <tbody class="mono" style="font-size:12.5px">
+            <tr><td>Secure</td><td>000</td><td>0</td><td>0</td><td>-</td></tr>
+            <tr><td>Non-secure</td><td>001</td><td>1</td><td>0</td><td>-</td></tr>
+            <tr><td>Root</td><td>010</td><td>0</td><td>1</td><td>RME_Support</td></tr>
+            <tr><td>Realm</td><td>011</td><td>1</td><td>1</td><td>RME_Support</td></tr>
+            <tr><td>System Agent</td><td>100</td><td>-</td><td>-</td><td>GDI_Support</td></tr>
+            <tr><td>Non-secure Protected</td><td>101</td><td>-</td><td>-</td><td>GDI_Support</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tool">
+        <h3 style="margin:0">Protection decoder</h3>
+        <div><label>Signalling <select id="pr-mode"><option value="prot">AxPROT + AxNSE</option><option value="pas">AxPRIV, AxINST, AxPAS</option></select></label></div>
+        <div id="pr-a"><label>AxPROT[2:0] <select id="pr-prot"><option>000</option><option>001</option><option>010</option><option selected>011</option><option>100</option><option>101</option><option>110</option><option>111</option></select></label><label><input type="checkbox" id="pr-nse"> AxNSE</label></div>
+        <div id="pr-b"><label>AxPAS <select id="pr-pas"><option value="0">000</option><option value="1">001</option><option value="2">010</option><option value="3">011</option><option value="4">100</option><option value="5">101</option><option value="6">110</option><option value="7">111</option></select></label><label><input type="checkbox" id="pr-priv"> AxPRIV</label><label><input type="checkbox" id="pr-inst"> AxINST</label></div>
+        <ul class="tight" id="pr-out" style="font-size:14.5px"></ul>
+        <p class="src"><span class="sl">Spec</span>§A4.5.2, p.78 · Table A4.7, p.79</p>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="card"><div class="tagline">Privilege and instruction</div><p style="font-size:14.5px">AXI distinguishes only privileged vs unprivileged. The instruction bit is a hint that may be wrong for mixed fetches; mark data unless known to be an instruction access.</p><p class="src"><span class="sl">Spec</span>§A4.5.2, p.78</p></div>
+      <div class="card"><div class="tagline">RME and GDI</div><p style="font-size:14.5px">RME adds Root and Realm spaces and affects CMOs and MPAM. GDI (Issue L) adds System Agent and Non-secure Protected for non-PE data flows; PEs may not access them except for CMOs to the PoPA. GDI requires RME and PAS_WIDTH 3.</p><p class="src"><span class="sl">Spec</span>§A4.5.4–A4.5.5, p.79–80</p></div>
+      <div class="card"><div class="tagline">Memory Encryption Contexts</div><p style="font-size:14.5px">AxMECID (16 bits) picks an encryption context per Realm. Zero in Secure, Non-secure and Root; any value in Realm, SA, NSP. Don't-care for most CMOs; must be 0 for DVM Complete. Caches store the MECID with the data and write it back with it.</p><p class="src"><span class="sl">Spec</span>§A4.6, Tables A4.10–A4.14, p.81–83</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="qos">
+  <div class="wrap">
+    <h2>7 · Region and QoS</h2>
+    <div class="grid g2">
+      <div class="card"><div class="tagline">AxREGION</div><h3>A decode the Subordinate doesn't have to do</h3><ul class="tight"><li>4 bits, up to 16 regions, produced by the interconnect's address decoder; default 0 when a Subordinate has one region.</li><li>Constant within any 4 KB space.</li><li>Not a new address space; only on interfaces downstream of a decode.</li><li>The Subordinate must answer correctly for unsupported regions (error or alias) and keep same-ID ordering across regions.</li></ul><p class="src"><span class="sl">Spec</span>§A4.7, p.84–85</p></div>
+      <div class="card"><div class="tagline">AxQOS and QoS accept</div><h3>Priority when the rules allow a choice</h3><ul class="tight"><li>4-bit AxQOS; higher = more important (recommended). Exact use is system-defined; interconnects often overwrite it from registers.</li><li>Default policy: pick the higher QoS, but only where AXI ordering doesn't already force an order.</li><li>VAxQOSACCEPT: the Subordinate accepts QoS ≥ this level without delay; lower ones may wait a long time, recommended not forever.</li></ul><p class="src"><span class="sl">Spec</span>§A4.8, p.86–88</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="rationale">
+  <div class="wrap">
+    <h2>8 · Why each rule exists, with real-time examples</h2>
+    <p class="sub">Rule, reason, worked example, and what breaks when it's ignored.</p>
+    <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+    <div class="whys">
+
+      <article class="wcard" data-g="buf"><div class="meta"><span>Bufferable</span><span>§A4.2.1 p.68</span></div><h3>Who may answer a write</h3><p class="rule">Non-bufferable (and [3:2] = 0): the response must come from the final destination. Bufferable: an intermediate point may respond.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A posted write that an intermediate buffer acknowledges lets the CPU move on in a few cycles instead of waiting for the full round trip. Some writes need the round trip, though: the driver must know the device has really seen the value before the next step.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A write to a PCIe-attached device's register takes about 1 µs to reach it. Device Bufferable: the CPU sees BRESP from the local buffer in ~20 ns. Device Non-bufferable: it waits the full 1 µs.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A buffer that answers Non-bufferable writes early breaks "write then read back to confirm" driver sequences and interrupt-clear races.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.2.1, p.68 · Table B4.3, p.312</li><li><span class="kind illus">Illustrative</span>latencies</li></ul></div></article>
+
+      <article class="wcard" data-g="buf"><div class="meta"><span>Bufferable</span><span>§A4.3.5 p.75</span></div><h3>Device B, then Device NB, same ID</h3><p class="rule">A Device Non-bufferable write after Device Bufferable writes with the same ID to the same device completes only after those writes are visible.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Same-ID writes to one Subordinate are ordered, and the Non-bufferable one must reach the destination before it is answered. So its response proves the earlier ones arrived. You get posted-write speed and a cheap way to confirm.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A driver writes 8 descriptor-ring registers as Device Bufferable, then the doorbell as Device Non-bufferable with the same ID. One full round trip instead of nine.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A different ID, or a different device, gives no guarantee. That's a common driver bug when an interconnect remaps IDs per Manager thread.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.3.5, p.75</li><li><span class="kind illus">Illustrative</span>driver sequence</li></ul></div></article>
+
+      <article class="wcard" data-g="buf"><div class="meta"><span>Bufferable</span><span>§A4.3.4 p.74–75</span></div><h3>Buffers must drain, even under pressure</h3><p class="rule">Bufferable writes must reach their destination in a timely manner. Merging a new write must not reset the drain timer, and reading forwarded data must not reset its timeout.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A CPU that polls or repeatedly writes one location could otherwise pin a write in a buffer forever. The other side, a device waiting for that value, would never see it.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A spin loop writes a progress counter every 50 ns into a write-combining buffer with a 1 µs drain timer. If each merge reset the timer, the counter would never leave the buffer.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Livelock that shows up only under tight software loops.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.3.4, p.74–75 · glossary, p.316</li><li><span class="kind illus">Illustrative</span>timings</li></ul></div></article>
+
+      <article class="wcard" data-g="mod"><div class="meta"><span>Modifiable</span><span>§A4.2.2 p.69</span></div><h3>Non-modifiable means "exactly as sent"</h3><p class="rule">No split, no merge. Address, Size, Length, Burst and protection unchanged. AxCACHE may only go from Bufferable to Non-bufferable; ID and QoS may change.</p>
+        <div class="part"><span class="l l-why">Why</span><p>A peripheral may react differently to one 8-byte access than to two 4-byte ones, for example a 64-bit timer that latches its high word on a 64-bit read. Keeping the shape lets the peripheral see exactly what software asked for.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64-bit read of a timer at 0x5000 through a 32-bit downsizer must become two reads. The spec allows it, because downsizing below Size is impossible otherwise, and lets the component flag the change through an IMPLEMENTATION DEFINED mechanism for debug.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Torn reads of multi-word registers, double side effects from split FIFO accesses.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.2.2 and Table A4.3, p.69</li><li><span class="kind illus">Illustrative</span>timer</li></ul></div></article>
+
+      <article class="wcard" data-g="mod"><div class="meta"><span>Modifiable</span><span>§A4.2.2 p.69–70</span></div><h3>Modifiable has limits too</h3><p class="rule">Modifiable requests may be split, merged, widened or prefetched, but never into a different 4 KB space, never splitting a single-copy-atomic access, never changing AxLOCK or protection attributes, never reducing visibility.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The 4 KB limit keeps decode correct. The atomicity limit keeps a CPU's naturally aligned 64-bit store from being seen half-done. Protection must not change because it decides who may access the memory at all.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An upsizer may widen a 4-byte read at 0x7FFC to a 16-byte read at 0x7FF0, but not to 0x7FF0–0x800F, which would cross into the next 4 KB page.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Prefetching into another page can touch a read-sensitive device mapped there, or trigger a security fault on an address the program never used.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.2.2, p.70</li><li><span class="kind derived">Derived</span>address example</li></ul></div></article>
+
+      <article class="wcard" data-g="mod"><div class="meta"><span>Modifiable</span><span>§A4.2.2 p.69</span></div><h3>Two exceptions for Non-modifiable</h3><p class="rule">A Non-modifiable request with Length &gt; 16 may be split. An exclusive Non-modifiable request may change Size and Length if the total bytes stay the same.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Long bursts must pass through AXI3-era components and QoS-limited paths. Exclusive accesses must survive width conversion while still covering exactly the monitored bytes.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>An exclusive 8-byte load (Size 8, Length 1) through a 32-bit downsizer becomes Size 4, Length 2: still 8 bytes, still one exclusive access.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Splitting an exclusive into two separate exclusives breaks the monitor; changing total bytes breaks exclusivity.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.2.2, p.69</li><li><span class="kind derived">Derived</span>example</li></ul></div></article>
+
+      <article class="wcard" data-g="alloc"><div class="meta"><span>Allocation &amp; types</span><span>§A4.2.3 p.70</span></div><h3>Lookup if either allocate bit is set</h3><p class="rule">AxCACHE[3:2] ≠ 0b00 ⇒ the line might be cached, so look it up. Allocation itself is only a recommendation.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Correctness depends only on "could it be in a cache?". Whether to allocate is a performance hint. Separating them means a wrong hint can only cost performance, never correctness.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A streaming read with ARCACHE 0b1011 (Write-Back No-Allocate) still looks up the system cache (a CPU might have the line dirty) but doesn't evict useful lines to store the stream.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Skipping the lookup on a "No-Allocate" read returns stale DRAM data when the line is dirty in a cache.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.2.3, p.70 · §A4.3.1, p.73</li><li><span class="kind illus">Illustrative</span>stream</li></ul></div></article>
+
+      <article class="wcard" data-g="alloc"><div class="meta"><span>Allocation &amp; types</span><span>§A4.3.2 p.74</span></div><h3>Agree on cacheability, not on hints</h3><p class="rule">All Managers must use the same cacheability for a region; allocation hints may differ; Device access to Normal Non-cacheable is fine.</p>
+        <div class="part"><span class="l l-why">Why</span><p>If one Manager reads a region as cacheable and another writes it as Non-cacheable, the writer bypasses the cache that the reader is hitting. Allocation hints don't cause this problem, so they can differ.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A GPU writes a buffer as Normal Non-cacheable; the CPU maps the same pages Write-Back. The CPU reads stale cached data: a software protocol error, contained to those 4 KB regions.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Silent data corruption. The protocol only promises no deadlock and no damage outside the region.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.3.2, p.74 · §A4.4.1, p.76</li><li><span class="kind illus">Illustrative</span>GPU example</li></ul></div></article>
+
+      <article class="wcard" data-g="err"><div class="meta"><span>Errors &amp; changes</span><span>§A4.4 p.76</span></div><h3>Software vs hardware protocol errors</h3><p class="rule">Software protocol errors (mismatched attributes) may corrupt data in that 4 KB region but must not deadlock. Hardware protocol errors (everything else) carry no guarantees.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Software bugs are expected and must not take the whole SoC down; hardware must still make progress. Hardware protocol violations mean a component is broken, and requiring recovery from those would make every component pay for every other component's bugs.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A user process maps a peripheral as Normal memory: the peripheral may misbehave, but it must still answer every transaction so the interconnect doesn't hang.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>A peripheral that stops responding to unexpected Modifiable accesses turns a software bug into a system hang.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.4, p.76 · §A4.1, p.67</li></ul></div></article>
+
+      <article class="wcard" data-g="prot"><div class="meta"><span>Protection</span><span>§A4.5.3 p.79</span></div><h3>Same address, different space</h3><p class="rule">Requests with the same address but a different physical address space may decode to different memory.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Secure firmware, a hypervisor's Realm, and Non-secure Linux can each own memory at the same physical address. The PAS acts like extra address bits, so caches and firewalls must include it in their tags and checks.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A system cache that tags lines without the PAS would let a Non-secure read of 0x8000_0000 hit a line filled by a Secure access to 0x8000_0000.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Cross-world data leaks: a security vulnerability, not just a bug. Note that Modifiable transforms must never change protection attributes.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.5.3, p.79 · §A4.2.2, p.70</li><li><span class="kind spec">Spec</span>H.c §A4.7, p.A4-75 (NS bit as an extra address bit)</li></ul></div></article>
+
+      <article class="wcard" data-g="prot"><div class="meta"><span>Protection</span><span>§A4.6.2 p.82–83</span></div><h3>MECID: preserved, stored, written back</h3><p class="rule">Components that pass a request on must preserve AxMECID where it applies; caches must store it with the data and supply it on write-back.</p>
+        <div class="part"><span class="l l-why">Why</span><p>The memory encryption engine picks the key from the MECID. If a cache wrote back a Realm's dirty line with the wrong or no MECID, the data would be encrypted with another Realm's key and become unreadable, or readable by the wrong Realm.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>Realm A writes with MECID 0x0012; the line is evicted later during Realm B's activity. The write-back must still carry 0x0012.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Data corruption at the encryption point. With GDI, MECID mismatches in SA and NSP must be masked so data never leaks between contexts.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.6.2–A4.6.3, p.82–83</li><li><span class="kind illus">Illustrative</span>MECID values</li></ul></div></article>
+
+      <article class="wcard" data-g="qos"><div class="meta"><span>Region &amp; QoS</span><span>§A4.7.2 p.84</span></div><h3>AxREGION constant within 4 KB</h3><p class="rule">The region identifier must not change within any 4 KB space.</p>
+        <div class="part"><span class="l l-why">Why</span><p>Bursts never cross 4 KB, so a region that is constant per 4 KB is constant per burst. The Subordinate can select its logical interface once per request.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A decoder that maps region 1 to 0x9000_0000–0x9000_07FF (2 KB) would violate this: a 4 KB-aligned burst could start in region 1 and run into region 0.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>The Subordinate applies one region's behaviour (say, read-only) to data meant for another.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.7.2, p.84</li><li><span class="kind illus">Illustrative</span>map</li></ul></div></article>
+
+      <article class="wcard" data-g="qos"><div class="meta"><span>Region &amp; QoS</span><span>§A4.8.1 p.86</span></div><h3>Ordering beats QoS</h3><p class="rule">Pick the higher QoS only when no AXI ordering rule already decides the order.</p>
+        <div class="part"><span class="l l-why">Why</span><p>QoS is a performance hint; ordering is correctness. A high-QoS read must not overtake a same-ID read whose data the Manager expects first.</p></div>
+        <div class="part ex"><span class="l l-ex">Real-time example</span><p>A display controller (QoS 14) and a CPU (QoS 4) both target DDR. The arbiter favours the display, but within the display's own same-ID stream it keeps request order.</p></div>
+        <div class="part brk"><span class="l l-brk">If you break it</span><p>Reordering same-ID traffic for QoS returns data out of order to a Manager that relies on ID ordering.</p></div>
+        <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A4.8.1, p.86</li><li><span class="kind illus">Illustrative</span>QoS values</li></ul></div></article>
+    </div>
+  </div>
+</section>
+
+<section id="live">
+  <div class="wrap">
+    <h2>9 · Live scenarios</h2>
+    <p class="sub">"M" rows are the Manager-side interface, "S" rows the interface into the Subordinate, with an interconnect or buffer between them. Shaded columns are the cycles each step describes.</p>
+    <div class="viewer">
+      <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+      <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+      <div class="scroller" id="wave"></div>
+      <div class="steps">
+        <div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+        <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14px">Cycle positions are illustrative; the spec fixes what may happen, not when.</p>
+  </div>
+</section>
+
+<section id="silicon">
+  <div class="wrap">
+    <h2>10 · Real silicon: what the theory turns into</h2>
+    <div class="twocol">
+      <div class="tbl-wrap">
+        <table>
+          <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind bg">Background</span> a common way processors map Armv8 translation-table attributes to AxCACHE; check your CPU's TRM for its exact mapping.</caption>
+          <thead><tr><th>Page attribute (Armv8)</th><th>Typical AxCACHE</th><th>Used for</th></tr></thead>
+          <tbody>
+            <tr><td>Device-nGnRnE</td><td class="mono">0000</td><td>Strongly ordered registers</td></tr>
+            <tr><td>Device-nGnRE (and other Device types)</td><td class="mono">0001</td><td>Most peripheral registers</td></tr>
+            <tr><td>Normal Non-cacheable</td><td class="mono">0011</td><td>Frame buffers, DMA buffers</td></tr>
+            <tr><td>Normal Write-Through</td><td class="mono">AR 1110 / AW 0110</td><td>Rare in modern systems</td></tr>
+            <tr><td>Normal Write-Back RWA</td><td class="mono">1111</td><td>Ordinary memory</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>What each component actually implements</h3>
+        <ul class="tight">
+          <li><strong>Interconnect write buffer:</strong> responds early only when AWCACHE[0] = 1; merges only when AWCACHE[1] = 1. <span class="ref">§A4.2.1–A4.2.2, p.68–70</span></li>
+          <li><strong>System cache:</strong> looks up when [3:2] ≠ 0, allocates by hint, tags by PAS (and stores MECID). <span class="ref">§A4.2.3, p.70 · §A4.5.3, p.79 · §A4.6.2, p.83</span></li>
+          <li><strong>Width converter:</strong> keeps Non-modifiable shape unless downsizing forces a change. <span class="ref">§A4.2.2, p.69</span></li>
+          <li><strong>Firewall / TZC:</strong> checks AxPROT[1] or AxPAS and AxPRIV per region. <span class="ref">§A4.5, p.77 · <span class="kind bg">Background</span></span></li>
+          <li><strong>DDR controller:</strong> schedules by AxQOS, drives QoS accept from queue occupancy. <span class="ref">§A4.8, p.86–87</span></li>
+        </ul>
+      </div>
+    </div>
+    <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead>
+        <tbody>
+          <tr><td>Interrupt fires before the device saw its config write</td><td>Driver relied on BRESP of a Device Bufferable write.</td><td class="ref">§A4.2.1, p.68 · §A4.3.5, p.75</td></tr>
+          <tr><td>Peripheral FIFO loses entries</td><td>Peripheral mapped Normal: reads prefetched, writes merged.</td><td class="ref">§A4.3.1, p.71–72 · §A4.4.1, p.76</td></tr>
+          <tr><td>Stale data after DMA</td><td>CPU maps buffer cacheable, DMA writes Non-cacheable, no cache maintenance.</td><td class="ref">§A4.3.2, p.74</td></tr>
+          <tr><td>Torn 64-bit register reads</td><td>Downsizer split a Non-modifiable read without care for the register.</td><td class="ref">§A4.2.2, p.69</td></tr>
+          <tr><td>Cache returns wrong data on a lookup-less read</td><td>Cache skipped lookup for "No-Allocate" reads.</td><td class="ref">§A4.2.3, p.70</td></tr>
+          <tr><td>Secure data visible to Non-secure software</td><td>Cache or buffer tags omit AxPROT[1]/AxPAS.</td><td class="ref">§A4.5.3, p.79</td></tr>
+          <tr><td>Writes stuck in a merge buffer under polling</td><td>Merge resets drain timer.</td><td class="ref">§A4.3.4, p.75</td></tr>
+          <tr><td>Exclusive fails after width conversion</td><td>Converter changed total bytes of an exclusive.</td><td class="ref">§A4.2.2, p.69</td></tr>
+          <tr><td>Peripheral hangs the bus on a bad access</td><td>Peripheral stops responding instead of completing.</td><td class="ref">§A4.1, p.67 · §A4.4.1, p.76</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="changes">
+  <div class="wrap">
+    <h2>11 · What changed from AXI3 and AXI4 to Issue L</h2>
+    <div class="tbl-wrap cmp">
+      <table>
+        <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI3 / AXI4</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>AxCACHE meaning</td><td class="then"><strong>AXI3:</strong> [0] Bufferable, [1] Cacheable, [2] Read-Allocate, [3] Write-Allocate, same on AR and AW; RA/WA must be 0 if C is 0. <strong>AXI4:</strong> [1] renamed Modifiable (function unchanged); RA/WA redefined so the "other" bit means "might be allocated by another transaction".</td><td>Bits named per channel: AR [2] Allocate, [3] Other Allocate; AW [2] Other Allocate, [3] Allocate. Same bit values as AXI4.</td><td class="ref">H.c §A4.2–A4.3, p.A4-63–A4-66 · §A4.2, p.68</td></tr>
+          <tr><td>Memory type encodings</td><td class="then">AXI4 introduced the named types; AXI3 encodings shown in brackets as legal alternatives.</td><td>The same table; bracketed values "permitted but not preferred".</td><td class="ref">H.c §A4.4, Table A4-5, p.A4-69 · Table A4.4, p.71</td></tr>
+          <tr><td>Device ordering</td><td class="then">AXI4 added: Device transactions with the same ID to the same Subordinate are ordered. Not an explicit AXI3 requirement.</td><td>Part of the ordering model (IDs &amp; Ordering guide).</td><td class="ref">H.c §A4.8, p.A4-76 · §A5.3, p.93</td></tr>
+          <tr><td>Non-modifiable fixed fields</td><td class="then">Table A4-2: address, size, length, burst, lock type, protection type.</td><td>Table A4.3: address, size, length, burst, and AxPROT, AxNSE, AxPAS, AxINST, AxPRIV. AxLOCK is listed under Modifiable's "must not change".</td><td class="ref">H.c Table A4-2, p.A4-64 · Table A4.3, p.69 · §A4.2.2, p.70</td></tr>
+          <tr><td>Bufferable on writes</td><td class="then">AXI3: Bufferable may delay the write any number of cycles.</td><td>The response means the data reached its final destination only when Bufferable is 0 <em>and</em> AWCACHE[3:2] are 0 (corrected in Issue L; a cacheable write can be answered by a cache).</td><td class="ref">H.c p.A4-63 · §A4.2.1, p.68 · Table B4.3, p.312</td></tr>
+          <tr><td>Protection</td><td class="then">AxPROT[2:0]: privileged, Non-secure, instruction. NS "can be treated as an additional address bit".</td><td>AxPROT kept, plus AxNSE for RME (Issue J); new option AxPRIV/AxINST/AxPAS (Issue L) with up to six PAS values.</td><td class="ref">H.c §A4.7, p.A4-75 · §A4.5, p.77–80 · Tables B4.1, B4.3</td></tr>
+          <tr><td>RME, MEC, GDI</td><td class="then">Not present.</td><td>RME (Issue J), MEC (Issue K), GDI (Issue L).</td><td class="ref">Tables B4.1–B4.3, p.307–311</td></tr>
+          <tr><td>QoS and Region</td><td class="then">Added in AXI4 ("AMBA 4 additional signaling"). QoS accept was an AMBA 5 feature.</td><td>Same signals; presence properties QOS_Present, REGION_Present, QoS_Accept.</td><td class="ref">H.c §A8.1–A8.2, p.A8-102–A8-103 · §E1.6, p.E1-360 · §A4.7–A4.8, p.84–88</td></tr>
+          <tr><td>CACHE_Present</td><td class="then">Not a property.</td><td>CACHE_Present decides whether AxCACHE exists (clarified Issue K).</td><td class="ref">Table A4.2, p.68 · Table B4.2, p.309</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="verify">
+  <div class="wrap">
+    <h2>12 · Verification</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Assertions</h3>
+        <ul class="tight">
+          <li>AxCACHE is one of the Table A4.4 values for its channel (no reserved encodings). <span class="ref">Table A4.4, p.71</span></li>
+          <li>Interconnect: a Non-modifiable request leaves with the same ADDR, SIZE, LEN, BURST, PROT/PAS/NSE/INST/PRIV; AxCACHE differs at most in bit 0 going 1→0. <span class="ref">§A4.2.2, p.69</span></li>
+          <li>Interconnect: any output request has the same 4 KB page as its input. <span class="ref">§A4.2.2, p.70</span></li>
+          <li>Interconnect: AxLOCK and protection never change. <span class="ref">§A4.2.2, p.70</span></li>
+          <li>Buffer: no early BRESP when AWCACHE[0] = 0 and AWCACHE[3:2] = 0. <span class="ref">§A4.2.1, p.68</span></li>
+          <li>PROT_Present ⇒ no AxPAS, no AxINST/AxPRIV. AxPAS ∉ {6, 7}; SA/NSP only with GDI_Support. <span class="ref">§A4.5.1, p.77 · Table A4.7, p.79</span></li>
+          <li>AxMECID = 0 for Secure, Non-secure, Root; DVM Complete MECID = 0. <span class="ref">Table A4.14, p.82 · p.83</span></li>
+          <li>AxREGION constant across a 4 KB space (for decoders). <span class="ref">§A4.7.2, p.84</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>SVA sketch and checker ideas</h3>
+<pre>// legal ARCACHE values
+a_arcache: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  ARVALID |-&gt; ARCACHE inside {4'b0000, 4'b0001, 4'b0010, 4'b0011,
+    4'b1010, 4'b1110, 4'b0110, 4'b1011, 4'b1111, 4'b0111});
+
+// early write response only for Bufferable (scoreboard check):
+// if resp_source == BUFFER then awcache[0] == 1 || awcache[3:2] != 0</pre>
+        <ul class="tight" style="margin-top:8px">
+          <li>Scoreboard through an interconnect: record each input request's attributes, match outputs, and check the permitted transformations per AxCACHE.</li>
+          <li>Memory model with a "visibility" timestamp: for Device NB, BRESP must come after the write is visible at the endpoint.</li>
+          <li>Mixed-attribute tests that deliberately create software protocol errors: check no deadlock and no corruption outside the 4 KB region.</li>
+        </ul>
+        <p class="src"><span class="sl">Spec</span>Table A4.4, p.71 · §A4.2.1, p.68 · §A4.4.1, p.76</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Functional coverage</h3>
+      <ul class="tight">
+        <li>All 10 legal AR and 10 legal AW AxCACHE values × burst type × Length &gt; 16.</li>
+        <li>Each memory type × response source (endpoint vs buffer) × read forwarding.</li>
+        <li>AxPROT 8 values (or AxPAS 6 values × PRIV × INST) × MECID zero/non-zero.</li>
+        <li>QoS: all 16 values; accept level crossing while requests wait; region 0–15 including unsupported ones.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="quiz">
+  <div class="wrap">
+    <h2>13 · Test yourself</h2>
+    <p class="sub">Use the decoders above to check your answers. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>What do the four AxCACHE bits mean, and which two swap between AR and AW? <span class="lvl">Basic</span></summary><div><p>[0] Bufferable, [1] Modifiable on both. On AR, [2] Allocate and [3] Other Allocate; on AW, [2] Other Allocate and [3] Allocate.</p><p class="src"><span class="sl">Spec</span>§A4.2, p.68</p></div></details>
+    <details><summary>Device Non-bufferable vs Device Bufferable: what's the difference? <span class="lvl">Basic</span></summary><div><p>Only for writes: Device Bufferable may get its response from an intermediate point and must reach the destination in a timely manner. Reads are identical: data from the final destination. Both are Non-modifiable, no prefetch, no merge.</p><p class="src"><span class="sl">Spec</span>§A4.3.1, p.71–72</p></div></details>
+    <details><summary>What may an interconnect do to a Modifiable transaction, and what may it never do? <span class="lvl">Basic</span></summary><div><p>Split, merge, fetch more on reads, write a larger range with strobes, change address/size/length/burst, change AxCACHE without reducing visibility, change ID and QoS. Never: change AxLOCK or protection attributes, cross into another 4 KB space, or split a single-copy-atomic access.</p><p class="src"><span class="sl">Spec</span>§A4.2.2, p.69–70</p></div></details>
+    <details><summary>When must a transaction be looked up in a cache? <span class="lvl">Basic</span></summary><div><p>Whenever AxCACHE[3:2] is not 0b00. Allocation is only a hint; lookup is a requirement.</p><p class="src"><span class="sl">Spec</span>§A4.2.3, p.70</p></div></details>
+    <details><summary>A driver needs to know that its last eight posted register writes reached the device. How? <span class="lvl">Intermediate</span></summary><div><p>Issue the writes Device Bufferable, then one Device Non-bufferable write with the same AXI ID to the same device. Its response comes from the device and, through same-ID ordering, implies the earlier writes are visible.</p><p class="src"><span class="sl">Spec</span>§A4.3.5, p.75</p></div></details>
+    <details><summary>ARCACHE = 0b1010. What memory type is it? <span class="lvl">Intermediate</span></summary><div><p>Write-Through No-Allocate, or equally Write-Through Write-Allocate: on a read the write-allocate hint has no effect, so Table A4.4 gives both the same ARCACHE. It must be looked up and allocation is not recommended for this read.</p><p class="src"><span class="sl">Spec</span>Table A4.4, p.71 · §A4.3.1, p.72–73</p></div></details>
+    <details><summary>Can a Non-modifiable transaction ever be split? <span class="lvl">Intermediate</span></summary><div><p>Yes, in two cases: Length greater than 16 (into shorter bursts with adjusted addresses), and when downsizing below Size makes it unavoidable. An exclusive Non-modifiable access may also change Size and Length if the total bytes stay the same.</p><p class="src"><span class="sl">Spec</span>§A4.2.2, p.69</p></div></details>
+    <details><summary>What is a software protocol error and what must the system guarantee? <span class="lvl">Intermediate</span></summary><div><p>Accesses to one location with mismatched shareability or cacheability. Data may be corrupted, but only within that 4 KB region, and the system must not deadlock; transactions must keep progressing.</p><p class="src"><span class="sl">Spec</span>§A4.4.1, p.76</p></div></details>
+    <details><summary>How is Realm PAS signalled with AxPROT, and with AxPAS? <span class="lvl">Advanced</span></summary><div><p>AxPROT[1] = 1 with AxNSE = 1 (needs RME_Support and PROT_Present), or AxPAS = 0b011. An interface has one set or the other, not both.</p><p class="src"><span class="sl">Spec</span>Table A4.7, p.79 · §A4.5.1, p.77</p></div></details>
+    <details><summary>Under GDI, a cache holds a System Agent PAS line tagged MECID 5. A partial write with MECID 9 to that line arrives. What happens? <span class="lvl">Advanced</span></summary><div><p>The cached data is masked to an IMPLEMENTATION SPECIFIC value (all ones recommended), the partial write is merged into it, and the cached MECID becomes 9. A read with a mismatched MECID returns masked data.</p><p class="src"><span class="sl">Spec</span>§A4.6.3, p.83</p></div></details>
+    <details><summary>How did AxCACHE change from AXI3 to AXI4 to Issue L? <span class="lvl">Advanced</span></summary><div><p>AXI3: Bufferable, Cacheable, Read-Allocate, Write-Allocate, same positions on both channels. AXI4: bit 1 renamed Modifiable (same function) and RA/WA redefined so the opposite-direction bit means "might be allocated by another transaction"; lookup needed if [3:2] ≠ 0. Issue L: same encodings, bits named Allocate/Other Allocate per channel; Bufferable meaning on writes corrected.</p><p class="src"><span class="sl">Spec</span>H.c §A4.2–A4.3, p.A4-63–A4-66 · §A4.2, p.68 · Table B4.3, p.312</p></div></details>
+    <details><summary>Why must AxREGION be constant within 4 KB, and who generates it? <span class="lvl">Advanced</span></summary><div><p>Because no burst crosses 4 KB, a per-4 KB constant region is constant for the whole burst. The interconnect's address decoder generates it for a Subordinate with multiple logical interfaces; otherwise it is the default 0.</p><p class="src"><span class="sl">Spec</span>§A4.7.2, p.84</p></div></details>
+  </div>
+</section>
+
+<section id="refs">
+  <div class="wrap">
+    <h2>14 · Spec reference index</h2>
+    <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>§A4.1</td><td>Subordinate types</td><td class="num">67</td><td>1, 2, 8, 10</td></tr>
+          <tr><td>§A4.2, Tables A4.1–A4.2</td><td>Memory attributes; AxCACHE; CACHE_Present</td><td class="num">68</td><td>3, 4, 11</td></tr>
+          <tr><td>§A4.2.1</td><td>Bufferable, AxCACHE[0]</td><td class="num">68–69</td><td>3, 8, 9, 10, 12</td></tr>
+          <tr><td>§A4.2.2, Table A4.3</td><td>Modifiable, AxCACHE[1]</td><td class="num">69–70</td><td>3, 8, 9, 10, 11, 12, 13</td></tr>
+          <tr><td>§A4.2.3</td><td>Allocate and Other Allocate</td><td class="num">70</td><td>3, 8, 10, 13</td></tr>
+          <tr><td>§A4.3, Table A4.4</td><td>Memory types; encodings</td><td class="num">71</td><td>3, 5, 9, 11, 12, 13</td></tr>
+          <tr><td>§A4.3.1</td><td>Memory type requirements</td><td class="num">71–74</td><td>1, 3, 5, 9, 10, 13</td></tr>
+          <tr><td>§A4.3.2–A4.3.3</td><td>Mismatched and changing memory attributes</td><td class="num">74</td><td>5, 8, 10</td></tr>
+          <tr><td>§A4.3.4</td><td>Transaction buffering</td><td class="num">74–75</td><td>8, 9, 10</td></tr>
+          <tr><td>§A4.3.5</td><td>Example use of Device memory types</td><td class="num">75</td><td>8, 9, 10, 13</td></tr>
+          <tr><td>§A4.4</td><td>Protocol errors</td><td class="num">76</td><td>5, 8, 10, 12, 13</td></tr>
+          <tr><td>§A4.5.1, Tables A4.5–A4.6</td><td>Signaling for protection attributes</td><td class="num">77</td><td>4, 6, 12, 13</td></tr>
+          <tr><td>§A4.5.2</td><td>Privileged and Instruction attributes</td><td class="num">78</td><td>4, 6</td></tr>
+          <tr><td>§A4.5.3, Table A4.7</td><td>Physical address space</td><td class="num">79</td><td>4, 6, 8, 10, 12, 13</td></tr>
+          <tr><td>§A4.5.4–A4.5.5, Tables A4.8–A4.9</td><td>RME; Granular Data Isolation</td><td class="num">79–80</td><td>6</td></tr>
+          <tr><td>§A4.6, Tables A4.10–A4.14</td><td>Memory Encryption Contexts</td><td class="num">81–83</td><td>4, 6, 8, 12, 13</td></tr>
+          <tr><td>§A4.7, Tables A4.15–A4.16</td><td>Multiple region interfaces</td><td class="num">84–85</td><td>4, 7, 8, 9, 12, 13</td></tr>
+          <tr><td>§A4.8, Tables A4.17–A4.20</td><td>QoS signaling; QoS acceptance</td><td class="num">86–88</td><td>1, 4, 7, 8, 9, 10</td></tr>
+          <tr><td>§A5.3</td><td>Request ordering</td><td class="num">93</td><td>11</td></tr>
+          <tr><td>Tables B4.1–B4.3</td><td>Revisions</td><td class="num">307–312</td><td>3, 11, 13</td></tr>
+          <tr><td>Glossary</td><td>"in a timely manner"</td><td class="num">316</td><td>5, 8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c</h3>
+    <div class="tbl-wrap refidx">
+      <table>
+        <thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead>
+        <tbody>
+          <tr><td>§A4.2</td><td>AXI3 memory attribute signaling</td><td class="num">A4-63</td><td>3, 11, 13</td></tr>
+          <tr><td>§A4.3</td><td>AXI4 changes to memory attribute signaling</td><td class="num">A4-64–A4-66</td><td>3, 11, 13</td></tr>
+          <tr><td>§A4.4, Table A4-5</td><td>Memory types</td><td class="num">A4-69</td><td>11</td></tr>
+          <tr><td>§A4.7</td><td>Access permissions</td><td class="num">A4-75</td><td>8, 11</td></tr>
+          <tr><td>§A4.8</td><td>Legacy considerations</td><td class="num">A4-76</td><td>11</td></tr>
+          <tr><td>§A8.1–A8.2</td><td>QoS signaling; multiple region signaling</td><td class="num">A8-102–A8-103</td><td>11</td></tr>
+          <tr><td>§E1.6</td><td>QoS Accept signaling</td><td class="num">E1-360</td><td>11</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<div class="wrap"><nav class="pager" aria-label="Guides"><a class="pv" href="bursts-addressing.html"><small>← Previous guide</small><strong>Bursts &amp; Addressing</strong></a><a class="nx" href="ids-ordering.html"><small>Next guide →</small><strong>IDs &amp; Ordering</strong></a><a class="all" href="../index.html">All guides and the request map</a></nav></div></main>
+<footer><div class="wrap">Built from ARM IHI 0022 Issue L, Chapter A4, with Appendix B4; AXI3/AXI4 comparisons from Issue H.c Chapters A4, A8 and E1. For sign-off, check the spec at the cited page.</div></footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  function at(n, s, labels) { var a = []; for (var i = 0; i < n; i++) a.push(""); labels.forEach(function (l, k) { a[s + k] = l; }); return a; }
+
+  window.PAGE = {
+    CW: 50,
+    dirName: { lp: "Manager", pl: "Subordinate", ic: "Interconnect", cfg: "Property" },
+    dirCls: { ic: "sb", cfg: "sb" },
+    groups: [["all", "All"], ["cache", "Memory attributes"], ["prot", "Protection"], ["rme", "RME and MEC"], ["reg", "Region and QoS"]],
+    sigs: [
+      ["cache", "AWCACHE, ARCACHE [3:0]", "lp", "bus", "Memory type of the request", "[0] Bufferable, [1] Modifiable; [2]/[3] Allocate and Other Allocate, swapped between AR and AW. Default 0x0 (Device Non-bufferable).", "Table A4.1, p.68"],
+      ["cache", "CACHE_Present", "cfg", "bool", "AxCACHE signals exist", "Default True. Clarified in Issue K.", "Table A4.2, p.68 · Table B4.2, p.309"],
+      ["prot", "AWPROT, ARPROT [2:0]", "lp", "bus", "[0] privileged, [1] Non-secure, [2] instruction", "Default 0b000. Superseded in Issue L by AxPRIV, AxINST and AxPAS; an interface uses one set or the other.", "Table A4.5, p.77 · §A4.5.2, p.78"],
+      ["prot", "AWPRIV, ARPRIV", "lp", "level", "Privileged access", "Same meaning as AxPROT[0]. Present when INSTPRIV_Present.", "Table A4.5, p.77"],
+      ["prot", "AWINST, ARINST", "lp", "level", "Instruction access (a hint)", "Same meaning as AxPROT[2]. Recommended LOW unless known to be an instruction fetch.", "Table A4.5, p.77 · §A4.5.2, p.78"],
+      ["prot", "AWPAS, ARPAS [PAS_WIDTH-1:0]", "lp", "bus", "Physical address space", "0 Secure, 1 Non-secure, 2 Root, 3 Realm, 4 System Agent, 5 Non-secure Protected. Default all zeros (Secure).", "Table A4.5, p.77 · Table A4.7, p.79"],
+      ["rme", "AWNSE, ARNSE", "lp", "level", "Extends AxPROT[1] to Root and Realm", "Only with RME_Support and PROT_Present.", "Table A4.5, p.77 · Table A4.7, p.79"],
+      ["rme", "AWMECID, ARMECID [15:0]", "lp", "bus", "Memory Encryption Context ID", "Must be 0 for Secure, Non-secure and Root; any value for Realm, SA and NSP. Preserved by components that pass requests on.", "Table A4.11, p.81 · Table A4.14, p.82 · §A4.6.2, p.83"],
+      ["rme", "RME_Support, GDI_Support, MEC_Support", "cfg", "bool", "Which RME extensions an interface carries", "All default False. GDI needs RME and PAS_WIDTH 3; MEC needs RME.", "Tables A4.8–A4.10, p.79–81"],
+      ["reg", "AWREGION, ARREGION [3:0]", "ic", "bus", "Which of up to 16 decoded regions", "Produced by an interconnect's address decode; constant within any 4 KB space. Default 0x0.", "Table A4.16, p.84 · §A4.7.2, p.84–85"],
+      ["reg", "AWQOS, ARQOS [3:0]", "lp", "bus", "QoS identifier, higher is more important (recommended)", "Interconnects often overwrite it from registers. Default 0x0.", "Table A4.17, p.86"],
+      ["reg", "VAWQOSACCEPT, VARQOSACCEPT [3:0]", "pl", "bus", "Lowest QoS accepted without delay", "Not tied to any channel handshake. Requests below it may wait a long time, but not forever (recommended).", "Table A4.19, p.87"]
+    ],
+
+    wgroups: [["all", "All"], ["buf", "Bufferable"], ["mod", "Modifiable"], ["alloc", "Allocation & types"], ["err", "Errors & changes"], ["prot", "Protection"], ["qos", "Region & QoS"]],
+
+    scenarios: [
+      {
+        id: "devb", tab: "Device B + NB", title: "Making Device Bufferable writes visible: end with a Device Non-bufferable write",
+        desc: "A driver posts two Device Bufferable writes to a peripheral, then one Device Non-bufferable write with the same AWID to the same peripheral. An interconnect buffer answers the Bufferable ones early. The last response only comes from the peripheral, and AXI ordering means it implies the first two have landed.",
+        ref: "§A4.3.1, p.71 · §A4.3.5, p.75",
+        n: 16, gaps: [],
+        sig: [
+          { name: "M AWVALID", d: "lp", t: "bit", v: bits(16, [[1, 3]]) },
+          { name: "M AWCACHE", d: "lp", t: "bus", v: seq([["", 1], ["0001 DevB", 1], ["0001 DevB", 1], ["0000 DevNB", 1], ["", 12]]) },
+          { name: "M BVALID", d: "sb", t: "bit", v: bits(16, [[3, 4], [13, 13]]) },
+          { name: "B from", d: "sb", t: "note", v: at(16, 3, ["buffer", "buffer", "", "", "", "", "", "", "", "", "peripheral"]) },
+          { name: "S AWVALID", d: "lp", t: "bit", v: bits(16, [[5, 5], [7, 7], [9, 9]]) },
+          { name: "S AW", d: "lp", t: "bus", v: at(16, 5, ["w1", "", "w2", "", "w3"]) },
+          { name: "S BVALID", d: "pl", t: "bit", v: bits(16, [[7, 7], [9, 9], [12, 12]]) },
+          { name: "visible at peripheral", d: "sb", t: "note", v: at(16, 7, ["w1", "", "w2", "", "", "w3"]) }
+        ],
+        steps: [
+          { r: [1, 3], t: "Two posted writes, then a fence-like write", x: "w1 and w2 are Device Bufferable (AWCACHE 0b0001); w3 is Device Non-bufferable (0b0000). All three use the same AWID and target the same peripheral.", s: "Table A4.4, p.71 · §A4.3.5, p.75" },
+          { r: [3, 4], t: "Early responses for w1 and w2", x: "An interconnect write buffer accepts w1 and w2 and returns BRESP immediately. That is allowed: a Bufferable write may get its response from an intermediate point. The driver now knows nothing about when the peripheral sees them.", w: "Early responses let the CPU retire stores to slow peripherals without stalling for the full round trip.", s: "§A4.2.1, p.68 · §A4.3.1, p.71" },
+          { r: [5, 12], t: "The buffer drains in order", x: "The buffer must push Bufferable writes to the final destination in a timely manner. w3 cannot be answered early, so it is forwarded too, behind w1 and w2 (same ID, same Subordinate).", s: "§A4.3.1, p.71 · §A4.3.4, p.74" },
+          { r: [13, 13], t: "One response that covers all three", x: "The response to w3 comes from the peripheral. Because same-ID writes to the same Subordinate are ordered, w1 and w2 are visible there too. This works only for writes with the same ID to the same device.", w: "This is the AXI way to know a posted register write has really landed, for example before enabling an interrupt that depends on it.", s: "§A4.3.5, p.75" }
+        ]
+      },
+      {
+        id: "merge", tab: "Modifiable merge", title: "An interconnect merges two Modifiable writes",
+        desc: "A Manager writes 0x100–0x10F and then 0x110–0x11F as two Normal Non-cacheable Bufferable bursts. A write-combining buffer merges them into one 32-byte burst. A Device write behind them passes through untouched.",
+        ref: "§A4.2.2, p.69–70 · §A4.3.1, p.72",
+        n: 13, gaps: [],
+        sig: [
+          { name: "M AWVALID", d: "lp", t: "bit", v: bits(13, [[1, 3]]) },
+          { name: "M AW", d: "lp", t: "bus", v: seq([["", 1], ["0x100 16B", 1], ["0x110 16B", 1], ["0x200 Dev", 1], ["", 9]]) },
+          { name: "M AWCACHE", d: "lp", t: "bus", v: seq([["", 1], ["0011", 2], ["0000", 1], ["", 9]]) },
+          { name: "S AWVALID", d: "lp", t: "bit", v: bits(13, [[6, 6], [8, 8]]) },
+          { name: "S AW", d: "lp", t: "bus", v: at(13, 6, ["0x100 32B", "", "0x200 Dev"]) },
+          { name: "S AWCACHE", d: "lp", t: "bus", v: at(13, 6, ["0011", "", "0000"]) },
+          { name: "buffer", d: "sb", t: "note", v: seq([["", 2], ["combine", 3], ["drain", 2], ["pass", 2], ["", 4]]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "Two adjacent Modifiable writes", x: "AWCACHE 0b0011 is Normal Non-cacheable Bufferable. Modifiable means the system may split, merge, widen or prefetch.", s: "Table A4.4, p.71 · §A4.2.2, p.69–70" },
+          { r: [6, 6], t: "One burst downstream", x: "The buffer emits one 32-byte write. Address, Size, Length and Burst may all change; AxLOCK and the protection attributes may not. It must not create an access to another 4 KB space, nor split a single-copy-atomic access.", w: "Merging cuts request traffic and DRAM overhead, which is why frame buffers and DMA destinations are mapped Normal Non-cacheable rather than Device.", s: "§A4.2.2, p.70" },
+          { r: [3, 8], t: "Device passes as it is", x: "The Device write (0b0000) is Non-modifiable: no split, no merge, same Size, Length, Burst, address and protection. Only Bufferable → Non-bufferable, the ID and QoS may change.", s: "§A4.2.2 and Table A4.3, p.69" },
+          { r: [2, 5], t: "Merging must not hold writes forever", x: "A merging buffer must not let new writes reset its drain timer. Otherwise a CPU polling-writes one address could keep it in the buffer indefinitely.", s: "§A4.3.4, p.75" }
+        ]
+      },
+      {
+        id: "fwd", tab: "Read from a write", title: "Normal Non-cacheable Bufferable read served from a write in flight",
+        desc: "A write to 0x400 sits in an interconnect buffer. A read to the same address arrives. With Bufferable reads (ARCACHE 0b0011) the buffer may return the newest buffered data; with 0b0010 it must go to memory.",
+        ref: "§A4.2.1, p.69 · §A4.3.1, p.72 · §A4.3.4, p.74–75",
+        n: 12, gaps: [],
+        sig: [
+          { name: "M AW (0x400)", d: "lp", t: "bit", v: bits(12, [[1, 1]]) },
+          { name: "M BVALID", d: "sb", t: "bit", v: bits(12, [[2, 2]]) },
+          { name: "M AR (0x400)", d: "lp", t: "bit", v: bits(12, [[3, 3], [7, 7]]) },
+          { name: "M ARCACHE", d: "lp", t: "bus", v: at(12, 3, ["0011", "", "", "", "0010"]) },
+          { name: "M RVALID", d: "sb", t: "bit", v: bits(12, [[4, 4], [10, 10]]) },
+          { name: "R from", d: "sb", t: "note", v: at(12, 4, ["buffer", "", "", "", "", "", "memory"]) },
+          { name: "S AR", d: "lp", t: "bit", v: bits(12, [[8, 8]]) },
+          { name: "S AW (drain)", d: "lp", t: "bit", v: bits(12, [[6, 6]]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "A buffered write", x: "The write is accepted and answered by an intermediate buffer.", s: "§A4.3.1, p.72" },
+          { r: [3, 4], t: "Bufferable read: forwarded from the buffer", x: "ARCACHE 0b0011 lets the read be served by a write still progressing to its destination, as long as it is the most recent version. The data must not be cached for a later read, and getting it does not mean the write has reached memory.", s: "§A4.2.1, p.69 · §A4.3.1, p.72" },
+          { r: [6, 10], t: "Non-bufferable read: must go to memory", x: "ARCACHE 0b0010 requires read data from the final destination. The read is sent to memory, after the buffered write drains to it.", w: "This is how software asks for a value that reflects what memory holds, not what is still in flight.", s: "§A4.2.1, p.69 · §A4.3.1, p.72" },
+          { r: [3, 10], t: "Forwarding can't last forever", x: "A buffer that forwards reads must make sure the read eventually goes to its destination; repeatedly reading the data must not reset its timeout.", s: "§A4.3.4, p.75" }
+        ]
+      },
+      {
+        id: "qos", tab: "QoS accept", title: "A memory controller raises its QoS accept level",
+        desc: "The controller's low-priority queue fills, so it raises VARQOSACCEPT to 8. A Manager with two requests waiting sends the QoS 12 one first; the QoS 2 request waits until the level drops.",
+        ref: "§A4.8.1, p.86 · §A4.8.2, p.87",
+        n: 13, gaps: [],
+        sig: [
+          { name: "VARQOSACCEPT", d: "pl", t: "bus", v: seq([["0", 2], ["8", 7], ["0", 4]]) },
+          { name: "ARVALID", d: "lp", t: "bit", v: bits(13, [[3, 3], [10, 10]]) },
+          { name: "ARREADY", d: "pl", t: "bit", v: bits(13, [[0, 12]]) },
+          { name: "ARQOS", d: "lp", t: "bus", v: at(13, 3, ["12", "", "", "", "", "", "", "2"]) },
+          { name: "Manager queue", d: "sb", t: "note", v: seq([["", 2], ["QoS12, QoS2", 1], ["QoS2 waits", 7], ["", 3]]) }
+        ],
+        steps: [
+          { r: [2, 3], t: "Accept level rises; the Manager picks the high-QoS request", x: "VARQOSACCEPT = 8 means requests with QoS 8 or more will be accepted without delay. The Manager issues QoS 12 first.", w: "Without the hint, the Manager might put QoS 2 on the bus and block the AR channel while the controller stalls it.", s: "§A4.8.2, p.87" },
+          { r: [4, 9], t: "Low-QoS request held back", x: "QoS 2 is below the accept level, so it may be stalled for a long time; the Manager keeps it queued instead. It is still allowed to send it, for example to avoid starvation.", s: "§A4.8.2, p.87" },
+          { r: [10, 10], t: "Level drops", x: "VARQOSACCEPT returns to 0 and the QoS 2 request goes out. The QoS accept signals are synchronous to ACLK but tied to no channel handshake.", s: "§A4.8.2, p.87" }
+        ]
+      },
+      {
+        id: "region", tab: "Region", title: "One Subordinate port, two logical interfaces",
+        desc: "A peripheral has registers at 0x4000_0000 and a data window at 0x9000_0000, both through one AXI port. The interconnect's decoder drives AWREGION so the peripheral never decodes high address bits.",
+        ref: "§A4.7.2, p.84–85",
+        n: 9, gaps: [],
+        sig: [
+          { name: "M AWVALID", d: "lp", t: "bit", v: bits(9, [[1, 1], [3, 3]]) },
+          { name: "M AWADDR", d: "lp", t: "bus", v: at(9, 1, ["0x4000_0010", "", "0x9000_0200"]) },
+          { name: "S AWVALID", d: "lp", t: "bit", v: bits(9, [[2, 2], [4, 4]]) },
+          { name: "S AWREGION", d: "sb", t: "bus", v: at(9, 2, ["0 regs", "", "1 data"]) },
+          { name: "S AWADDR[11:0]", d: "sb", t: "bus", v: at(9, 2, ["0x010", "", "0x200"]) }
+        ],
+        steps: [
+          { r: [1, 2], t: "Register access", x: "The decoder matches 0x4000_0000 and drives AWREGION 0. The peripheral uses AWREGION and the low address bits only.", s: "§A4.7.2, p.84" },
+          { r: [3, 4], t: "Data window access", x: "0x9000_0200 decodes to AWREGION 1. The region must stay constant within any 4 KB space, so a burst never changes region midway.", w: "AxREGION is not a new address space; it only saves the Subordinate a decode. It must appear only downstream of an address decode.", s: "§A4.7.2, p.84–85" },
+          { r: [5, 8], t: "Unsupported regions", x: "If the peripheral implements fewer than 16 regions it must still respond correctly to the others, for example with an error response or by aliasing. Same-ID responses across regions must stay in order.", s: "§A4.7.2, p.84–85" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact, part, plw) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = part === "wave" ? 4 : part === "labels" ? plw : (compact ? 150 : LW);
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    if (part === "labels") {
+      var ls = "<svg viewBox=\"0 0 " + lw + " " + H + "\" width=\"" + lw + "\" height=\"" + H + "\" aria-hidden=\"true\">", mc = Math.floor((lw - 14) / 7.25);
+      rows.forEach(function (r, ri) {
+        var y0 = TOP + ri * RH, mid = (y0 + 6 + y0 + RH - 7) / 2, nm = r.name;
+        if (nm.length > mc) nm = nm.slice(0, mc - 1) + "…";
+        ls += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\"><title>" + esc(r.name) + "</title>" + esc(nm) + "</text>";
+      });
+      return ls + "</svg>";
+    }
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      if (part !== "wave") s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      var longest = 0; s.sig.forEach(function (r) { longest = Math.max(longest, r.name.length); });
+      var narrow = waveEl.clientWidth && waveEl.clientWidth < 560;
+      var plw = Math.max(64, Math.min(Math.round(longest * 7.25 + 18), narrow ? Math.round(waveEl.clientWidth * 0.36) : 230));
+      waveEl.innerHTML = "<div class=\"wfix\">" + renderWave(s, null, false, "labels", plw) + "</div>" + renderWave(s, st.r, false, "wave");
+      var vis = waveEl.clientWidth - plw, a = 4 + st.r[0] * CW, b = 4 + (st.r[1] + 1) * CW;
+      if (vis > 0) waveEl.scrollLeft = (b - a >= vis) ? Math.max(0, a - 6) : Math.max(0, Math.min(a - CW * 0.6, (a + b) / 2 - vis / 2 + 0));
+      if (vis > 0 && b <= vis - 6) waveEl.scrollLeft = 0;
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { go(step); }, 150); });
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- tables: label cells so they can stack into cards on phones ---------- */
+  (function () {
+    function label(t) {
+      var ths = t.querySelectorAll("thead th"); if (!ths.length) return;
+      var heads = Array.prototype.map.call(ths, function (h) { return h.textContent.trim(); });
+      Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] !== undefined) td.setAttribute("data-label", heads[i]); });
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("table"), function (t) {
+      if (!t.tHead || t.querySelector("[rowspan],[colspan]") || t.classList.contains("nostack")) return;
+      t.classList.add("stack"); label(t);
+      if (window.MutationObserver && t.tBodies[0]) new MutationObserver(function () { label(t); }).observe(t.tBodies[0], { childList: true });
+    });
+  })();
+
+  /* ---------- section nav: mark the section being read; series nav: show the current guide ---------- */
+  (function () {
+    var here = document.querySelector(".series .here"), ser = $("series");
+    if (here && ser && ser.scrollWidth > ser.clientWidth) ser.scrollLeft = Math.max(0, here.offsetLeft - ser.offsetLeft - 60);
+    var bar = document.querySelector("nav.toc .wrap");
+    if (!bar || !window.IntersectionObserver) return;
+    var links = {}, cur = null;
+    Array.prototype.forEach.call(bar.querySelectorAll("a[href^='#']"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = links[e.target.id]; if (!a || a === cur) return;
+        if (cur) cur.removeAttribute("aria-current");
+        cur = a; a.setAttribute("aria-current", "true");
+        bar.scrollLeft = Math.max(0, a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2);
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(links).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+
+</script>
+<script>(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  if (!$("mt-bits")) return;
+  var T = {
+    DevNB: ["Device Non-bufferable", "Response and read data from the final destination; Non-modifiable; no prefetch; no write merging."],
+    DevB: ["Device Bufferable", "Write response may come from an intermediate point, write must reach the destination in a timely manner; read data from the final destination; Non-modifiable; no prefetch; no merging."],
+    NNCNB: ["Normal Non-cacheable Non-bufferable", "Response and read data from the final destination; Modifiable; writes may merge."],
+    NNCB: ["Normal Non-cacheable Bufferable", "Early write response allowed, timely visibility; read data from the destination or from the newest in-flight write (not cached for later); Modifiable; writes may merge."],
+    WTNA: ["Write-Through No-Allocate", "Early write response, timely visibility; reads may hit an intermediate cached copy; Modifiable; prefetch and merge allowed; cache lookup required; allocation not recommended."],
+    WTRA: ["Write-Through Read-Allocate", "As Write-Through No-Allocate; allocation recommended for reads, not for writes."],
+    WTWA: ["Write-Through Write-Allocate", "As Write-Through No-Allocate; allocation recommended for writes, not for reads."],
+    WTRWA: ["Write-Through Read and Write-Allocate", "As Write-Through No-Allocate; allocation recommended for reads and writes."],
+    WBNA: ["Write-Back No-Allocate", "Early write response; writes need not reach the final destination; reads may hit a cached copy; Modifiable; prefetch and merge allowed; lookup required; allocation not recommended."],
+    WBRA: ["Write-Back Read-Allocate", "As Write-Back No-Allocate; allocation recommended for reads, not for writes."],
+    WBWA: ["Write-Back Write-Allocate", "As Write-Back No-Allocate; allocation recommended for writes, not for reads."],
+    WBRWA: ["Write-Back Read and Write-Allocate", "As Write-Back No-Allocate; allocation recommended for reads and writes."]
+  };
+  var AR = { "0000": [["DevNB"]], "0001": [["DevB"]], "0010": [["NNCNB"]], "0011": [["NNCB"]], "1010": [["WTNA"], ["WTWA"]], "1110": [["WTRA"], ["WTRWA"]], "0110": [["WTRA", 1]], "1011": [["WBNA"], ["WBWA"]], "1111": [["WBRA"], ["WBRWA"]], "0111": [["WBRA", 1]] };
+  var AW = { "0000": [["DevNB"]], "0001": [["DevB"]], "0010": [["NNCNB"]], "0011": [["NNCB"]], "0110": [["WTNA"], ["WTRA"]], "1110": [["WTWA"], ["WTRWA"]], "1010": [["WTWA", 1]], "0111": [["WBNA"], ["WBRA"]], "1111": [["WBWA"], ["WBRWA"]], "1011": [["WBWA", 1]] };
+  var bitsEl = $("mt-bits"), ch = "AR", v = [0, 0, 0, 0];
+  function draw() {
+    var key = "" + v[3] + v[2] + v[1] + v[0];
+    var map = ch === "AR" ? AR : AW, hit = map[key];
+    var allocBit = ch === "AR" ? 2 : 3, otherBit = ch === "AR" ? 3 : 2;
+    Array.prototype.forEach.call(bitsEl.querySelectorAll("button"), function (b) {
+      var i = +b.getAttribute("data-b");
+      b.setAttribute("aria-pressed", v[i] ? "true" : "false");
+      b.querySelector(".v").textContent = v[i];
+      var nm = i === 0 ? "Bufferable" : i === 1 ? "Modifiable" : (i === allocBit ? "Allocate" : "Other Allocate");
+      b.querySelector(".n").textContent = nm;
+    });
+    var h = "<p class=\"mono\" style=\"margin:0\">" + ch + "CACHE = 0b" + key + "</p>";
+    if (!hit) h += "<p style=\"color:var(--bad);margin:4px 0 0\"><strong>Reserved.</strong> Not a memory type in Table A4.4.</p>";
+    else hit.forEach(function (m) {
+      h += "<div class=\"mt-hit\"><strong>" + T[m[0]][0] + "</strong>" + (m[1] ? " <span class=\"pill\">permitted, not preferred</span>" : "") + "<p>" + T[m[0]][1] + "</p></div>";
+    });
+    if (hit && hit.length > 1) h += "<p class=\"note-s\">On " + ch + " this encoding stands for both types: the hint bit that differs between them is about the other direction, so it has no effect on this request.</p>";
+    var look = (v[3] || v[2]);
+    h += "<ul class=\"tight\" style=\"font-size:14px\"><li>Cache lookup " + (look ? "required (AxCACHE[3:2] ≠ 0b00)" : "not required (AxCACHE[3:2] = 0b00)") + ".</li>" +
+      "<li>" + (v[1] ? "Modifiable: may be split, merged, widened or prefetched." : "Non-modifiable: Size, Length, Burst, address and protection fixed; only Bufferable→Non-bufferable, ID and QoS may change.") + "</li></ul>";
+    h += "<p class=\"note-s\">AXI3 reading of the same bits: [0] Bufferable, [1] Cacheable, [2] Read-Allocate, [3] Write-Allocate on both channels (H.c Table A4-1, p.A4-63).</p>";
+    $("mt-out").innerHTML = h;
+  }
+  Array.prototype.forEach.call(bitsEl.querySelectorAll("button"), function (b) {
+    b.addEventListener("click", function () { var i = +b.getAttribute("data-b"); v[i] = v[i] ? 0 : 1; draw(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ch]"), function (b) {
+    b.addEventListener("click", function () {
+      ch = b.getAttribute("data-ch");
+      Array.prototype.forEach.call(document.querySelectorAll("[data-ch]"), function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      draw();
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-mt]"), function (b) {
+    b.addEventListener("click", function () { var k = b.getAttribute("data-mt"); v = [+k[3], +k[2], +k[1], +k[0]]; draw(); });
+  });
+  draw();
+
+  /* protection decoder */
+  function prot() {
+    var mode = $("pr-mode").value, out = "";
+    var P = ["Secure", "Non-secure", "Root", "Realm", "System Agent", "Non-secure Protected", "reserved", "reserved"];
+    var need = ["-", "-", "RME_Support", "RME_Support", "GDI_Support", "GDI_Support", "-", "-"];
+    if (mode === "prot") {
+      var p = parseInt($("pr-prot").value, 2), nse = $("pr-nse").checked ? 1 : 0;
+      var pas = ((p >> 1) & 1) | (nse << 1);
+      out = "<li>" + ((p & 1) ? "Privileged" : "Unprivileged") + " (AxPROT[0])</li><li>" + ((p & 4) ? "Instruction" : "Data") + " access, a hint (AxPROT[2])</li><li>PAS: <strong>" + P[pas] + "</strong> (AxPROT[1] = " + ((p >> 1) & 1) + ", AxNSE = " + nse + ")" + (need[pas] !== "-" ? " · needs " + need[pas] : "") + "</li>";
+    } else {
+      var pa = parseInt($("pr-pas").value, 10);
+      out = "<li>" + ($("pr-priv").checked ? "Privileged" : "Unprivileged") + " (AxPRIV)</li><li>" + ($("pr-inst").checked ? "Instruction" : "Data") + " access (AxINST)</li><li>PAS: <strong>" + P[pa] + "</strong> (AxPAS = 0b" + ("00" + pa.toString(2)).slice(-3) + ")" + (need[pa] !== "-" ? " · needs " + need[pa] : "") + (pa > 5 ? " · reserved value" : "") + "</li>";
+    }
+    $("pr-out").innerHTML = out;
+    $("pr-a").style.display = mode === "prot" ? "" : "none";
+    $("pr-b").style.display = mode === "prot" ? "none" : "";
+  }
+  ["pr-mode", "pr-prot", "pr-nse", "pr-pas", "pr-priv", "pr-inst"].forEach(function (id) { $(id).addEventListener("change", prot); });
+  prot();
+})();
+</script>
+</body>
+</html>

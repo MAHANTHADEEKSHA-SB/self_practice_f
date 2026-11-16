@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AXI Caches &amp; CMOs Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* AXI field guides. Color encodes who drives a signal: amber = Manager (class lp), teal = Subordinate (class pl),
+   violet = credits, interface-level signals and annotations (class sb). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #5a6676;
+  --line: #d8dee6;
+  --pl: #0d6f8f;
+  --lp: #a85a07;
+  --sb: #6a4cc0;
+  --hl: rgba(13, 111, 143, 0.10);
+  --code: #eef1f5;
+  --bad: #b3261e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1319;
+    --surface: #151c24;
+    --ink: #e5eaf0;
+    --muted: #93a0af;
+    --line: #2a3541;
+    --pl: #52b9d8;
+    --lp: #efa452;
+    --sb: #a891f2;
+    --hl: rgba(82, 185, 216, 0.14);
+    --code: #1c2530; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1319;
+  --surface: #151c24;
+  --ink: #e5eaf0;
+  --muted: #93a0af;
+  --line: #2a3541;
+  --pl: #52b9d8;
+  --lp: #efa452;
+  --sb: #a891f2;
+  --hl: rgba(82, 185, 216, 0.14);
+  --code: #1c2530; --bad: #ff8a80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+a { color: var(--pl); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--pl); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+.lp { color: var(--lp); }
+.pl { color: var(--pl); }
+.sbc { color: var(--sb); }
+
+header.top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.hero { padding: 36px 0 26px; display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); text-transform: uppercase; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4.4vw, 44px); font-weight: 600; }
+h2 { font-size: 28px; font-weight: 600; }
+h3 { font-size: 19px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0; font-size: 17px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+
+nav.toc {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-top: 6px; padding-bottom: 6px; }
+nav.toc a {
+  white-space: nowrap; text-decoration: none; color: var(--muted);
+  font-size: 14px; padding: 6px 10px; border-radius: 6px;
+}
+nav.toc a:hover { background: var(--hl); color: var(--ink); }
+
+section { padding: 44px 0 8px; }
+section > .wrap > h2 { margin-bottom: 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+p { max-width: 70ch; }
+
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 8px; align-content: start;
+}
+.card p { margin: 0; }
+.card .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tagline { font-family: var(--font-mono); font-size: 12px; color: var(--pl); }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.sig { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+td.num, th.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.dir { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.chip {
+  font-family: var(--font-body); font-size: 13px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--pl); border-color: var(--pl); color: var(--surface); }
+
+/* Waveform viewer */
+.viewer { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 8px 8px 0; }
+.tab {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: var(--muted);
+  font-family: var(--font-body); font-size: 14px; padding: 8px 12px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--bg); color: var(--ink); border-color: var(--line); font-weight: 500; }
+.vhead { padding: 16px 18px 6px; display: grid; gap: 4px; background: var(--bg); }
+.vhead p { margin: 0; color: var(--muted); font-size: 14px; }
+.scroller { overflow-x: auto; background: var(--bg); padding: 4px 8px 12px; }
+.scroller svg { display: block; }
+.wl { font-family: var(--font-mono); font-size: 12px; }
+.wl.lp { fill: var(--lp); } .wl.pl { fill: var(--pl); } .wl.sb { fill: var(--sb); } .wl.note { fill: var(--muted); }
+.wv { fill: none; stroke-width: 1.6; }
+.wv.lp { stroke: var(--lp); } .wv.pl { stroke: var(--pl); } .wv.sb { stroke: var(--sb); }
+.bus.lp { stroke: var(--lp); fill: color-mix(in srgb, var(--lp) 10%, transparent); }
+.bus.pl { stroke: var(--pl); fill: color-mix(in srgb, var(--pl) 10%, transparent); }
+.bus.sb { stroke: var(--sb); fill: color-mix(in srgb, var(--sb) 12%, transparent); }
+.bus { stroke-width: 1.3; }
+.bt { font-family: var(--font-mono); font-size: 10.5px; fill: var(--ink); }
+.nt { font-family: var(--font-body); font-size: 11px; fill: var(--muted); font-style: italic; }
+.notebox { fill: var(--surface); stroke: var(--line); }
+.grid-l { stroke: var(--line); stroke-width: 1; }
+.cyc { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.hlr { fill: var(--hl); }
+.gapbg { fill: var(--bg); }
+.gapz { stroke: var(--muted); stroke-width: 1.2; fill: none; }
+.idle { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line); }
+.stepbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--font-body); font-size: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.dots { display: flex; gap: 6px; margin-left: 4px; flex-wrap: wrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-family: var(--font-mono); font-size: 12px; cursor: pointer; padding: 0; }
+.dot[aria-current="step"] { background: var(--pl); color: var(--surface); border-color: var(--pl); }
+.cycles { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stepbody { padding: 0 18px 18px; display: grid; gap: 6px; }
+.stepbody h3 { font-size: 18px; }
+.stepbody p { margin: 0; }
+.why { border-left: 3px solid var(--sb); padding-left: 12px; color: var(--muted); font-size: 15px; }
+
+.mini { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mini .card .scroller { padding: 0; background: transparent; }
+
+pre { background: var(--code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; margin: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--pl); border-radius: 8px; padding: 14px 16px; }
+.callout p { margin: 0; }
+.twocol { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+ul.tight { margin: 0; padding-left: 20px; }
+ul.tight li { margin: 4px 0; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: 13px; }
+
+/* Rationale cards: rule, why, real-time example, what breaks */
+.whys { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+.wcard[hidden] { display: none; }
+.wcard .meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.wcard .meta span:last-child { text-transform: none; letter-spacing: 0; }
+.wcard h3 { font-size: 18px; }
+.wcard p { margin: 0; font-size: 15px; }
+.wcard .rule { font-size: 14.5px; background: var(--code); border-radius: 6px; padding: 8px 10px; }
+.wcard .part { display: grid; gap: 3px; }
+.wcard .l { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+.l-why { color: var(--pl); }
+.l-ex { color: var(--sb); }
+.l-brk { color: var(--bad); }
+.wcard .ex { background: var(--bg); border-left: 3px solid var(--sb); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.wcard .brk { border-left: 3px solid var(--bad); padding-left: 10px; }
+.wcard .brk p { color: var(--muted); font-size: 14.5px; }
+.wcard ul { margin: 2px 0 0; padding-left: 18px; font-size: 14.5px; }
+.wcard ul li { margin: 2px 0; }
+.callout ul.tight { margin-top: 6px; font-size: 15px; }
+.note-s { color: var(--muted); font-size: 15px; }
+
+/* Spec references */
+.src { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0; max-width: none; }
+.src .sl { font-family: var(--font-body); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--pl); margin-right: 6px; }
+.ref { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+td.ref { min-width: 150px; }
+figcaption .ref { display: block; margin-top: 6px; }
+.kind { display: inline-block; font-family: var(--font-mono); font-size: 10px; line-height: 16px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 1px; }
+.kind.spec { color: var(--pl); }
+.kind.derived { color: var(--sb); }
+.kind.illus { color: var(--lp); }
+.kind.bg { color: var(--muted); }
+.wcard .checks { border-top: 1px dashed var(--line); padding-top: 10px; }
+.wcard .checks ul { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 5px; font-size: 13px; color: var(--muted); }
+.wcard .checks li { margin: 0; }
+.l-src { color: var(--muted); }
+.refidx td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+@media (max-width: 480px) {
+  .wrap { padding: 0 16px; }
+  h2 { font-size: 24px; }
+  .cycles { margin-left: 0; width: 100%; }
+}
+
+/* ---- shared additions for the field-guide series ---- */
+.series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.series a { color: var(--muted); text-decoration: none; }
+.series a:hover { color: var(--ink); text-decoration: underline; }
+.series .here { color: var(--ink); font-weight: 500; }
+.legend .sw.sq { width: 12px; height: 12px; border-radius: 3px; }
+.diff td:first-child { font-weight: 500; white-space: nowrap; }
+.diff td.same { color: var(--muted); }
+.stage { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.stage div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.stage div b { display: block; font-family: var(--font-display); font-size: 15px; }
+.stage div.on { border-color: var(--pl); background: var(--hl); }
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "–"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
+.bitfield { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-family: var(--font-mono); font-size: 11.5px; background: var(--surface); }
+.bitfield > div { border-right: 1px solid var(--line); padding: 6px 4px; text-align: center; display: grid; gap: 2px; align-content: start; }
+.bitfield > div:last-child { border-right: 0; }
+.bitfield .bn { color: var(--muted); font-size: 10px; }
+.bitfield .f { font-weight: 500; }
+.bitfield .f.lp { color: var(--lp); } .bitfield .f.pl { color: var(--pl); } .bitfield .f.sb { color: var(--sb); }
+.flow { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.flow > div { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.flow > div:last-child { border-bottom: 0; }
+.flow .n { font-family: var(--font-mono); font-size: 12px; color: var(--surface); background: var(--pl); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; }
+.flow p { margin: 0; font-size: 15px; }
+.grid > *, .twocol > *, .whys > *, .mini > * { min-width: 0; }
+code { overflow-wrap: anywhere; }
+
+
+/* ---- AXI additions ---- */
+.ver { display:inline-block; font-family:var(--font-mono); font-size:10.5px; line-height:16px; padding:0 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted); white-space:nowrap; vertical-align:1px; }
+.ver.new { color:var(--pl); border-color:var(--pl); }
+.ver.old { color:var(--lp); border-color:var(--lp); }
+.ver.gone { color:var(--bad); border-color:var(--bad); }
+.cmp td:first-child { font-weight:500; min-width:150px; }
+.cmp td.then { color:var(--muted); }
+.dep text { font-family:var(--font-mono); font-size:12px; }
+.kbd { font-family:var(--font-mono); font-size:12px; border:1px solid var(--line); border-radius:4px; padding:0 5px; background:var(--code); }
+
+/* ---- phone and touch upgrades ---- */
+.calc, .tool { grid-template-columns: minmax(0, 1fr); }
+.calc > *, .tool > * { min-width: 0; }
+#wave { display: flex; align-items: flex-start; padding-left: 0; scroll-behavior: auto; }
+#wave > svg { flex: none; }
+.wfix { position: sticky; left: 0; z-index: 1; flex: none; background: var(--bg); border-right: 1px solid var(--line); }
+nav.toc a[aria-current] { background: var(--hl); color: var(--ink); font-weight: 500; }
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 28px; }
+.pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-decoration: none; color: var(--ink); }
+.pager a:hover { border-color: var(--pl); }
+.pager a small { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pager a.nx { text-align: right; grid-column: 2; }
+.pager a strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+.pager .all { grid-column: 1 / -1; text-align: center; font-size: 14px; padding: 10px; }
+@media (pointer: coarse) {
+  .chip, .tab, .btn, nav.toc a { min-height: 40px; display: inline-flex; align-items: center; }
+  .dot { min-width: 38px; min-height: 38px; }
+  summary { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (max-width: 640px) {
+  .hero { padding-top: 18px; padding-bottom: 16px; }
+  .lede { font-size: 15.5px; }
+  .series { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 4px 14px; padding: 6px 0; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .series::-webkit-scrollbar { display: none; }
+  .series > * { flex: none; }
+  figure { overflow-x: auto; }
+  figure svg { min-width: 560px; max-width: none; }
+  figure svg.dep, figure svg.lmap { min-width: 700px; }
+  figcaption { position: sticky; left: 0; }
+  table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: auto; }
+  table.stack tr { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.stack tr:last-child { border-bottom: 0; }
+  table.stack td { padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  table.stack td:empty { display: none; }
+  table.stack td::before { content: attr(data-label); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+  table.stack td:first-child { font-size: 15px; font-weight: 600; }
+  table.stack td:first-child::before { display: none; }
+  table.stack caption { display: block; }
+  table.stack td.dir, table.stack td.dir + td { display: inline-block; margin-right: 10px; vertical-align: middle; }
+  table.stack td.dir::before, table.stack td.dir + td::before { display: none; }
+  .pager { grid-template-columns: 1fr; }
+  .pager a.nx { grid-column: 1; text-align: left; }
+  .bitfield { grid-auto-columns: minmax(22px, 1fr); overflow-x: auto; }
+}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap hero">
+    <div class="series" id="series"><span>AXI Field Guides (Issue L):</span><a href="../index.html"><strong>All guides</strong></a><a href="channels-handshake.html">Channels &amp; Handshake</a><a href="bursts-addressing.html">Bursts &amp; Addressing</a><a href="request-attributes.html">Request Attributes</a><a href="ids-ordering.html">IDs &amp; Ordering</a><a href="responses-exclusives-atomics.html">Responses, Exclusives &amp; Atomics</a><span class="here">Caches &amp; CMOs</span><a href="qualifiers-debug-user.html">Qualifiers, Debug &amp; User</a><a href="untranslated-dvm.html">Untranslated &amp; DVM</a><span title="coming soon" style="opacity:.55">Power, Reset &amp; Protection</span><span title="coming soon" style="opacity:.55">Signals &amp; Interface Classes</span><span title="coming soon" style="opacity:.55">Interconnect &amp; Bridges</span><span title="coming soon" style="opacity:.55">AXI-Stream</span></div>
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · Chapters A8 and A9 · caches, Domains and cache maintenance</div>
+    <h1>AXI Caches &amp; CMOs Field Guide</h1>
+    <p class="lede">AXI doesn't snoop, but it lives in systems full of caches. This guide covers how AXI requests say which caches they must touch (Domains plus memory type), I/O coherency, caching Shareable lines in a system cache, the hint transactions (Prefetch, stash, deallocating reads, InvalidateHint), and cache maintenance operations, including write-with-CMO, persistence, PoPA and PoPS. It includes cache-lookup decoders, waveforms, verification checks, interview questions and what changed from AXI4 and ACE.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>tie-offs, properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ and p. = section and printed page of ARM IHI 0022 <strong>Issue L</strong>. "H.c" = Issue H.c, where caches and CMOs belonged to ACE (Part D) and AMBA 5 features (Part E). Tags: <span class="kind spec">Spec</span> <span class="kind derived">Derived</span> <span class="kind illus">Illustrative</span> <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#where">2 · Where caches sit</a><a href="#dom">3 · Domains</a><a href="#signals">4 · Signals</a><a href="#lines">5 · Cache lines &amp; Shareable lines</a><a href="#hints">6 · Hints</a><a href="#cmo">7 · CMOs</a><a href="#rationale">8 · Why each rule</a><a href="#live">9 · Live scenarios</a><a href="#silicon">10 · Real silicon</a><a href="#changes">11 · AXI4/ACE → Issue L</a><a href="#verify">12 · Verification</a><a href="#quiz">13 · Test yourself</a><a href="#refs">14 · Spec index</a>
+</div></nav>
+
+<style>
+  .tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; }
+  .tool .in { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+  .tool label { display: grid; gap: 4px; font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .tool select { font-family: var(--font-body); font-size: 14px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+</style>
+
+<main>
+<section id="why"><div class="wrap">
+  <h2>1 · Why AXI needs to talk about caches</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Visibility</div><h3>Somebody must see the write</h3><p>Data can be cached at many points. Every request must say how far it has to go to be visible to the agents that care, without AXI itself snooping.</p><p class="src"><span class="sl">Spec</span>§A8.1, p.132 · §A8.3, p.134</p></div>
+    <div class="card"><div class="tagline">Three coherency styles</div><h3>Non-cacheable, software, hardware</h3><p>AMBA supports Non-cacheable sharing, software coherency with cache maintenance, and hardware coherency with snooping (CHI). AXI supports all three through a Domain on every location.</p><p class="src"><span class="sl">Spec</span>§A8.3, p.134</p></div>
+    <div class="card"><div class="tagline">I/O coherency</div><h3>AXI agents next to CHI caches</h3><p>A DMA or NIC on AXI can read and write coherently through a CHI interconnect, without having a snoopable cache of its own.</p><p class="src"><span class="sl">Spec</span>§A8.4, p.137</p></div>
+    <div class="card"><div class="tagline">Performance</div><h3>Hints and stashing</h3><p>Prefetch, stash and deallocation hints move data to where it will be used, or out of the way, without affecting correctness.</p><p class="src"><span class="sl">Spec</span>§A8.6–A8.9, p.142–152</p></div>
+  </div>
+</div></section>
+
+<section id="where"><div class="wrap">
+  <h2>2 · Where the caches sit</h2>
+  <figure>
+    <svg viewBox="0 0 860 300" role="img" aria-label="Fully coherent agents connect over CHI to a coherent interconnect; an I/O coherent agent connects over AXI; a non-coherent agent with a Non-shareable cache connects over AXI to a non-coherent interconnect; both reach a system cache over AXI, then memory.">
+      <g font-family="var(--font-body)" font-size="12.5">
+        <rect x="20" y="16" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--ink)"/><text x="34" y="38" font-weight="600" fill="var(--ink)">Fully coherent CPU</text><text x="34" y="56" fill="var(--muted)">Shareable cache</text>
+        <rect x="190" y="16" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--ink)"/><text x="204" y="38" font-weight="600" fill="var(--ink)">Fully coherent CPU</text><text x="204" y="56" fill="var(--muted)">Shareable cache</text>
+        <rect x="360" y="16" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--lp)"/><text x="374" y="38" font-weight="600" fill="var(--lp)">I/O coherent agent</text><text x="374" y="56" fill="var(--muted)">no Shareable cache</text>
+        <rect x="620" y="16" width="200" height="56" rx="8" fill="var(--surface)" stroke="var(--lp)"/><text x="634" y="38" font-weight="600" fill="var(--lp)">Non-coherent agent</text><text x="634" y="56" fill="var(--muted)">Non-shareable cache</text>
+        <text x="80" y="92" fill="var(--muted)" font-family="var(--font-mono)">CHI</text><text x="250" y="92" fill="var(--muted)" font-family="var(--font-mono)">CHI</text><text x="420" y="92" fill="var(--lp)" font-family="var(--font-mono)">AXI</text><text x="700" y="92" fill="var(--lp)" font-family="var(--font-mono)">AXI</text>
+        <line x1="95" y1="72" x2="95" y2="110" stroke="var(--muted)"/><line x1="265" y1="72" x2="265" y2="110" stroke="var(--muted)"/><line x1="435" y1="72" x2="435" y2="110" stroke="var(--lp)"/><line x1="720" y1="72" x2="720" y2="140" stroke="var(--lp)"/>
+        <rect x="20" y="110" width="490" height="50" rx="8" fill="var(--hl)" stroke="var(--pl)"/><text x="40" y="140" font-weight="600" fill="var(--ink)">Coherent interconnect and cache (CHI): snoops peer caches</text>
+        <rect x="620" y="140" width="200" height="40" rx="8" fill="var(--surface)" stroke="var(--ink)"/><text x="634" y="165" fill="var(--ink)">Non-coherent interconnect</text>
+        <line x1="265" y1="160" x2="265" y2="210" stroke="var(--lp)"/><line x1="720" y1="180" x2="720" y2="210" stroke="var(--lp)"/>
+        <text x="275" y="192" fill="var(--lp)" font-family="var(--font-mono)">AXI</text><text x="730" y="200" fill="var(--lp)" font-family="var(--font-mono)">AXI</text>
+        <rect x="20" y="210" width="800" height="36" rx="8" fill="var(--surface)" stroke="var(--pl)"/><text x="40" y="233" font-weight="600" fill="var(--ink)">System cache: visible to all agents (in-line for everyone)</text>
+        <rect x="20" y="256" width="800" height="32" rx="8" fill="var(--surface)" stroke="var(--muted)"/><text x="40" y="277" fill="var(--ink)">Memory</text>
+      </g>
+    </svg>
+    <figcaption>Peer caches are reached by snooping (needs CHI); in-line caches are the ones a request passes through on its way to memory. Redrawn after Figures A8.1–A8.2.<span class="ref">Spec: §A8.1 and Figure A8.1, p.132 · §A8.4 and Figure A8.2, p.137 · §A8.3.6, p.136</span></figcaption>
+  </figure>
+</div></section>
+
+<section id="dom"><div class="wrap">
+  <h2>3 · Domains</h2>
+  <div class="grid g3">
+    <div class="card"><div class="tagline">System (AxDOMAIN 11)</div><p style="font-size:14.5px">Visible to every Manager that can access it, by never caching it: System requests are Non-cacheable. Required for Device. Simple, not fast.</p><p class="src"><span class="sl">Spec</span>§A8.3.1, p.134</p></div>
+    <div class="card"><div class="tagline">Non-shareable (00)</div><p style="font-size:14.5px">Not required to be visible to others; no hardware coherency. Sharing needs CMOs (software coherency). Clean Non-shareable lines must not be written back on eviction, and Dirty data must not be passed to another cache on a read.</p><p class="src"><span class="sl">Spec</span>§A8.3.2, p.134</p></div>
+    <div class="card"><div class="tagline">Shareable (01 or 10)</div><p style="font-size:14.5px">Visible to all Managers that also mark it Shareable: snoop local caches, look up caches that may hold others' Shareable data. INCR or WRAP only, not FIXED. 0b10 recommended; older issues used 01 Inner / 10 Outer Shareable.</p><p class="src"><span class="sl">Spec</span>§A8.3.3–A8.3.4, p.134–135</p></div>
+  </div>
+  <div class="tool" style="margin-top:16px">
+    <h3 style="margin:0">Which caches does a request touch?</h3>
+    <div class="in">
+      <label>Memory type<select id="w-type"><option value="dev">Device (AxCACHE[3:1] = 000)</option><option value="nc">Normal Non-cacheable (001)</option><option value="c" selected>Normal Cacheable ([3:2] ≠ 00)</option></select></label>
+      <label>Domain<select id="w-dom"><option value="NSH">Non-shareable</option><option value="SH" selected>Shareable</option><option value="SYS">System</option></select></label>
+      <label>Request<select id="w-kind"><option value="n">read or write</option><option value="cmo">CMO</option></select></label>
+    </div>
+    <p id="w-out" style="margin:0;font-size:15px"></p>
+  </div>
+  <div class="callout" style="margin-top:12px">
+    <p><strong>No AxDOMAIN on the interface?</strong> Non-cacheable requests are assumed System. For Cacheable requests Issue L gives two different answers: the first paragraph of §A8.3.4 says Non-shareable, the list after Table A8.5 says Shareable. CMOs without AxDOMAIN are assumed Non-shareable. Pin this down in your system's integration spec rather than relying on either sentence.</p>
+    <p class="src"><span class="kind derived">Derived</span> §A8.3.4, p.135 (both statements) · §A9.3, p.156 · Table B4.3, p.312</p>
+  </div>
+</div></section>
+
+<section id="signals"><div class="wrap">
+  <h2>4 · Signals and properties</h2>
+  <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead><tbody id="sigbody"></tbody></table></div>
+</div></section>
+
+<section id="lines"><div class="wrap">
+  <h2>5 · Cache lines and Shareable lines</h2>
+  <div class="twocol">
+    <div class="card"><h3>Cache line sized transactions</h3><ul class="tight" style="font-size:14.5px">
+      <li>Cache_Line_Size 16 to 2048 bytes, default 64; 64 for CHI compatibility. One common size for any system that shares caches.</li>
+      <li>A line must fit in 16 transfers or fewer on interfaces that carry line-sized transactions.</li>
+      <li>Must be line sized and Regular: ReadShared, ReadClean, CleanShared, CleanInvalid, MakeInvalid, CleanSharedPersist, ReadNoSnoop with MTE Fetch, WriteNoSnoopFull, WriteUniqueFull, WriteBackFull, WriteEvictFull, CMO, WriteZero, WriteUniqueFullStash, WriteFullCMO, StashOnceShared/Unique, Prefetch, InvalidateHint.</li>
+      <li>Size × Length = line size; writes have every strobe set.</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A8.2, Table A8.2, p.133</p></div>
+    <div class="card"><h3>Caching Shareable lines (system cache below CHI)</h3><ul class="tight" style="font-size:14.5px">
+      <li>States: Clean, Dirty, Shareable Clean, Shareable Dirty.</li>
+      <li>ReadShared (may return Dirty with OKAYDIRTY) and ReadClean (must be Clean) fill upstream caches.</li>
+      <li>WriteBackFull (Shareable Dirty evict) and WriteEvictFull (Shareable Clean evict; must never update memory).</li>
+      <li>WriteNoSnoopFull: Non-shareable full-line Dirty write, not allocated upstream. WriteUniqueFull: I/O coherent full-line write.</li>
+      <li>Shareable_Cache_Support must be False on I/O coherent interfaces; BROADCASTSHAREABLE LOW converts everything to Non-shareable equivalents (WriteEvictFull is dropped).</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A8.5, p.138–141 · §A8.4, p.137</p></div>
+  </div>
+  <div class="tool" style="margin-top:16px">
+    <h3 style="margin:0">Table A8.8: may this Opcode hit this line?</h3>
+    <div class="in">
+      <label>Opcode<select id="h-op"><option value="rd">Read*</option><option value="wr">Write*</option><option value="cs">CleanShared*</option><option value="ci">CleanInvalid* / MakeInvalid</option><option value="hint">InvalidateHint / Prefetch</option><option value="st">StashOnce*</option></select></label>
+      <label>Request Domain<select id="h-dom"><option value="NSH">Non-shareable</option><option value="SH">Shareable</option></select></label>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>Line state in the cache</th><th>Rule</th><th>Note</th></tr></thead><tbody id="h-out"></tbody></table></div>
+    <p class="src"><span class="sl">Spec</span>Table A8.8, p.138. * includes all variants of the Opcode.</p>
+  </div>
+</div></section>
+
+<section id="hints"><div class="wrap">
+  <h2>6 · Hint transactions</h2>
+  <p class="sub">All of these may be ignored or answered early without breaking correctness. That is what makes them hints.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Hint</th><th>Channels</th><th>Key rules</th><th>Spec</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>Prefetch</td><td>AW, B</td><td>AWSNOOP 01111; line sized, Regular, Normal, NSH or SH, not exclusive, unique ID. Any level may act or just answer (OKAY, DECERR, SLVERR, or TRANSFAULT with PRI). Not ordered with CMOs, so never use it to fill a managed cache. Later reads may get PREFETCHED.</td><td class="ref">§A8.6, p.142–143</td></tr>
+      <tr><td>WriteUniquePtlStash / FullStash</td><td>AW, W, B</td><td>Shareable writes that suggest allocating the line in a cache; Ptl ≤ a line, Full = line, Regular, all strobes. Without stash support, convert to WriteUniquePtl / Full.</td><td class="ref">§A8.7.1–A8.7.2, p.144–145 · Table A8.21, p.148</td></tr>
+      <tr><td>StashOnceShared / Unique</td><td>AW, B</td><td>Fetch a line into a cache (Unique: recommended to invalidate others, mind exclusive sequences). NSH or SH. Must not share an ID with outstanding non-StashOnce writes, so they can be answered at once. Basic support = StashOnceShared only, no targets.</td><td class="ref">§A8.7, p.144–148</td></tr>
+      <tr><td>Stash targets</td><td>-</td><td>AWSTASHNID (11 bits, physical interface) and AWSTASHLPID (5 bits, logical processor), each with an enable; zero and disabled on non-stash requests.</td><td class="ref">§A8.7.4, p.146</td></tr>
+      <tr><td>ReadOnceCleanInvalid / MakeInvalid</td><td>AR, R</td><td>Snapshot read, recommended to deallocate. ROCI writes back Dirty data; ROMI may discard it, use only when known safe. Neither guarantees a clean or invalidate. Convert to ReadOnce if unsupported.</td><td class="ref">§A8.8, p.149–150</td></tr>
+      <tr><td>InvalidateHint</td><td>AW, B</td><td>AWSNOOP 10010 (needs 5-bit AWSNOOP); line sized, Regular, INCR, Normal Cacheable, unique ID. Line may be dropped, write-back optional; beware exposing overwritten values.</td><td class="ref">§A8.9, p.151–152</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="cmo"><div class="wrap">
+  <h2>7 · Cache maintenance operations</h2>
+  <p class="sub">Unlike hints, a CMO must be actioned by every cache that holds the line in its scope.</p>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A9.1, p.154 · Table A9.7, p.159 · Table A9.11, p.163</caption>
+      <thead><tr><th>CMO</th><th>After it completes</th><th>AWCMO</th><th>ARSNOOP</th></tr></thead>
+      <tbody style="font-size:13.5px">
+        <tr><td>CleanShared (CS)</td><td>All copies Clean; writes observable</td><td class="mono">001</td><td class="mono">1000</td></tr>
+        <tr><td>CleanSharedPersist (CSP)</td><td>… and reached the PoP</td><td class="mono">010</td><td class="mono">1010</td></tr>
+        <tr><td>CleanSharedDeepPersist (CSDP)</td><td>… and reached the PoDP</td><td class="mono">011</td><td>-</td></tr>
+        <tr><td>CleanInvalid (CI)</td><td>All copies invalid, Dirty written to memory</td><td class="mono">000</td><td class="mono">1001</td></tr>
+        <tr><td>CleanInvalidPoPA (CIPA)</td><td>Invalid; Dirty written past the PoPA (RME)</td><td class="mono">100</td><td>-</td></tr>
+        <tr><td>CleanInvalidStorage (CIS)</td><td>Invalid; Dirty written past the PoPS (Issue L)</td><td class="mono">101</td><td>-</td></tr>
+        <tr><td>MakeInvalid (MI)</td><td>All copies invalid; Dirty data may be discarded</td><td>-</td><td class="mono">1101</td></tr>
+      </tbody></table></div>
+    <div class="flow">
+      <div><span class="n">1</span><p>A cache receiving a cacheable CMO looks up the line. <span class="ref">§A9.2, p.155</span></p></div>
+      <div><span class="n">2</span><p>A coherent interconnect receiving a Shareable CMO snoops caches that may have the line (allocated for invalidates, Dirty for cleans); needs CHI. <span class="ref">§A9.2, p.155</span></p></div>
+      <div><span class="n">3</span><p>For a clean, write back dirty data found. Recommended: Write-Through No-Allocate for writes that a CMO will follow. <span class="ref">§A9.2, p.155</span></p></div>
+      <div><span class="n">4</span><p>Wait for snoops and write-backs to complete. <span class="ref">§A9.2, p.155</span></p></div>
+      <div><span class="n">5</span><p>Respond, or forward downstream and pass back its response if a downstream cache might hold the line with an observer beyond it. <span class="ref">§A9.2, p.155 · §A9.4, p.157</span></p></div>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="k">Attributes</div><p style="font-size:14.5px">Line sized, Regular, Non-shareable or Shareable, never System (so never Device). Cacheable/Shareable for a CMO should match the location's normal attributes; allocation hints need not.</p><p class="src"><span class="sl">Spec</span>§A9.3, p.156</p></div>
+    <div class="card"><div class="k">Write with CMO</div><p style="font-size:14.5px">WritePtlCMO (≤ a line, not FIXED) and WriteFullCMO (line, Regular). The CMO part is always cacheable and Shareable, covers the whole line. May be split into the write then the CMO (same ID on AW, or after the write response).</p><p class="src"><span class="sl">Spec</span>§A9.6, p.160–162</p></div>
+    <div class="card"><div class="k">Persistence, PoPA, PoPS</div><p style="font-size:14.5px">CSP/CSDP on AW get two B responses (BCOMP, BPERSIST) in any order, or one combined. PoPA (RME) and PoPS (poison scrubbing, Issue L) have their own CMOs and tie-offs.</p><p class="src"><span class="sl">Spec</span>§A9.8–A9.10, p.164–171</p></div>
+  </div>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>8 · Why each rule exists, with real-time examples</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="dom"><div class="meta"><span>Domains</span><span>§A8.3.2 p.134</span></div><h3>Never write back a Clean Non-shareable line</h3><p class="rule">Evicting Clean Non-shareable data with a write-back is not permitted; Dirty data isn't passed between caches on a Non-shareable read.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Another Manager may have written a newer Dirty copy into a downstream cache. A Clean line arriving later would overwrite it with older data. Passing Dirty upward would create a second copy that is responsible for a write-back and could later overwrite a newer update.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A GPU L2 holds a Clean copy of 0x4000; a DMA writes 0x4000 into the system cache (now Dirty). If the GPU's eviction wrote its Clean copy back, the DMA's data would be lost.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Lost updates that look like software coherency bugs.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A8.3.2, p.134</li><li><span class="kind illus">Illustrative</span>GPU example</li></ul></div></article>
+
+    <article class="wcard" data-g="dom"><div class="meta"><span>Domains</span><span>Table A8.7 p.136</span></div><h3>Device is System; System is Non-cacheable</h3><p class="rule">Device requests must use the System Domain, and System Domain requests are Non-cacheable.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A device register must be visible to everybody immediately and must never sit in a cache. Tying Device to System, and System to Non-cacheable, makes "visible to all" a structural property rather than a promise someone has to keep.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An interrupt controller register access with AxDOMAIN = 00 is illegal; a checker should flag it before a cache tries to allocate it.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Status bits read from a stale cached copy.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A8.3.1, p.134 · Table A8.7, p.136</li></ul></div></article>
+
+    <article class="wcard" data-g="line"><div class="meta"><span>Cache lines</span><span>§A8.5.1 p.140</span></div><h3>WriteEvictFull never reaches memory</h3><p class="rule">Data from a WriteEvictFull (a Shareable Clean eviction) must not update memory, and Shareable Clean lines must not be exposed outside the Shareable Domain.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Within the Shareable Domain, another cache may hold the line Dirty with newer data. The Clean evicted copy is only useful as a cache fill; writing it to memory could overwrite newer data that hasn't been written back yet.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU evicts a Clean shared line into the system cache with WriteEvictFull; a second CPU still holds it Unique Dirty. The system cache may keep it as Shareable Clean, but must never write it to DRAM.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Stale data overwriting fresh data in memory.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A8.5.1, p.140 · Table B4.2, p.309</li></ul></div></article>
+
+    <article class="wcard" data-g="hint"><div class="meta"><span>Hints</span><span>§A8.7.5 p.147</span></div><h3>StashOnce IDs are kept apart</h3><p class="rule">A StashOnce must not share an ID with outstanding non-StashOnce write-channel transactions.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A component that doesn't support stashing should be able to answer a StashOnce instantly. If it shared an ID with a pending write, answering early would put the B responses out of order.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A NIC uses ID 7 for StashOnce and IDs 0–6 for packet writes. Any bridge can drop StashOnce with an immediate OKAY.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>An early StashOnce response overtakes a same-ID write response: an ordering violation.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A8.7.5, p.147</li><li><span class="kind illus">Illustrative</span>IDs</li></ul></div></article>
+
+    <article class="wcard" data-g="hint"><div class="meta"><span>Hints</span><span>§A8.6 p.142</span></div><h3>Prefetch isn't ordered with CMOs</h3><p class="rule">A Prefetch must not be used to signal that a line can be fetched into a managed or visible cache.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A Prefetch may be overtaken by, or overtake, a CMO for the same line. If it allocated into a cache that software manages with CMOs, stale data could reappear right after software invalidated it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Prefetch into a memory controller's row buffer is fine; prefetch into a CPU-visible system cache line that a driver is about to invalidate is not.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Software coherency silently broken by a performance feature.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A8.6, p.142 · Table B4.1, p.308</li></ul></div></article>
+
+    <article class="wcard" data-g="hint"><div class="meta"><span>Hints</span><span>§A8.9 p.151</span></div><h3>InvalidateHint can expose old data</h3><p class="rule">Because the hint may drop a Dirty line without writing it back, care is needed to avoid exposing previously overwritten values.</p>
+      <div class="part"><span class="l l-why">Why</span><p>If a scrubbing write (say, zeroing a key buffer) is still Dirty in a cache and an InvalidateHint drops it, memory still holds the old secret.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Crypto software zeroes a 64-byte key buffer, then issues InvalidateHint. Without a clean in between, DRAM still holds the key.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Security leak. Clean after the scrubbing write, or restrict the hint to non-sensitive ranges.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A8.9, p.151</li><li><span class="kind illus">Illustrative</span>crypto example</li></ul></div></article>
+
+    <article class="wcard" data-g="cmo"><div class="meta"><span>CMOs</span><span>§A9.1 p.154</span></div><h3>CMOs on the write channels</h3><p class="rule">CMOs may travel on read or write channels; write channels are recommended for new designs.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A CMO has no data to return, so B fits it naturally. On the write channels it can also be combined with a write (WritePtlCMO, WriteFullCMO) and can carry the two-response persistence protocol.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A storage controller flushing a log record to persistent memory: one WriteFullCMO with CSP instead of a write, wait for B, then a CSP on AR.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Read-channel CMOs can't express CSDP, CIPA or CIS, and can't combine with data.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A9.1, p.154 · §A9.5–A9.6, p.158–161 · Table A9.11, p.163</li></ul></div></article>
+
+    <article class="wcard" data-g="cmo"><div class="meta"><span>CMOs</span><span>§A9.8.4 p.165</span></div><h3>Two responses for persistence</h3><p class="rule">CSP and CSDP on the write channels get a Completion response and a Persist response, in either order, or both in one transfer.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Reaching persistent media can take far longer than reaching visibility. Separating them lets the interconnect free tracking at visibility and still tell software when the data is durable.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>Completion after 300 ns when the line hits the memory controller's queue; Persist after 2 µs when the NVDIMM confirms.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager that waits for "the" B and treats the first one as persistent loses data on power failure.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A9.8.4, p.165–166</li><li><span class="kind illus">Illustrative</span>timings</li></ul></div></article>
+
+    <article class="wcard" data-g="cmo"><div class="meta"><span>CMOs</span><span>§A9.10 p.170</span></div><h3>CleanInvalidStorage for poison scrubbing</h3><p class="rule">CIS cleans and invalidates every cache and buffer up to the Point of Physical Storage, so the next read comes from memory.</p>
+      <div class="part"><span class="l l-why">Why</span><p>To clear poison, software writes a good value and reads it back. If the write stayed in a cache, the read-back would "pass" while memory still has the fault. CIS forces the write all the way out and makes the read-back honest.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A server RAS daemon: write 0 to the poisoned line, WriteFullCMO with CIS, then read: still poisoned ⇒ persistent fault, retire the page.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Persistent faults misreported as fixed.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A9.10, p.170 · Table B4.3, p.312</li></ul></div></article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>9 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+      <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+  <p style="color:var(--muted);font-size:14px">Columns are illustrative steps, not exact cycles; the software-coherency tab shows phases of a whole sequence.</p>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <h2>10 · Real silicon: what the theory turns into</h2>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind bg">Background</span> typical choices; Opcode rules from Chapters A7–A9.</caption>
+    <thead><tr><th>Agent</th><th>Interface</th><th>Typical Domain and Opcodes</th></tr></thead>
+    <tbody style="font-size:14px">
+      <tr><td>CPU cluster</td><td>CHI (fully coherent)</td><td>Not AXI; its Shareable caches are the peer caches AXI agents rely on.</td></tr>
+      <tr><td>PCIe root complex, NIC, accelerator DMA</td><td>AXI, I/O coherent</td><td>Shareable ReadOnce / WriteUniquePtl / WriteUniqueFull; StashOnce or write-with-stash to put packets into a CPU's cache.</td></tr>
+      <tr><td>Display, camera</td><td>AXI, non-coherent</td><td>Non-shareable or System Normal Non-cacheable; software CMOs for shared buffers.</td></tr>
+      <tr><td>System cache (LLC)</td><td>AXI Subordinate + Manager below CHI</td><td>Shareable_Cache_Support for Shareable line states; WriteNoSnoopFull evictions to DRAM.</td></tr>
+      <tr><td>Persistent memory controller</td><td>AXI Subordinate</td><td>Persist_CMO, two-response B, PoP at the controller.</td></tr>
+    </tbody></table></div>
+  <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead><tbody>
+    <tr><td>DMA reads stale data after the CPU wrote it</td><td>Buffer Non-shareable and no CleanShared before handing over.</td><td class="ref">§A8.3.2, p.134 · §A9.11.1, p.172</td></tr>
+    <tr><td>CPU reads stale data after DMA wrote it</td><td>Invalidate issued before the DMA finished, CPU prefetched in between.</td><td class="ref">§A9.11.1, p.172–173</td></tr>
+    <tr><td>Newer data overwritten in DRAM</td><td>System cache wrote back a WriteEvictFull or a Clean Non-shareable eviction.</td><td class="ref">§A8.3.2, p.134 · §A8.5.1, p.140</td></tr>
+    <tr><td>Hang on a StashOnce through a bridge</td><td>Bridge forwarded StashOnce to a Subordinate without stash support.</td><td class="ref">Table A8.21, p.148</td></tr>
+    <tr><td>Persistent data lost on power fail</td><td>Software treated the Completion B as the Persist B.</td><td class="ref">§A9.8.4, p.165–166</td></tr>
+    <tr><td>CMO ignored by a system cache</td><td>CMO sent as Non-cacheable Non-shareable (applies to no caches).</td><td class="ref">Table A9.1, p.156</td></tr>
+    <tr><td>Coherency lost when attaching an AXI4 DMA</td><td>No AxDOMAIN on the DMA; integrator assumed the wrong default for Cacheable traffic.</td><td class="ref">§A8.3.4, p.135</td></tr>
+  </tbody></table></div>
+</div></section>
+
+<section id="changes"><div class="wrap">
+  <h2>11 · What changed from AXI4 and ACE to Issue L</h2>
+  <div class="tbl-wrap cmp"><table>
+    <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI4 / ACE / AMBA 5 features</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>Who has Domains</td><td class="then">AXI3/AXI4: no AxDOMAIN, no Opcodes. ACE and ACE-Lite added AxDOMAIN, AxSNOOP, AxBAR.</td><td>Optional AxDOMAIN on every class (Shareable_Transactions); Opcodes on AxSNOOP.</td><td class="ref">H.c §D2.1, p.D2-170 · §A8.3.4, p.135</td></tr>
+      <tr><td>AxDOMAIN 01 and 10</td><td class="then">01 Inner Shareable, 10 Outer Shareable.</td><td>Both mean Shareable; 10 recommended.</td><td class="ref">§A8.3.4, p.135</td></tr>
+      <tr><td>Full coherency</td><td class="then">ACE and ACE5: snoop channels AC/CR/CD, full cache states.</td><td>ACE and ACE5 removed; CHI recommended for fully coherent agents. AXI keeps I/O coherency (ACE5-Lite).</td><td class="ref">Table B4.1, p.307 · H.c Part D</td></tr>
+      <tr><td>Barriers</td><td class="then">ACE barrier transactions (AxBAR).</td><td>Not in the spec.</td><td class="ref">H.c §D8, p.D8-284</td></tr>
+      <tr><td>CMOs</td><td class="then">ACE/ACE-Lite CMOs on the read channels; Issue G added the option of CMOs on the write channels; H.c also defines write with cache maintenance and Persistence CMOs.</td><td>Write channels recommended; adds CIPA (RME, Issue J), CIS to PoPS (Issue L); Domain assumed Non-shareable when AxDOMAIN missing (Issue L).</td><td class="ref">H.c §D7, p.D7-266–D7-280 · Chapter A9 · Tables B4.1, B4.3</td></tr>
+      <tr><td>Stash, deallocate, prefetch</td><td class="then">AMBA 5 optional features (Part E).</td><td>Core Chapter A8; Basic stash option and InvalidateHint (Issue J).</td><td class="ref">H.c §E1.2–E1.3, §E1.16 · §A8.6–A8.9 · Table B4.1, p.307</td></tr>
+      <tr><td>Shareable lines in a system cache</td><td class="then">Not available to AXI/ACE-Lite.</td><td>ReadShared, ReadClean, WriteBackFull, WriteEvictFull with Shareable_Cache_Support (Issue J).</td><td class="ref">Table B4.1, p.307 · §A8.5, p.138</td></tr>
+      <tr><td>Line size</td><td class="then">Implicit.</td><td>Cache_Line_Size property, default 64 (Issue K).</td><td class="ref">§A8.2, p.133 · Table B4.2, p.309</td></tr>
+      <tr><td>Line-sized Opcodes</td><td class="then">Fixed attributes.</td><td>WriteZero, WriteNoSnoopFull, WritePtlCMO, WriteFullCMO may be Modifiable or Non-modifiable (Issue L).</td><td class="ref">Table B4.3, p.312</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>12 · Verification</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Assertions</h3><ul class="tight" style="font-size:14.5px">
+      <li>Legal AxSNOOP/AxDOMAIN pair (Tables A7.3–A7.4) and memory type/Domain (Table A8.7). <span class="ref">p.126–136</span></li>
+      <li>Line-sized Opcodes: Size × Length = Cache_Line_Size, Regular, all strobes. <span class="ref">§A8.2, p.133</span></li>
+      <li>CMOs: never System; no W data for stand-alone CMO; MakeInvalid never on AW. <span class="ref">§A9.3, §A9.5, p.156–159</span></li>
+      <li>Stash: target enables LOW on non-stash; NID/LPID zero when disabled; no line crossing. <span class="ref">§A8.7.2–A8.7.4, p.145–146</span></li>
+      <li>Unique ID for Prefetch, InvalidateHint; StashOnce IDs separate. <span class="ref">§A8.6.1, §A8.7.5, §A8.9.1</span></li>
+      <li>PCMO: exactly one BCOMP and one BPERSIST per CSP/CSDP (or one combined). <span class="ref">§A9.8.4, p.166</span></li>
+      <li>PREFETCHED only with RRESP_WIDTH 3, never on exclusive reads. <span class="ref">§A8.6.2, p.143</span></li></ul></div>
+    <div class="card"><h3>Scoreboarding caches</h3><ul class="tight" style="font-size:14.5px">
+      <li>Model per line: state (I, Clean, Dirty, SC, SD) plus memory value; drive Table A8.8 must/must-not hit as assertions.</li>
+      <li>For each CMO, after its response check: no in-scope copy is Dirty (cleans) or valid (invalidates), memory holds the latest write.</li>
+      <li>Software-coherency tests that follow Figure A9.3, plus negative tests that break the order to make sure the testbench notices.</li>
+      <li>Coverage: Opcode × Domain × line state; CMO type × channel; Persist response order (before, after, combined); stash with/without targets × Basic/True.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> · rules from Chapters A8–A9</p></div>
+  </div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>13 · Test yourself</h2>
+  <p class="sub"><button class="btn" id="qa-toggle" type="button" aria-pressed="false">Show all answers</button></p>
+  <details><summary>What are the three Domains and what does each guarantee? <span class="lvl">Basic</span></summary><div><p>System: visible to all, achieved by never caching (Non-cacheable; Device must use it). Non-shareable: no visibility requirement, software must use CMOs to share. Shareable: visible to all agents that mark it Shareable, via snooping and lookup.</p><p class="src"><span class="sl">Spec</span>§A8.3.1–A8.3.3, p.134</p></div></details>
+  <details><summary>What does an I/O coherent Manager do and not do? <span class="lvl">Basic</span></summary><div><p>It reads and writes Shareable data through a coherent interconnect (ReadOnce, WriteUnique*), but it can't be snooped, so it must not cache Shareable data. Shareable_Cache_Support must be False.</p><p class="src"><span class="sl">Spec</span>§A8.4, p.137</p></div></details>
+  <details><summary>Hint vs CMO: what's the difference in obligation? <span class="lvl">Basic</span></summary><div><p>Hints (Prefetch, stash, deallocating reads, InvalidateHint) may be ignored or answered early. A CMO must be actioned by every cache that holds the line in its scope.</p><p class="src"><span class="sl">Spec</span>§A8.7, p.144 · §A8.9, p.151 · §A9.1, p.154</p></div></details>
+  <details><summary>Which caches does a Normal Cacheable Non-shareable CMO apply to? A Normal Non-cacheable Shareable one? <span class="lvl">Intermediate</span></summary><div><p>In-line caches; peer caches.</p><p class="src"><span class="sl">Spec</span>Table A9.1, p.156</p></div></details>
+  <details><summary>Why may a Shareable Clean line evicted with WriteEvictFull never update memory? <span class="lvl">Intermediate</span></summary><div><p>Another cache in the Shareable Domain may hold a newer Dirty copy. Writing the Clean data to memory could overwrite data that hasn't been written back yet.</p><p class="src"><span class="sl">Spec</span>§A8.5.1, p.140</p></div></details>
+  <details><summary>Explain the two B responses for a CleanSharedPersist on AW. <span class="lvl">Intermediate</span></summary><div><p>Completion (BCOMP): observable, follows normal ordering. Persist (BPERSIST): reached the PoP, no ordering requirements. Either order, or one transfer with both set.</p><p class="src"><span class="sl">Spec</span>§A9.8.4, p.165–166</p></div></details>
+  <details><summary>Why can a StashOnce be answered immediately by a component that doesn't stash? <span class="lvl">Intermediate</span></summary><div><p>StashOnce IDs can't be shared with outstanding non-StashOnce writes, so an early response can't violate same-ID ordering, and stashing is only a hint.</p><p class="src"><span class="sl">Spec</span>§A8.7.5, p.147</p></div></details>
+  <details><summary>Describe the five stages for sharing a buffer with a non-coherent DMA. Where is the CPU's view unpredictable? <span class="lvl">Advanced</span></summary><div><p>1 coherent access; 2 clean; 3 non-coherent access; 4 invalidate; 5 coherent access. Between the clean and the invalidate, observation of the line is UNPREDICTABLE.</p><p class="src"><span class="sl">Spec</span>§A9.11.1, Figure A9.3, p.172–173</p></div></details>
+  <details><summary>A processor CMO instruction targets a Device location but must reach all caches. What does the Manager issue? <span class="lvl">Advanced</span></summary><div><p>A Normal Cacheable Shareable CMO, the most pervasive kind, because CMOs can't be System/Device.</p><p class="src"><span class="sl">Spec</span>§A9.11, p.172 · §A9.3, p.156</p></div></details>
+  <details><summary>What is the Point of Physical Storage and which CMO targets it? <span class="lvl">Advanced</span></summary><div><p>The furthest point a write can propagate, after all caches and buffers, normally the memory interface. CleanInvalidStorage (AWCMO 101, Issue L) cleans and invalidates everything up to it so a read-back really tests memory, used for poison scrubbing.</p><p class="src"><span class="sl">Spec</span>§A9.10, p.170</p></div></details>
+  <details><summary>What changed for AxDOMAIN between ACE and Issue L? <span class="lvl">Advanced</span></summary><div><p>ACE: 01 Inner Shareable, 10 Outer Shareable. Issue L: both mean Shareable, 10 recommended; the signals are optional on any interface class, and full coherency (snoop channels) moved to CHI.</p><p class="src"><span class="sl">Spec</span>§A8.3.4, p.135 · Table B4.1, p.307</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>14 · Spec reference index</h2>
+  <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A8.1, Figure A8.1</td><td>Caching in AXI</td><td class="num">132</td><td>1, 2</td></tr>
+    <tr><td>§A8.2, Table A8.2</td><td>Cache line size</td><td class="num">133</td><td>4, 5, 12</td></tr>
+    <tr><td>§A8.3–A8.3.3</td><td>Cache coherency and Domains</td><td class="num">134</td><td>1, 3, 8, 10, 13</td></tr>
+    <tr><td>§A8.3.4, Tables A8.3–A8.6</td><td>Domain signaling</td><td class="num">135–136</td><td>3, 4, 10, 11, 13</td></tr>
+    <tr><td>§A8.3.6, Table A8.7</td><td>Domains and memory types</td><td class="num">136</td><td>2, 3, 8, 12</td></tr>
+    <tr><td>§A8.4, Figure A8.2</td><td>I/O coherency</td><td class="num">137</td><td>1, 2, 5, 13</td></tr>
+    <tr><td>§A8.5, Tables A8.8–A8.13</td><td>Caching Shareable lines</td><td class="num">138–141</td><td>4, 5, 8, 10, 11, 13</td></tr>
+    <tr><td>§A8.6, Table A8.14</td><td>Prefetch transaction</td><td class="num">142–143</td><td>6, 8, 9, 12</td></tr>
+    <tr><td>§A8.7, Tables A8.15–A8.21</td><td>Cache stashing</td><td class="num">144–148</td><td>4, 6, 8, 9, 10, 12, 13</td></tr>
+    <tr><td>§A8.8, Table A8.22</td><td>Deallocating read transactions</td><td class="num">149–150</td><td>6</td></tr>
+    <tr><td>§A8.9, Tables A8.23–A8.24</td><td>Invalidate hint</td><td class="num">151–152</td><td>6, 8</td></tr>
+    <tr><td>§A9.1–A9.2</td><td>CMOs; actions on receiving a CMO</td><td class="num">154–155</td><td>7, 8, 9, 13</td></tr>
+    <tr><td>§A9.3, Table A9.1</td><td>CMO request attributes</td><td class="num">156</td><td>3, 7, 10, 12, 13</td></tr>
+    <tr><td>§A9.4, Table A9.2</td><td>CMO propagation</td><td class="num">157</td><td>4, 7, 9</td></tr>
+    <tr><td>§A9.5, Tables A9.3–A9.7</td><td>CMOs on the write channels; AWCMO</td><td class="num">158–159</td><td>4, 7, 9, 12</td></tr>
+    <tr><td>§A9.6</td><td>Write with CMO</td><td class="num">160–162</td><td>7, 8, 9</td></tr>
+    <tr><td>§A9.7, Tables A9.10–A9.11</td><td>CMOs on the read channels</td><td class="num">163</td><td>7, 8</td></tr>
+    <tr><td>§A9.8, Tables A9.12–A9.14</td><td>CMOs for Persistence</td><td class="num">164–167</td><td>4, 7, 8, 9, 10, 12, 13</td></tr>
+    <tr><td>§A9.9–A9.10, Tables A9.15–A9.19</td><td>CMO to PoPA; Point of Physical Storage</td><td class="num">168–171</td><td>4, 7, 8, 13</td></tr>
+    <tr><td>§A9.11, Figure A9.3</td><td>Processor cache maintenance instructions</td><td class="num">172–173</td><td>9, 10, 13</td></tr>
+    <tr><td>Tables B4.1–B4.3</td><td>Revisions</td><td class="num">307–312</td><td>3, 8, 11, 13</td></tr>
+  </tbody></table></div>
+  <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§D2.1</td><td>Changes to existing AXI channels (ACE)</td><td class="num">D2-170</td><td>11</td></tr>
+    <tr><td>§D7</td><td>Cache Maintenance (ACE)</td><td class="num">D7-266–D7-280</td><td>11</td></tr>
+    <tr><td>§D8</td><td>Barrier Transactions</td><td class="num">D8-284</td><td>11</td></tr>
+    <tr><td>§E1.2, §E1.3, §E1.16</td><td>Cache stashing; deallocating transactions; prefetch</td><td class="num">E1-351, E1-355, E1-396</td><td>11</td></tr>
+  </tbody></table></div>
+</div></section>
+<div class="wrap"><nav class="pager" aria-label="Guides"><a class="pv" href="responses-exclusives-atomics.html"><small>← Previous guide</small><strong>Responses, Exclusives &amp; Atomics</strong></a><a class="nx" href="qualifiers-debug-user.html"><small>Next guide →</small><strong>Qualifiers, Debug &amp; User</strong></a><a class="all" href="../index.html">All guides and the request map</a></nav></div></main>
+<footer><div class="wrap">Built from ARM IHI 0022 Issue L, Chapters A8 and A9, with Appendix B4; comparisons from Issue H.c Parts D and E. For sign-off, check the spec at the cited page.</div></footer>
+
+<script>
+(function () {
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function bits(n, ranges) { var a = []; for (var i = 0; i < n; i++) a.push("0"); (ranges || []).forEach(function (r) { for (var k = r[0]; k <= r[1]; k++) a[k] = "1"; }); return a.join(""); }
+  function at(n, s, labels) { var a = []; for (var i = 0; i < n; i++) a.push(""); labels.forEach(function (l, k) { a[s + k] = l; }); return a; }
+
+  window.PAGE = {
+    CW: 50,
+    dirName: { lp: "Manager", pl: "Subordinate", cfg: "Property", tie: "Tie-off (Manager input)" },
+    dirCls: { cfg: "sb", tie: "sb" },
+    groups: [["all", "All"], ["dom", "Domain"], ["stash", "Stash"], ["cmo", "CMO"], ["tie", "Tie-offs"], ["prop", "Properties"]],
+    sigs: [
+      ["dom", "AWDOMAIN, ARDOMAIN [1:0]", "lp", "bus", "Shareability Domain", "00 Non-shareable, 01/10 Shareable (10 recommended), 11 System. Present when Shareable_Transactions is True.", "Tables A8.4–A8.5, p.135"],
+      ["stash", "AWSTASHNID [10:0], AWSTASHNIDEN", "lp", "bus", "Target node (physical interface) for a stash", "NIDEN LOW ⇒ NID must be 0; LOW on all non-stash requests.", "Table A8.16, p.146"],
+      ["stash", "AWSTASHLPID [4:0], AWSTASHLPIDEN", "lp", "bus", "Logical processor within the target", "LPIDEN LOW ⇒ LPID must be 0; LOW on all non-stash requests.", "Table A8.16, p.146"],
+      ["cmo", "AWCMO [AWCMO_WIDTH-1:0]", "lp", "bus", "CMO type for CMO, WritePtlCMO, WriteFullCMO", "000 CI, 001 CS, 010 CSP, 011 CSDP, 100 CIPA, 101 CIS. Width 0, 2 or 3.", "Tables A9.5–A9.7, p.158–159"],
+      ["cmo", "BCOMP", "pl", "level", "This B is the Completion response", "With a PCMO: once per transaction, ordered like normal responses.", "Table A9.14, p.166 · §A3.3.1, p.61"],
+      ["cmo", "BPERSIST", "pl", "level", "This B is the Persist response", "Once per CSP/CSDP; no ordering requirements; may be combined with BCOMP in one transfer.", "Table A9.14, p.166"],
+      ["tie", "BROADCASTSHAREABLE", "tie", "tie-off", "Issue Shareable transactions", "LOW: convert to Non-shareable equivalents (Table A8.13).", "Table A8.12, p.140"],
+      ["tie", "BROADCASTCACHEMAINT", "tie", "tie-off", "Issue CMOs", "LOW with BROADCASTSHAREABLE LOW: CS/CI/MI not issued; write+CMO become plain writes.", "Table A9.2, p.157"],
+      ["tie", "BROADCASTPERSIST, BROADCASTCMOPOPA, BROADCASTSTORAGE", "tie", "tie-off", "Issue CSP/CSDP, CIPA, CIS", "LOW: downgrade or suppress those CMOs.", "Tables A9.13, A9.16, A9.19, p.165–171"],
+      ["prop", "Cache_Line_Size", "cfg", "16…2048", "Line size in bytes", "Default 64 (required for CHI compatibility). A line must fit in ≤ 16 transfers.", "§A8.2, p.133"],
+      ["prop", "Shareable_Transactions", "cfg", "bool", "Shareable Domain and AxDOMAIN present", "Default False.", "Table A8.3, p.135"],
+      ["prop", "Shareable_Cache_Support", "cfg", "bool", "ReadShared, ReadClean, WriteBackFull, WriteEvictFull", "Default False; must be False on I/O coherent interfaces.", "Table A8.10, p.140 · §A8.4, p.137"],
+      ["prop", "Cache_Stash_Transactions", "cfg", "True/Basic/False", "Stash Opcodes", "Basic = StashOnceShared only, no targets.", "Table A8.19, p.148"],
+      ["prop", "CMO_On_Write, CMO_On_Read, Write_Plus_CMO", "cfg", "bool", "Where CMOs travel", "Write channels recommended for new designs.", "Tables A9.3, A9.8, A9.10, p.158–163"],
+      ["prop", "Persist_CMO, Storage_CMO, RME_Support", "cfg", "bool", "CSP/CSDP, CIS, CIPA", "Storage_CMO needs CMO_On_Write.", "Tables A9.12, A9.17, p.164–170"],
+      ["prop", "Prefetch_Transaction, DeAllocation_Transactions, InvalidateHint_Transaction", "cfg", "bool", "Hint Opcodes", "Prefetch needs RRESP_WIDTH 3 for PREFETCHED.", "Tables A8.14, A8.22, A8.23, p.143–152"]
+    ],
+
+    wgroups: [["all", "All"], ["dom", "Domains"], ["line", "Cache lines"], ["hint", "Hints"], ["cmo", "CMOs"]],
+
+    scenarios: [
+      {
+        id: "cmo", tab: "CMO on W channels", title: "Stand-alone CleanShared on the write channels",
+        desc: "A non-coherent DMA's driver needs a buffer written by the CPU to reach memory. It issues a Shareable CleanShared CMO: AW only (no W data), one B when every copy is clean and the writes are observable.",
+        ref: "§A9.1, p.154 · §A9.2, p.155 · §A9.5, p.158–159",
+        n: 12, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(12, [[1, 1]]) },
+          { name: "AWSNOOP / AWCMO", d: "lp", t: "bus", v: at(12, 1, ["CMO / CS"]) },
+          { name: "AWDOMAIN", d: "lp", t: "bus", v: at(12, 1, ["SH"]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(12, []) },
+          { name: "interconnect", d: "sb", t: "note", v: seq([["", 2], ["snoop dirty copies", 3], ["write back", 3], ["", 4]]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(12, [[9, 9]]) },
+          { name: "BRESP", d: "pl", t: "bus", v: at(12, 9, ["OKAY"]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "A data-less write-channel request", x: "AWSNOOP 0b0110 (CMO) with AWCMO 0b001 (CleanShared). Cache line sized and Regular; Domain Non-shareable or Shareable, never System; no W beats.", s: "Table A9.4, p.158 · Table A9.7, p.159 · §A9.3, p.156" },
+          { r: [2, 7], t: "Look up, snoop, write back", x: "A cache looks up the line; a coherent interconnect snoops caches that might hold it Dirty; dirty data is written back, and all of that completes.", s: "§A9.2, p.155" },
+          { r: [9, 9], t: "One response", x: "CleanShared and CleanInvalid have a single B transfer. If a downstream cache might hold the line and an observer sits beyond it, the CMO must be forwarded and its response passed back.", w: "Recommended for new designs: CMOs on the write channels. The read-channel versions exist for legacy components.", s: "§A9.5, p.159 · §A9.4, p.157 · §A9.1, p.154" }
+        ]
+      },
+      {
+        id: "pcmo", tab: "Write + persist", title: "WriteFullCMO with CleanSharedPersist: two responses",
+        desc: "A storage driver writes a full 64-byte line to persistent memory and needs to know when it has reached the Point of Persistence. One request carries both. The Completion response (BCOMP) frees tracking early; the Persist response (BPERSIST) comes when the data is persistent.",
+        ref: "§A9.6, p.160–161 · §A9.8.4, p.165–166",
+        n: 14, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(14, [[1, 1]]) },
+          { name: "AWSNOOP / AWCMO", d: "lp", t: "bus", v: at(14, 1, ["WriteFullCMO / CSP"]) },
+          { name: "WVALID", d: "lp", t: "bit", v: bits(14, [[1, 4]]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(14, [[7, 7], [12, 12]]) },
+          { name: "BCOMP", d: "pl", t: "bit", v: bits(14, [[7, 7]]) },
+          { name: "BPERSIST", d: "pl", t: "bit", v: bits(14, [[12, 12]]) },
+          { name: "meaning", d: "sb", t: "note", v: at(14, 7, ["observable", "", "", "", "", "persistent"]) }
+        ],
+        steps: [
+          { r: [1, 4], t: "Write and CMO in one transaction", x: "AWSNOOP 0b1011 (WriteFullCMO), AWCMO 0b010 (CleanSharedPersist). Cache line sized, Regular, all strobes set. The CMO part is always treated as cacheable and Shareable.", s: "§A9.6.1, p.161 · Table A9.7, p.159" },
+          { r: [7, 7], t: "Completion response", x: "BCOMP HIGH, BPERSIST LOW: the write is observable. It follows normal response ordering, and if AWIDUNQ was set the ID can be reused once it arrives.", s: "§A9.8.4 and Table A9.14, p.166" },
+          { r: [12, 12], t: "Persist response", x: "BPERSIST HIGH, BCOMP LOW: the data has reached the PoP. It has no ordering requirements and may even come first. A Subordinate may instead send one transfer with both HIGH.", w: "Committing to persistent media can take microseconds. Splitting the responses lets the interconnect release the transaction's tracking entry long before then.", s: "§A9.8.4, p.165–166 · §A9.6.3, p.161" }
+        ]
+      },
+      {
+        id: "stash", tab: "StashOnce", title: "StashOnceShared: a data-less hint answered at once",
+        desc: "A NIC tells the system that a CPU will soon read a descriptor line. StashOnceShared with a target NID. The interconnect can't stash (no stash support on that path), so it answers immediately without propagating, which is safe because StashOnce uses an ID no other write uses.",
+        ref: "§A8.7, p.144–148",
+        n: 9, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "AWSNOOP", d: "lp", t: "bus", v: at(9, 1, ["StashOnceShared"]) },
+          { name: "AWSTASHNIDEN", d: "lp", t: "bit", v: bits(9, [[1, 1]]) },
+          { name: "AWSTASHNID", d: "lp", t: "bus", v: at(9, 1, ["0x012"]) },
+          { name: "BVALID", d: "pl", t: "bit", v: bits(9, [[3, 3]]) },
+          { name: "BRESP", d: "pl", t: "bus", v: at(9, 3, ["OKAY"]) }
+        ],
+        steps: [
+          { r: [1, 1], t: "A hint, not an access", x: "StashOnceShared (AWSNOOP 0b1100): fetch this line into a particular cache, other copies may stay. Cache line sized and Regular, Modifiable, not exclusive, no MTE, not atomic. The target IDs are optional and the enable bits say which are valid.", s: "§A8.7.1–A8.7.4, p.144–146" },
+          { r: [3, 3], t: "Immediate response", x: "A component that doesn't support stashing may drop a StashOnce and respond at once. StashOnce IDs can't be shared with outstanding non-StashOnce writes, so answering early can't break any ordering.", w: "Stashing is purely a performance hint; ignoring it must always be safe and cheap.", s: "§A8.7.5, p.147 · Table A8.21, p.148" }
+        ]
+      },
+      {
+        id: "pf", tab: "Prefetch", title: "Prefetch, then a read that hits it",
+        desc: "A video decoder knows it will read a reference block soon. It sends a Prefetch (AW only, one B). The memory controller fetches the line into its buffer. The later read gets RRESP PREFETCHED, which the Manager can use to tune how much it prefetches.",
+        ref: "§A8.6, p.142–143",
+        n: 14, gaps: [],
+        sig: [
+          { name: "AWVALID", d: "lp", t: "bit", v: bits(14, [[1, 1]]) },
+          { name: "AWSNOOP", d: "lp", t: "bus", v: at(14, 1, ["Prefetch 0x8000"]) },
+          { name: "BVALID / BRESP", d: "pl", t: "bus", v: at(14, 3, ["OKAY"]) },
+          { name: "controller", d: "sb", t: "note", v: seq([["", 2], ["fetch line from DRAM", 5], ["held", 7]]) },
+          { name: "ARVALID", d: "lp", t: "bit", v: bits(14, [[9, 9]]) },
+          { name: "AR", d: "lp", t: "bus", v: at(14, 9, ["ReadNoSnoop 0x8000"]) },
+          { name: "RRESP", d: "pl", t: "bus", v: at(14, 10, ["PREFETCHED", "PREFETCHED", "PREFETCHED", "PREFETCHED"]) }
+        ],
+        steps: [
+          { r: [1, 3], t: "Prefetch: AW and B only", x: "AWSNOOP 0b01111, cache line sized and Regular, Normal (AWCACHE[1] = 1), Non-shareable or Shareable, unique ID. Any level may act on it or just answer OKAY.", s: "§A8.6.1, p.142" },
+          { r: [4, 8], t: "Data prepared", x: "The controller opens the DRAM row and buffers the line. Prefetch is not ordered with CMOs, so it must never be used to put data into a managed or visible cache.", s: "§A8.6, p.142" },
+          { r: [9, 13], t: "PREFETCHED", x: "RRESP 0b100 means valid data from a prefetched source. Recommended: all beats of a line or none. Needs RRESP_WIDTH 3, never for exclusive reads, and can go to a Manager that didn't send the prefetch itself.", s: "§A8.6.2, p.143" }
+        ]
+      },
+      {
+        id: "sw", tab: "Software coherency", title: "Handing a buffer to a non-coherent agent and back (Figure A9.3)",
+        desc: "The five stages of sharing data with a non-coherent DMA using CMOs. Between the clean (stage 2) and the invalidate (stage 4), the coherent side's view of the line is UNPREDICTABLE.",
+        ref: "§A9.11.1 and Figure A9.3, p.172–173",
+        n: 15, gaps: [], unit: "phase columns",
+        sig: [
+          { name: "stage", d: "sb", t: "note", v: seq([["1 coherent access", 3], ["2 clean", 3], ["3 DMA access", 3], ["4 invalidate", 3], ["5 coherent access", 3]]) },
+          { name: "CPU traffic", d: "lp", t: "bus", v: seq([["writes buffer", 3], ["CleanShared", 3], ["", 3], ["CleanInvalid", 3], ["reads result", 3]]) },
+          { name: "DMA traffic", d: "lp", t: "bus", v: seq([["", 6], ["reads, writes", 3], ["", 6]]) },
+          { name: "CPU view", d: "sb", t: "note", v: seq([["defined", 3], ["", 1], ["UNPREDICTABLE", 7], ["", 1], ["defined", 3]]) }
+        ],
+        steps: [
+          { r: [0, 2], t: "Coherent side owns the data", x: "CPUs read and write the buffer freely; it may be Dirty in their caches.", s: "§A9.11.1, p.172" },
+          { r: [3, 5], t: "Clean", x: "CleanShared (or CleanInvalid) pushes dirty lines to memory so the non-coherent agent will see them.", s: "§A9.11.1, p.172" },
+          { r: [6, 8], t: "Non-coherent access", x: "The DMA reads and writes memory directly. A CPU looking at the line now might see stale, new or changing values.", s: "§A9.11.1, p.172" },
+          { r: [9, 11], t: "Invalidate", x: "CleanInvalid or MakeInvalid removes any stale copies the coherent side may have picked up, so the next read fetches the DMA's data.", s: "§A9.11.1, p.172" },
+          { r: [12, 14], t: "Coherent access again", x: "The result is now defined. Any CPU access between stages 2 and 4 could have pulled the line back into a cache, which is why the invalidate comes after the DMA finishes.", w: "This is the software-coherency contract that the Non-shareable Domain relies on; the bus can't detect if software gets it wrong.", s: "§A9.11.1, p.172–173 · §A8.3.2, p.134" }
+        ]
+      }
+    ]
+  };
+})();
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var P = window.PAGE || {};
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- signal / field table ---------- */
+  (function () {
+    var chipsEl = $("sigchips"), bodyEl = $("sigbody");
+    if (!chipsEl || !bodyEl || !P.sigs) return;
+    var dirName = P.dirName || { lp: "Upper", pl: "Lower", both: "both" };
+    var dirCls = P.dirCls || {};
+    var active = "all";
+    function drawTable() {
+      var html = "";
+      P.sigs.forEach(function (r) {
+        if (active !== "all" && r[0] !== active) return;
+        var dirTxt = dirName[r[2]] || r[2];
+        var cls = dirCls[r[2]] !== undefined ? dirCls[r[2]] : (r[2] === "both" ? "" : r[2]);
+        html += "<tr><td class=\"sig " + cls + "\">" + r[1] + "</td><td class=\"dir " + cls + "\">" + dirTxt +
+          "</td><td><span class=\"pill\">" + r[3] + "</span></td><td>" + r[4] + "</td><td>" + r[5] + "</td><td class=\"ref\">" + (r[6] || "") + "</td></tr>";
+      });
+      bodyEl.innerHTML = html;
+    }
+    P.groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1];
+      b.setAttribute("aria-pressed", g[0] === active ? "true" : "false");
+      b.addEventListener("click", function () {
+        active = g[0];
+        Array.prototype.forEach.call(chipsEl.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        drawTable();
+      });
+      chipsEl.appendChild(b);
+    });
+    drawTable();
+  })();
+
+  /* ---------- rationale filter ---------- */
+  (function () {
+    var wchips = $("whychips");
+    if (!wchips || !P.wgroups) return;
+    var wcards = document.querySelectorAll(".wcard");
+    var wactive = "all";
+    P.wgroups.forEach(function (g) {
+      var count = 0;
+      Array.prototype.forEach.call(wcards, function (c) { if (g[0] === "all" || c.getAttribute("data-g") === g[0]) count++; });
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g[1] + " · " + count;
+      b.setAttribute("aria-pressed", g[0] === wactive ? "true" : "false");
+      b.addEventListener("click", function () {
+        wactive = g[0];
+        Array.prototype.forEach.call(wchips.children, function (c) { c.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        Array.prototype.forEach.call(wcards, function (c) { c.hidden = !(wactive === "all" || c.getAttribute("data-g") === wactive); });
+      });
+      wchips.appendChild(b);
+    });
+  })();
+
+  /* ---------- waveform engine ---------- */
+  var CW = P.CW || 34, LW = P.LW || 196, RH = 28, TOP = 20;
+  function seq(parts) { var a = []; parts.forEach(function (p) { for (var i = 0; i < p[1]; i++) a.push(p[0]); }); return a; }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function renderWave(scn, hl, compact, part, plw) {
+    var N = scn.n, gaps = scn.gaps || [], rows = scn.sig;
+    CW = scn.cw || P.CW || 34;
+    var lw = part === "wave" ? 4 : part === "labels" ? plw : (compact ? 150 : LW);
+    var W = lw + N * CW + 10, H = TOP + rows.length * RH + 6;
+    if (part === "labels") {
+      var ls = "<svg viewBox=\"0 0 " + lw + " " + H + "\" width=\"" + lw + "\" height=\"" + H + "\" aria-hidden=\"true\">", mc = Math.floor((lw - 14) / 7.25);
+      rows.forEach(function (r, ri) {
+        var y0 = TOP + ri * RH, mid = (y0 + 6 + y0 + RH - 7) / 2, nm = r.name;
+        if (nm.length > mc) nm = nm.slice(0, mc - 1) + "…";
+        ls += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\"><title>" + esc(r.name) + "</title>" + esc(nm) + "</text>";
+      });
+      return ls + "</svg>";
+    }
+    function isGap(i) { return gaps.indexOf(i) >= 0; }
+    var s = "<svg viewBox=\"0 0 " + W + " " + H + "\" width=\"" + W + "\" height=\"" + H + "\" role=\"img\" aria-label=\"" + esc(scn.aria || scn.title || "waveform") + "\">";
+    if (hl) s += "<rect class=\"hlr\" x=\"" + (lw + hl[0] * CW) + "\" y=\"0\" width=\"" + ((hl[1] - hl[0] + 1) * CW) + "\" height=\"" + H + "\"/>";
+    for (var i = 0; i <= N; i++) {
+      var x = lw + i * CW;
+      s += "<line class=\"grid-l\" x1=\"" + x + "\" y1=\"" + (TOP - 4) + "\" x2=\"" + x + "\" y2=\"" + (H - 4) + "\" opacity=\"0.6\"/>";
+      if (i < N && !isGap(i)) s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">" + i + "</text>";
+    }
+    rows.forEach(function (r, ri) {
+      var y0 = TOP + ri * RH, hi = y0 + 6, lo = y0 + RH - 7, mid = (hi + lo) / 2;
+      if (part !== "wave") s += "<text class=\"wl " + r.d + "\" x=\"8\" y=\"" + (mid + 4) + "\">" + esc(r.name) + "</text>";
+      if (r.t === "bit") {
+        var d = "", prev = null;
+        for (var k = 0; k < N; k++) {
+          if (isGap(k)) { prev = null; continue; }
+          var v = r.v.charAt(k), yy = v === "1" ? hi : lo, x0 = lw + k * CW, x1 = x0 + CW;
+          if (prev === null) d += "M" + x0 + "," + yy; else if (prev !== yy) d += "L" + x0 + "," + yy;
+          d += "L" + x1 + "," + yy; prev = yy;
+        }
+        s += "<path class=\"wv " + r.d + "\" d=\"" + d + "\"/>";
+      } else {
+        var vals = r.v, k2 = 0;
+        while (k2 < N) {
+          if (isGap(k2)) { k2++; continue; }
+          var lab = vals[k2], j = k2;
+          while (j + 1 < N && !isGap(j + 1) && vals[j + 1] === lab) j++;
+          var xa = lw + k2 * CW, xb = lw + (j + 1) * CW, w = xb - xa;
+          if (r.t === "bus") {
+            if (lab === "") {
+              s += "<line class=\"idle\" x1=\"" + xa + "\" y1=\"" + mid + "\" x2=\"" + xb + "\" y2=\"" + mid + "\"/>";
+            } else {
+              s += "<path class=\"bus " + r.d + "\" d=\"M" + xa + "," + mid + " L" + (xa + 4) + "," + hi + " L" + (xb - 4) + "," + hi + " L" + xb + "," + mid + " L" + (xb - 4) + "," + lo + " L" + (xa + 4) + "," + lo + " Z\"/>";
+              var t = lab, maxc = Math.floor((w - 8) / 6.4);
+              if (t.length > maxc) t = maxc > 2 ? t.slice(0, maxc - 1) + "…" : "";
+              s += "<text class=\"bt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"><title>" + esc(lab) + "</title>" + esc(t) + "</text>";
+            }
+          } else if (lab !== "") {
+            s += "<rect class=\"notebox\" x=\"" + (xa + 2) + "\" y=\"" + (hi - 1) + "\" width=\"" + (w - 4) + "\" height=\"" + (lo - hi + 2) + "\" rx=\"5\"" + (r.d === "sb" ? " style=\"stroke:var(--sb)\"" : "") + "/>";
+            var t2 = lab, maxc2 = Math.floor((w - 10) / 5.8);
+            if (t2.length > maxc2) t2 = t2.slice(0, Math.max(0, maxc2 - 1)) + "…";
+            s += "<text class=\"nt\" x=\"" + (xa + w / 2) + "\" y=\"" + (mid + 4) + "\" text-anchor=\"middle\"" + (r.d === "sb" ? " style=\"fill:var(--sb);font-style:normal;font-family:var(--font-mono);font-size:10.5px\"" : "") + "><title>" + esc(lab) + "</title>" + esc(t2) + "</text>";
+          }
+          k2 = j + 1;
+        }
+      }
+    });
+    gaps.forEach(function (g) {
+      var x = lw + g * CW;
+      s += "<rect class=\"gapbg\" x=\"" + (x + 1) + "\" y=\"" + (TOP - 4) + "\" width=\"" + (CW - 2) + "\" height=\"" + (H - TOP) + "\"/>";
+      var z1 = "", z2 = "";
+      for (var yy = TOP - 4, n = 0; yy < H - 4; yy += 6, n++) {
+        z1 += (n === 0 ? "M" : "L") + (x + 11 + (n % 2 ? 4 : 0)) + "," + yy;
+        z2 += (n === 0 ? "M" : "L") + (x + 19 + (n % 2 ? 4 : 0)) + "," + yy;
+      }
+      s += "<path class=\"gapz\" d=\"" + z1 + "\"/><path class=\"gapz\" d=\"" + z2 + "\"/>";
+      s += "<text class=\"cyc\" x=\"" + (x + CW / 2) + "\" y=\"12\" text-anchor=\"middle\">≈</text>";
+    });
+    return s + "</svg>";
+  }
+
+  /* ---------- mini handshake waves ---------- */
+  (function () {
+    var minisEl = $("minis");
+    if (!minisEl || !P.minis) return;
+    P.minis.forEach(function (m) {
+      var c = document.createElement("div");
+      c.className = "card";
+      c.innerHTML = "<div class=\"tagline\">" + esc(m.tag) + "</div><h3>" + esc(m.title) + "</h3><div class=\"scroller\">" +
+        renderWave(m.w, null, true) + "</div><p style=\"font-size:15px\">" + esc(m.text) + "</p>" +
+        (m.ref ? "<p class=\"src\"><span class=\"sl\">Spec</span>" + esc(m.ref) + "</p>" : "");
+      minisEl.appendChild(c);
+    });
+  })();
+
+  /* ---------- live scenarios ---------- */
+  (function () {
+    var tabsEl = $("tabs"), waveEl = $("wave"), dotsEl = $("dots");
+    if (!tabsEl || !P.scenarios) return;
+    var scenarios = P.scenarios, cur = 0, step = 0;
+    function pick(i) {
+      cur = i; step = 0;
+      Array.prototype.forEach.call(tabsEl.children, function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+      var s = scenarios[i];
+      $("sc-title").textContent = s.title;
+      $("sc-desc").textContent = s.desc;
+      $("sc-src").innerHTML = s.ref ? "<span class=\"sl\">Spec</span>" + esc(s.ref) : "";
+      dotsEl.innerHTML = "";
+      s.steps.forEach(function (st, k) {
+        var d = document.createElement("button");
+        d.type = "button"; d.className = "dot"; d.textContent = String(k + 1);
+        d.setAttribute("aria-label", "Step " + (k + 1) + ": " + st.t);
+        d.addEventListener("click", function () { go(k); });
+        dotsEl.appendChild(d);
+      });
+      go(0);
+    }
+    function go(k) {
+      var s = scenarios[cur];
+      step = Math.max(0, Math.min(s.steps.length - 1, k));
+      var st = s.steps[step];
+      var longest = 0; s.sig.forEach(function (r) { longest = Math.max(longest, r.name.length); });
+      var narrow = waveEl.clientWidth && waveEl.clientWidth < 560;
+      var plw = Math.max(64, Math.min(Math.round(longest * 7.25 + 18), narrow ? Math.round(waveEl.clientWidth * 0.36) : 230));
+      waveEl.innerHTML = "<div class=\"wfix\">" + renderWave(s, null, false, "labels", plw) + "</div>" + renderWave(s, st.r, false, "wave");
+      var vis = waveEl.clientWidth - plw, a = 4 + st.r[0] * CW, b = 4 + (st.r[1] + 1) * CW;
+      if (vis > 0) waveEl.scrollLeft = (b - a >= vis) ? Math.max(0, a - 6) : Math.max(0, Math.min(a - CW * 0.6, (a + b) / 2 - vis / 2 + 0));
+      if (vis > 0 && b <= vis - 6) waveEl.scrollLeft = 0;
+      $("st-title").textContent = (step + 1) + ". " + st.t;
+      $("st-text").textContent = st.x;
+      var w = $("st-why");
+      w.textContent = st.w || ""; w.style.display = st.w ? "" : "none";
+      var se = $("st-src");
+      se.innerHTML = st.s ? "<span class=\"sl\">Spec</span>" + esc(st.s) : ""; se.style.display = st.s ? "" : "none";
+      $("cyc").textContent = (s.unit || "cycles") + " " + st.r[0] + "–" + st.r[1];
+      Array.prototype.forEach.call(dotsEl.children, function (d, j) { if (j === step) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current"); });
+      $("prev").disabled = step === 0;
+      $("next").disabled = step === s.steps.length - 1;
+    }
+    scenarios.forEach(function (s, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.setAttribute("role", "tab"); b.textContent = s.tab;
+      b.addEventListener("click", function () { pick(i); });
+      b.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { e.preventDefault(); var n = (i + 1) % scenarios.length; pick(n); tabsEl.children[n].focus(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); var p = (i - 1 + scenarios.length) % scenarios.length; pick(p); tabsEl.children[p].focus(); }
+      });
+      tabsEl.appendChild(b);
+    });
+    $("prev").addEventListener("click", function () { go(step - 1); });
+    $("next").addEventListener("click", function () { go(step + 1); });
+    pick(0);
+    var rt; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { go(step); }, 150); });
+    /* sanity: every waveform row must match its scenario length */
+    scenarios.concat((P.minis || []).map(function (m) { return m.w; })).forEach(function (s) {
+      s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+    });
+  })();
+
+  /* ---------- tables: label cells so they can stack into cards on phones ---------- */
+  (function () {
+    function label(t) {
+      var ths = t.querySelectorAll("thead th"); if (!ths.length) return;
+      var heads = Array.prototype.map.call(ths, function (h) { return h.textContent.trim(); });
+      Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
+        Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i] !== undefined) td.setAttribute("data-label", heads[i]); });
+      });
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("table"), function (t) {
+      if (!t.tHead || t.querySelector("[rowspan],[colspan]") || t.classList.contains("nostack")) return;
+      t.classList.add("stack"); label(t);
+      if (window.MutationObserver && t.tBodies[0]) new MutationObserver(function () { label(t); }).observe(t.tBodies[0], { childList: true });
+    });
+  })();
+
+  /* ---------- section nav: mark the section being read; series nav: show the current guide ---------- */
+  (function () {
+    var here = document.querySelector(".series .here"), ser = $("series");
+    if (here && ser && ser.scrollWidth > ser.clientWidth) ser.scrollLeft = Math.max(0, here.offsetLeft - ser.offsetLeft - 60);
+    var bar = document.querySelector("nav.toc .wrap");
+    if (!bar || !window.IntersectionObserver) return;
+    var links = {}, cur = null;
+    Array.prototype.forEach.call(bar.querySelectorAll("a[href^='#']"), function (a) { links[a.getAttribute("href").slice(1)] = a; });
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = links[e.target.id]; if (!a || a === cur) return;
+        if (cur) cur.removeAttribute("aria-current");
+        cur = a; a.setAttribute("aria-current", "true");
+        bar.scrollLeft = Math.max(0, a.offsetLeft - bar.offsetLeft - (bar.clientWidth - a.offsetWidth) / 2);
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(links).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+  })();
+
+  /* ---------- quiz reveal: open all / close all ---------- */
+  (function () {
+    var b = $("qa-toggle");
+    if (!b) return;
+    b.addEventListener("click", function () {
+      var ds = document.querySelectorAll("#quiz details"), open = b.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(ds, function (d) { d.open = open; });
+      b.setAttribute("aria-pressed", open ? "true" : "false");
+      b.textContent = open ? "Hide all answers" : "Show all answers";
+    });
+  })();
+})();
+
+
+</script>
+<script>(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  if (!$("w-type")) return;
+  function which() {
+    var t = $("w-type").value, d = $("w-dom").value, k = $("w-kind").value, out, ok = true, ref;
+    if (k === "n") {
+      ref = "Table A8.7, p.136 · §A8.3.1, p.134";
+      if (t === "dev") { if (d === "SYS") out = "No caches. Device requests must use the System Domain."; else { ok = false; out = "Illegal: Device requests are required to use the System Domain."; } }
+      else if (t === "nc") { out = d === "NSH" ? "No caches." : d === "SH" ? "Peer caches. Permitted but not expected; some implementations don't look up peer caches for Non-cacheable accesses." : "No caches (System is the recommended Domain for Normal Non-cacheable)."; }
+      else { if (d === "SYS") { ok = false; out = "Illegal: System Domain requests must be Non-cacheable."; } else out = d === "NSH" ? "In-line caches (those the request passes through towards memory)." : "In-line and peer caches (peer caches need a coherent protocol such as CHI to snoop)."; }
+    } else {
+      ref = "Table A9.1, p.156 · §A9.3, p.156";
+      if (d === "SYS" || t === "dev") { ok = false; out = "Illegal for a CMO: System Domain (and so Device) is not permitted. A processor CMO on a Device location is issued as Normal Cacheable Shareable instead (§A9.11, p.172)."; }
+      else if (t === "nc") out = d === "NSH" ? "No caches." : "Peer caches.";
+      else out = d === "NSH" ? "In-line caches." : "Peer caches and in-line caches.";
+    }
+    $("w-out").innerHTML = "<span style=\"color:" + (ok ? "var(--pl)" : "var(--bad)") + ";font-weight:600\">" + (ok ? "✓ " : "✗ ") + "</span>" + out + " <span class=\"ref\">" + ref + "</span>";
+  }
+  var H = {
+    rd: { NSH: ["Permitted", "Permitted", "Must not hit", "Permitted¹"], SH: ["Permitted", "Must hit", "Permitted", "Must hit²"] },
+    wr: { NSH: ["Must hit", "Must hit", "Must not hit", "Permitted¹"], SH: ["Must hit", "Must hit", "Must hit", "Must hit"] },
+    cs: { NSH: ["Permitted", "Must hit", "Permitted", "Permitted³"], SH: ["Permitted", "Must hit", "Permitted", "Must hit"] },
+    ci: { NSH: ["Must hit", "Must hit", "Permitted³", "Permitted³"], SH: ["Must hit", "Must hit", "Must hit", "Must hit"] },
+    hint: { NSH: ["Permitted", "Permitted", "Permitted", "Permitted"], SH: ["Permitted", "Permitted", "Permitted", "Permitted"] },
+    st: { NSH: ["Permitted", "Permitted", "Must not hit", "Permitted"], SH: ["Permitted", "Permitted", "Permitted", "Permitted"] }
+  };
+  var S = ["Clean", "Dirty", "Shareable Clean", "Shareable Dirty"];
+  var F = { "¹": "the line must no longer be marked Shareable", "²": "Dirty data can be provided upstream if the request was ReadShared", "³": "must hit if RME_Support is True" };
+  function hit() {
+    var row = H[$("h-op").value][$("h-dom").value];
+    $("h-out").innerHTML = row.map(function (v, i) {
+      var f = v.match(/[¹²³]/), base = v.replace(/[¹²³]/, "");
+      var col = base === "Must hit" ? "var(--pl)" : base === "Must not hit" ? "var(--bad)" : "var(--muted)";
+      return "<tr><td>" + S[i] + "</td><td style=\"color:" + col + ";font-weight:500\">" + (base === "Permitted" ? "Permitted to hit" : base) + "</td><td style=\"color:var(--muted);font-size:13px\">" + (f ? F[f[0]] : "") + "</td></tr>";
+    }).join("");
+  }
+  ["w-type", "w-dom", "w-kind"].forEach(function (k) { $(k).addEventListener("change", which); });
+  ["h-op", "h-dom"].forEach(function (k) { $(k).addEventListener("change", hit); });
+  which(); hit();
+})();
+</script>
+</body>
+</html>

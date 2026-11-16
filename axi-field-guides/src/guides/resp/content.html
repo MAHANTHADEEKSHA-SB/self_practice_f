@@ -1,0 +1,431 @@
+<header class="top">
+  <div class="wrap hero">
+    {{SERIES}}
+    <div class="eyebrow">AMBA AXI · ARM IHI 0022 Issue L · §A3.3, Chapters A6 and A7 · how a transaction ends</div>
+    <h1>AXI Responses, Exclusives &amp; Atomics Field Guide</h1>
+    <p class="lede">Every AXI transaction ends with a response, and three features build on that response to make synchronisation work: single- and multi-copy atomicity, exclusive accesses with their monitor, and Atomic transactions that carry the operation to the data. This guide covers BRESP and RRESP with every encoding, the Busy indicator and Consistent DECERR, the exclusive sequence and its rules, the four Atomic types and AWATOP, and the request Opcodes on AxSNOOP. It includes an exclusive-monitor simulator, waveforms, verification checks, interview questions and what changed from AXI3 and AXI4.</p>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--lp)"></i>driven by the Manager</span>
+      <span><i class="sw" style="background:var(--pl)"></i>driven by the Subordinate</span>
+      <span><i class="sw" style="background:var(--sb)"></i>state, properties and annotations</span>
+    </div>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ and p. = section and printed page of ARM IHI 0022 <strong>Issue L</strong>. "H.c" = Issue H.c (AXI3/AXI4), pages like p.A7-99. Tags: <span class="kind spec">Spec</span> <span class="kind derived">Derived</span> <span class="kind illus">Illustrative</span> <span class="kind bg">Background</span>.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections"><div class="wrap">
+  <a href="#why">1 · Why</a><a href="#resp">2 · Responses</a><a href="#signals">3 · Signals</a><a href="#atomicity">4 · Atomicity</a><a href="#excl">5 · Exclusive accesses</a><a href="#sim">6 · Monitor simulator</a><a href="#atomic">7 · Atomic transactions</a><a href="#opc">8 · Opcodes</a><a href="#rationale">9 · Why each rule</a><a href="#live">10 · Live scenarios</a><a href="#silicon">11 · Real silicon</a><a href="#changes">12 · AXI3/AXI4 → Issue L</a><a href="#verify">13 · Verification</a><a href="#quiz">14 · Test yourself</a><a href="#refs">15 · Spec index</a>
+</div></nav>
+
+<style>
+  .tool { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 12px; }
+  .tool .in { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+  .tool label { display: grid; gap: 4px; font-size: 12px; font-family: var(--font-mono); color: var(--muted); }
+  .tool select, .tool input[type=text] { font-family: var(--font-mono); font-size: 14px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: auto; }
+  .tool label.cb { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: 13.5px; color: var(--ink); }
+</style>
+
+<main>
+
+<section id="why"><div class="wrap">
+  <h2>1 · Why responses, exclusives and atomics</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Completion</div><h3>The response is the only proof</h3><p>A Manager learns that a transaction happened, and whether it worked, only from its response: one B per write-channel transaction, one RRESP per read beat. The ordering model is built on these completion points.</p><p class="src"><span class="sl">Spec</span>§A3.3, p.61 · §A5.3.3, p.94</p></div>
+    <div class="card"><div class="tagline">Errors</div><h3>Fail cleanly, never hang</h3><p>Errors don't shorten transactions. SLVERR and DECERR say what went wrong while every beat still completes, so the fabric stays consistent.</p><p class="src"><span class="sl">Spec</span>§A3.3.2, p.62</p></div>
+    <div class="card"><div class="tagline">Synchronisation</div><h3>Semaphores without locking the bus</h3><p>An exclusive read–write pair succeeds only if nobody wrote the location in between, and the bus stays fully shared meanwhile. AXI3's locked transfers blocked everyone; AXI4 dropped them.</p><p class="src"><span class="sl">Spec</span>§A6.3, p.110 · H.c §A7.3, p.A7-99</p></div>
+    <div class="card"><div class="tagline">Scalability</div><h3>Send the operation to the data</h3><p>Atomic transactions perform add, swap, compare-and-swap and friends at the memory or cache, so a hot counter is locked for a few cycles near the data instead of a round trip.</p><p class="src"><span class="sl">Spec</span>§A6.4, p.113</p></div>
+  </div>
+</div></section>
+
+<section id="resp"><div class="wrap">
+  <h2>2 · Responses</h2>
+  <p class="sub">BRESP and RRESP are 2 bits by default and 3 bits when an interface uses the newer response codes. With width 0, the response is assumed OKAY.</p>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A3.28, p.62</caption>
+      <thead><tr><th>BRESP</th><th>Label</th><th>Meaning</th></tr></thead>
+      <tbody style="font-size:13.5px">
+        <tr><td class="mono">000</td><td>OKAY</td><td>Normal write succeeded and is observable. For an exclusive write: <strong>failed</strong>.</td></tr>
+        <tr><td class="mono">001</td><td>EXOKAY</td><td>Exclusive write succeeded. Only for exclusive writes.</td></tr>
+        <tr><td class="mono">010</td><td>SLVERR</td><td>Reached an endpoint but didn't complete: read-only, powered down. Location may be partly updated.</td></tr>
+        <tr><td class="mono">011</td><td>DECERR</td><td>Never reached a point where data can be written, typically an invalid address.</td></tr>
+        <tr><td class="mono">100</td><td>DEFER</td><td>Can't be serviced now; not updated. WriteDeferrable only.</td></tr>
+        <tr><td class="mono">101</td><td>TRANSFAULT</td><td>Translation fault, might be resolved by PRI. PRI flow only.</td></tr>
+        <tr><td class="mono">110</td><td>-</td><td>Reserved</td></tr>
+        <tr><td class="mono">111</td><td>UNSUPPORTED</td><td>Target doesn't support this type; not updated. WriteDeferrable only.</td></tr>
+      </tbody></table></div>
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A3.31, p.63</caption>
+      <thead><tr><th>RRESP</th><th>Label</th><th>Meaning</th></tr></thead>
+      <tbody style="font-size:13.5px">
+        <tr><td class="mono">000</td><td>OKAY</td><td>Data valid. For an exclusive read: the Subordinate doesn't support exclusives.</td></tr>
+        <tr><td class="mono">001</td><td>EXOKAY</td><td>Exclusive read succeeded (now monitored).</td></tr>
+        <tr><td class="mono">010</td><td>SLVERR</td><td>Contained error, only this location affected. Data not valid.</td></tr>
+        <tr><td class="mono">011</td><td>DECERR</td><td>Non-contained error, other locations may be affected. Data not valid.</td></tr>
+        <tr><td class="mono">100</td><td>PREFETCHED</td><td>Data valid, from a prefetched value.</td></tr>
+        <tr><td class="mono">101</td><td>TRANSFAULT</td><td>Translation fault (PRI flow). Data not valid.</td></tr>
+        <tr><td class="mono">110</td><td>OKAYDIRTY</td><td>Data valid and Dirty with respect to memory. ReadShared only.</td></tr>
+        <tr><td class="mono">111</td><td>-</td><td>Reserved</td></tr>
+      </tbody></table></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><div class="k">Write responses</div><p style="font-size:14.5px">One Completion response per write-channel transaction. Persist CMOs and MTE Match add a second response; BCOMP then marks which one is the Completion, HIGH on exactly one.</p><p class="src"><span class="sl">Spec</span>§A3.3.1, p.61</p></div>
+    <div class="card"><div class="k">Read responses</div><p style="font-size:14.5px">One response per beat, may differ beat to beat, all Length beats always sent. When data isn't valid the Manager may still sample RDATA, so a Subordinate must not rely on the response code to hide sensitive data.</p><p class="src"><span class="sl">Spec</span>§A3.3.2, p.62–63</p></div>
+    <div class="card"><div class="k">Busy and Consistent DECERR</div><p style="font-size:14.5px">BBUSY/RBUSY (2 bits) report Subordinate load so Managers can throttle speculation. Consistent_DECERR promises DECERR on all or none of the beats in each cache line, so one beat is enough to check.</p><p class="src"><span class="sl">Spec</span>§A3.3.2–A3.3.3, p.63–65</p></div>
+  </div>
+</div></section>
+
+<section id="signals"><div class="wrap">
+  <h2>3 · Signals and properties</h2>
+  <div class="chips" role="group" aria-label="Filter signals by group" id="sigchips"></div>
+  <div class="tbl-wrap"><table><thead><tr><th>Signal / property</th><th>Driver</th><th>Kind</th><th>Meaning</th><th>Live behavior</th><th>Spec</th></tr></thead><tbody id="sigbody"></tbody></table></div>
+</div></section>
+
+<section id="atomicity"><div class="wrap">
+  <h2>4 · Single-copy and multi-copy atomicity</h2>
+  <div class="grid g2">
+    <div class="card"><div class="tagline">Single-copy atomicity size</div><h3>No one sees half an update</h3><ul class="tight" style="font-size:14.5px"><li>The minimum number of bytes a transaction updates atomically. Larger transactions update in blocks of at least that size.</li><li>Not fixed by AXI; components that communicate form a single-copy atomic group (for example a 32-bit group with peripherals, and a 64-bit group of CPU, DSP and DRAM).</li><li>A transaction is never more atomic than the alignment of its start address. Byte strobes don't change the atomicity size.</li><li>Modifiable transforms must not split an atomic-sized access.</li></ul><p class="src"><span class="sl">Spec</span>§A6.1 and Figure A6.1, p.108 · §A4.2.2, p.70</p></div>
+    <div class="card"><div class="tagline">Multi-copy atomicity</div><h3>Everyone sees writes the same way</h3><ul class="tight" style="font-size:14.5px"><li>Writes to one location are observed in the same order by all agents, and a write observable by one agent is observable by all.</li><li>Achieved with a single Point of Serialization per address (invalidating cached copies before the new value is visible) and no forwarding buffers upstream of agents.</li><li>Multi_Copy_Atomicity must be True for Issue G and later.</li></ul><p class="src"><span class="sl">Spec</span>§A6.2, Table A6.1, p.109</p></div>
+  </div>
+</div></section>
+
+<section id="excl"><div class="wrap">
+  <h2>5 · Exclusive accesses</h2>
+  <p class="sub">A load-exclusive / store-exclusive pair. The bus is never locked; the Subordinate's monitor just watches whether anybody wrote the location in between.</p>
+  <div class="flow">
+    <div><span class="n">1</span><p><strong>Exclusive read</strong> (ARLOCK HIGH). A monitoring Subordinate records the address against the ARID and answers EXOKAY on every beat. Without a monitor it answers OKAY: data valid, nothing monitored; the Manager should then skip the write. <span class="ref">§A6.3.1–A6.3.2, p.110–111</span></p></div>
+    <div><span class="n">2</span><p><strong>Read must complete</strong> before the write part starts. <span class="ref">§A6.3.2, p.111</span></p></div>
+    <div><span class="n">3</span><p><strong>Exclusive write</strong> (AWLOCK HIGH) to the same address with AWID = the read's ARID and matching attributes (Table A6.5). <span class="ref">§A6.3.1, p.110 · Table A6.5, p.112</span></p></div>
+    <div><span class="n">4</span><p><strong>Success:</strong> still monitored for that ID ⇒ memory updated, EXOKAY. <strong>Failure:</strong> written by someone, monitor moved by another exclusive read with the same ID, or attributes differ ⇒ not updated, OKAY. <span class="ref">§A6.3.4, p.112</span></p></div>
+    <div><span class="n">5</span><p><strong>No write part?</strong> Fine: the monitor keeps watching until the next exclusive read with that ID moves it. One address per ID. <span class="ref">§A6.3.1, p.111</span></p></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>Restrictions (else UNPREDICTABLE)</h3><ul class="tight" style="font-size:14.5px"><li>Address aligned to Size × Length.</li><li>Total bytes a power of 2: 1 to 128.</li><li>Length ≤ 16.</li><li>Domain not Shareable.</li><li>Opcode ReadExclusive / WriteExclusive.</li><li>AWTAGOP not Match.</li><li>AxCACHE chosen so both requests reach the monitor.</li></ul><p class="src"><span class="sl">Spec</span>§A6.3.3, p.111</p></div>
+    <div class="card"><h3>The monitor</h3><ul class="tight" style="font-size:14.5px"><li>Recommended: one monitor unit per exclusive-capable Manager ID.</li><li>Watches at least Size × Length bytes, may watch up to 128, which can fail an exclusive because a neighbouring byte was written.</li><li>An exclusive read's beats are all EXOKAY or none; OKAY and EXOKAY are never mixed in one transaction.</li><li>A non-monitoring Subordinate answers OKAY to an exclusive write and updates the location.</li><li>Manager True + Subordinate False on Exclusive_Accesses: exclusives always fail, no deadlock.</li></ul><p class="src"><span class="sl">Spec</span>§A6.3.3–A6.3.4, p.111–112 · Table A6.4, p.110</p></div>
+  </div>
+</div></section>
+
+<section id="sim"><div class="wrap">
+  <h2>6 · Exclusive monitor simulator</h2>
+  <p class="sub">Two Managers, two IDs each, one Subordinate. Try the presets, then build your own sequence. The monitor follows §A6.3.4: one address per Manager+ID, cleared by any write to its granule, moved by a new exclusive read with the same ID.</p>
+  <div class="tool">
+    <div class="presets" style="display:flex;flex-wrap:wrap;gap:6px">
+      <button class="chip" type="button" data-ex="ok">Clean success</button>
+      <button class="chip" type="button" data-ex="clash">Another Manager writes</button>
+      <button class="chip" type="button" data-ex="race">Two Managers race</button>
+      <button class="chip" type="button" data-ex="rearm">Same ID re-armed</button>
+      <button class="chip" type="button" data-ex="nb">Neighbour write (try granule 64)</button>
+      <button class="chip" type="button" data-ex="twoid">Two IDs, two locks</button>
+    </div>
+    <div class="in">
+      <label>Manager<select id="ex-m"><option>M0</option><option>M1</option></select></label>
+      <label>ID<select id="ex-id"><option>0</option><option>1</option></select></label>
+      <label>Operation<select id="ex-op"><option value="ExRd">exclusive read</option><option value="ExWr">exclusive write</option><option value="Wr">normal write</option><option value="Rd">normal read</option></select></label>
+      <label>Address<input type="text" id="ex-addr" value="0x100" size="8" spellcheck="false"></label>
+      <button class="btn primary" id="ex-add" type="button">Add event</button>
+      <button class="btn" id="ex-reset" type="button">Clear</button>
+      <label>Monitored granule<select id="ex-gran"><option value="8">8 bytes</option><option value="64">64 bytes</option><option value="128">128 bytes</option></select></label>
+      <label class="cb"><input type="checkbox" id="ex-sup" checked> Subordinate has a monitor</label>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th class="num">#</th><th>Who</th><th>Operation</th><th>Address</th><th>Response</th><th>Memory updated</th><th>Why</th><th>Monitors after</th></tr></thead><tbody id="ex-log"></tbody></table></div>
+    <p class="src"><span class="kind derived">Derived</span> model of §A6.3.1–A6.3.4, p.110–112. Real monitors may be coarser; the spec only fixes what success and failure mean.</p>
+  </div>
+</div></section>
+
+<section id="atomic"><div class="wrap">
+  <h2>7 · Atomic transactions</h2>
+  <p class="sub">The Manager sends address, operation and operand on AW and W; the Subordinate performs the operation and (except for AtomicStore) returns the original value on R, plus one B.</p>
+  <div class="tbl-wrap"><table>
+    <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: §A6.4.1, p.113–114 · §A6.4.3, p.114–115 · Table A6.8, p.117</caption>
+    <thead><tr><th>Type</th><th>AWATOP[5:0]</th><th>Out (W)</th><th>In (R)</th><th>Burst</th><th>Alignment</th><th>Responses</th></tr></thead>
+    <tbody style="font-size:13.5px">
+      <tr><td>AtomicStore</td><td class="mono">01 e op</td><td>1, 2, 4, 8 B</td><td>-</td><td>INCR</td><td>Total write size</td><td>B only</td></tr>
+      <tr><td>AtomicLoad</td><td class="mono">10 e op</td><td>1, 2, 4, 8 B</td><td>same size, original value</td><td>INCR</td><td>Total write size</td><td>R and B</td></tr>
+      <tr><td>AtomicSwap</td><td class="mono">110000</td><td>1, 2, 4, 8 B</td><td>same size, original value</td><td>INCR</td><td>Total write size</td><td>R and B</td></tr>
+      <tr><td>AtomicCompare</td><td class="mono">110001</td><td>2, 4, 8, 16, 32 B (compare + swap)</td><td>half, original value</td><td>INCR if AWADDR in lower half (compare first); WRAP if upper half (swap first)</td><td>Half the write size</td><td>R and B</td></tr>
+    </tbody></table></div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>AWATOP for Store and Load</h3>
+      <div class="bitfield"><div><span class="bn">5</span><span class="f lp">type</span></div><div><span class="bn">4</span><span class="f lp">type</span></div><div><span class="bn">3</span><span class="f lp">endian</span></div><div><span class="bn">2</span><span class="f lp">op</span></div><div><span class="bn">1</span><span class="f lp">op</span></div><div><span class="bn">0</span><span class="f lp">op</span></div></div>
+      <p class="mono" style="font-size:12.5px;margin-top:8px">op: 000 ADD · 001 CLR · 010 EOR · 011 SET · 100 SMAX · 101 SMIN · 110 UMAX · 111 UMIN</p>
+      <p style="font-size:14.5px">Endian bit 3: 0 little, 1 big; applies to arithmetic ops, ignored for bitwise ones. No overflow or other operation error exists: every input combination is defined.</p>
+      <p class="src"><span class="sl">Spec</span>Tables A6.6, A6.8, A6.9, p.114–118 · §A6.4.8, p.119</p></div>
+    <div class="card"><h3>Rules that keep Atomics simple</h3><ul class="tight" style="font-size:14.5px">
+      <li>One ID for request, B and R, so it must fit both AWID and RID.</li>
+      <li>Unique in flight: AtomicStore against write-channel traffic with the same ID; Load/Swap/Compare against both channels. Hence no ordering with other transactions.</li>
+      <li>AWLOCK LOW, AWSNOOP 0; any AWCACHE/AWDOMAIN valid for the interface.</li>
+      <li>Length &gt; 1 needs full-width Size; strobes HIGH inside the data window, LOW outside; all Atomics count as Regular.</li>
+      <li>Whole location updated atomically, regardless of the component's single-copy atomicity size.</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A6.4.3–A6.4.5, p.114–117 · §A6.4, p.113</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>Structure and dependencies</h3><ul class="tight" style="font-size:14.5px">
+      <li>Read beats: from AWLEN and AWATOP; AtomicCompare with Length &gt; 1 returns half the beats.</li>
+      <li>Subordinate may wait for all W before R, or send all R before taking any W. The Manager must cope with both.</li>
+      <li>RVALID waits for the AW handshake only. The Manager must not wait for RVALID before WVALID.</li>
+      <li>B only after all W beats and when the result is observable. Either response may serve as "visible".</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A6.4.7–A6.4.9, Figure A6.5, p.118–121</p></div>
+    <div class="card"><h3>Support and errors</h3><ul class="tight" style="font-size:14.5px">
+      <li>Supporting Atomics means all operations, sizes and endiannesses.</li>
+      <li>BROADCASTATOMIC tie-off lets a Manager stop issuing them.</li>
+      <li>A Subordinate supporting them only in some regions or types gives an error elsewhere. An interconnect without support needs every Manager configured not to issue them.</li>
+      <li>Device Atomics must reach the endpoint; Cacheable ones may be done in the interconnect or passed on.</li>
+      <li>On a write error the Subordinate still sends every R beat; recommended: error on both R and B.</li></ul>
+      <p class="src"><span class="sl">Spec</span>§A6.4.8, p.119 · §A6.4.10, p.121–122</p></div>
+  </div>
+</div></section>
+
+<section id="opc"><div class="wrap">
+  <h2>8 · Request Opcodes (AxSNOOP)</h2>
+  <p class="sub">The Opcode is AxSNOOP together with AxDOMAIN. Zero is the generic request: WriteNoSnoop / ReadNoSnoop for Non-shareable or System, WriteUniquePtl / ReadOnce for Shareable. Atomic, exclusive and ACT accesses also use zero and are marked by AWATOP, AxLOCK or AxACTV.</p>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A7.3, p.126–128. Domain: NSH Non-shareable, SH Shareable, SYS System.</caption>
+      <thead><tr><th>AWSNOOP</th><th>Domain</th><th>Opcode</th></tr></thead>
+      <tbody class="mono" style="font-size:12px">
+        <tr><td>00000</td><td>NSH, SYS / SH</td><td>WriteNoSnoop / WriteUniquePtl (also Atomic, WriteExclusive, WriteACT)</td></tr>
+        <tr><td>00001</td><td>NSH, SYS / SH</td><td>WriteNoSnoopFull / WriteUniqueFull</td></tr>
+        <tr><td>00011</td><td>SH</td><td>WriteBackFull</td></tr>
+        <tr><td>00101</td><td>SH</td><td>WriteEvictFull</td></tr>
+        <tr><td>00110</td><td>NSH, SH</td><td>CMO (on write channel)</td></tr>
+        <tr><td>00111</td><td>any</td><td>WriteZero</td></tr>
+        <tr><td>01000 / 01001</td><td>SH</td><td>WriteUniquePtlStash / FullStash</td></tr>
+        <tr><td>01010 / 01011</td><td>NSH, SH</td><td>WritePtlCMO / WriteFullCMO</td></tr>
+        <tr><td>01100 / 01101</td><td>NSH, SH</td><td>StashOnceShared / StashOnceUnique</td></tr>
+        <tr><td>01110</td><td>any</td><td>StashTranslation</td></tr>
+        <tr><td>01111</td><td>NSH, SH</td><td>Prefetch</td></tr>
+        <tr><td>10000</td><td>SYS</td><td>WriteDeferrable</td></tr>
+        <tr><td>10001</td><td>any</td><td>UnstashTranslation</td></tr>
+        <tr><td>10010</td><td>NSH, SH</td><td>InvalidateHint</td></tr>
+      </tbody></table></div>
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px">Spec: Table A7.4, p.129–130</caption>
+      <thead><tr><th>ARSNOOP</th><th>Domain</th><th>Opcode</th></tr></thead>
+      <tbody class="mono" style="font-size:12px">
+        <tr><td>0000</td><td>NSH, SYS / SH</td><td>ReadNoSnoop / ReadOnce (also ReadExclusive, ReadACT)</td></tr>
+        <tr><td>0001</td><td>SH</td><td>ReadShared</td></tr>
+        <tr><td>0010</td><td>SH</td><td>ReadClean</td></tr>
+        <tr><td>0100</td><td>SH</td><td>ReadOnceCleanInvalid</td></tr>
+        <tr><td>0101</td><td>SH</td><td>ReadOnceMakeInvalid</td></tr>
+        <tr><td>1000</td><td>NSH, SH</td><td>CleanShared</td></tr>
+        <tr><td>1001</td><td>NSH, SH</td><td>CleanInvalid</td></tr>
+        <tr><td>1010</td><td>NSH, SH</td><td>CleanSharedPersist</td></tr>
+        <tr><td>1101</td><td>NSH, SH</td><td>MakeInvalid</td></tr>
+        <tr><td>1110</td><td>SH</td><td>DVM Complete</td></tr>
+      </tbody></table></div>
+  </div>
+  <p style="color:var(--muted);font-size:15px">Unlisted AxSNOOP/AxDOMAIN combinations are illegal. AWSNOOP_WIDTH is 0, 4 or 5 (5 needed for WriteDeferrable, UnstashTranslation, InvalidateHint); ARSNOOP_WIDTH 0 or 4. Each Opcode has an enabling property; the caching and translation ones are explained in the Caches &amp; CMOs, Qualifiers and Untranslated guides. <span class="ref">§A7.1, Table A7.2, p.124–125</span></p>
+</div></section>
+
+<section id="rationale"><div class="wrap">
+  <h2>9 · Why each rule exists, with real-time examples</h2>
+  <div class="chips" role="group" aria-label="Filter rules by area" id="whychips"></div>
+  <div class="whys">
+    <article class="wcard" data-g="resp"><div class="meta"><span>Responses</span><span>§A3.3.2 p.62</span></div><h3>Errors don't end bursts early</h3><p class="rule">All Length beats are always completed, whatever the response.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Every component on the path counts beats. If an error shortened a burst, all of them would need a separate way to resynchronise. Keeping the count fixed means errors are just data.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 16-beat read hits a powered-down SRAM bank after beat 9. Beats 10–16 come back SLVERR with junk data; the CPU's line-fill logic still counts 16 and raises the error once.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Subordinate that sends only one error beat hangs the R channel.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.3.2, p.62 · H.c §A3.4.5, p.A3-59</li><li><span class="kind illus">Illustrative</span>example</li></ul></div></article>
+
+    <article class="wcard" data-g="resp"><div class="meta"><span>Responses</span><span>Tables A3.28, A3.31</span></div><h3>SLVERR vs DECERR</h3><p class="rule">SLVERR: reached an endpoint, which failed. DECERR: never reached a point where data exists, typically no Subordinate at that address.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Software reacts differently. DECERR usually means a bad pointer or a missing device (a programming error). SLVERR means the device is there but unhappy (powered down, read-only, FIFO overrun), which a driver may be able to fix.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A write to an unmapped hole: the interconnect's default Subordinate returns DECERR. A write to a read-only OTP register: the OTP controller returns SLVERR.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Debugging gets much harder: a firmware engineer chasing a "decode error" in an address map when the real cause is a powered-down block.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>Tables A3.28, A3.31, p.62–63</li><li><span class="kind illus">Illustrative</span>examples</li></ul></div></article>
+
+    <article class="wcard" data-g="resp"><div class="meta"><span>Responses</span><span>§A3.3.2 p.63</span></div><h3>Error data may still be sampled</h3><p class="rule">When a response says data is not valid, the Manager might still sample RDATA, so the Subordinate must not rely on the response to hide sensitive data.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Managers often latch RDATA every beat for timing and look at RRESP afterwards. Whatever is on the wires during an error beat effectively leaves the Subordinate.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A key-storage block refuses a Non-secure read with SLVERR but drives the key on RDATA. A Non-secure CPU that captured RDATA has the key.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A security leak through error responses. Drive zeros, or anything harmless, on error beats.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A3.3.2, p.63 · Table B4.1, p.308</li><li><span class="kind illus">Illustrative</span>key block</li></ul></div></article>
+
+    <article class="wcard" data-g="ex"><div class="meta"><span>Exclusive</span><span>§A6.3 p.110–112</span></div><h3>OKAY means "failed" for an exclusive write</h3><p class="rule">An exclusive write succeeds only with EXOKAY; OKAY means memory was not updated (or the Subordinate has no monitor).</p>
+      <div class="part"><span class="l l-why">Why</span><p>The response code space was kept compatible: a Subordinate that knows nothing about exclusives naturally answers OKAY, which tells the Manager it got no exclusivity guarantee.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>On Arm, STXR writes 0 to its status register on EXOKAY and 1 otherwise; the spin-lock loop retries on 1.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A bridge that maps EXOKAY to OKAY on the way back makes every exclusive look failed and spin-locks livelock.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A6.3.2, p.111 · Table A3.28, p.62</li><li><span class="kind bg">Background</span>Arm LDXR/STXR</li></ul></div></article>
+
+    <article class="wcard" data-g="ex"><div class="meta"><span>Exclusive</span><span>§A6.3.3 p.111</span></div><h3>Aligned, power-of-two, ≤ 128 bytes, ≤ 16 beats</h3><p class="rule">The exclusive's bytes form one naturally aligned power-of-two block of at most 128 bytes.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A monitor tracks a granule, not an arbitrary range. Natural alignment means the block always fits inside one granule, so one comparator per ID is enough.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An exclusive pair on a 16-byte (LDXP/STXP) structure at 0x1010 is fine; at 0x1018 it straddles a 16-byte boundary and is UNPREDICTABLE.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>UNPREDICTABLE: some monitors succeed, some fail, some corrupt.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A6.3.3, p.111</li><li><span class="kind bg">Background</span>LDXP/STXP</li></ul></div></article>
+
+    <article class="wcard" data-g="ex"><div class="meta"><span>Exclusive</span><span>Table A6.5 p.112</span></div><h3>Read and write must match</h3><p class="rule">If ID, address, length, size, burst, lock, AxCACHE[1:0], protection, domain, Opcode or MMU fields differ between the exclusive read and write, the write may fail.</p>
+      <div class="part"><span class="l l-why">Why</span><p>The monitor identifies the pair by ID and address in the Subordinate's view. A changed attribute could route the write to a different monitor, or represent a different address space entirely.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A width converter makes the read Size 8 Length 1 and the write Size 4 Length 2 (allowed for exclusives if the bytes match) but changes AxCACHE[0] differently on each: the monitor may treat them as different.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Exclusives that fail forever only in one path through the fabric.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>Table A6.5, p.112 · §A4.2.2, p.69</li><li><span class="kind illus">Illustrative</span>converter</li></ul></div></article>
+
+    <article class="wcard" data-g="atom"><div class="meta"><span>Atomic</span><span>§A6.4.4 p.116</span></div><h3>Atomics use a unique ID</h3><p class="rule">AtomicStore: no other outstanding write-channel transaction with that ID. Load, Swap, Compare: none on either channel.</p>
+      <div class="part"><span class="l l-why">Why</span><p>An Atomic has a B and possibly an R with one ID. If other transactions shared it, the same-ID ordering rules would tie the Atomic's R to unrelated reads and its B to unrelated writes, creating cross-channel ordering AXI otherwise never has.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A CPU reserves ID 0x3F for Atomics and issues one at a time on it; all other traffic uses 0x00–0x3E.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>An interconnect may deadlock trying to order an Atomic's R behind a read that is waiting for something the Atomic holds.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A6.4.4, p.116</li><li><span class="kind illus">Illustrative</span>ID choice</li></ul></div></article>
+
+    <article class="wcard" data-g="atom"><div class="meta"><span>Atomic</span><span>§A6.4.7 p.118</span></div><h3>R and W may happen in either order</h3><p class="rule">The Subordinate may wait for all W before R, or send all R before taking W. The Manager must handle both.</p>
+      <div class="part"><span class="l l-why">Why</span><p>Some Subordinates read first (they need the old value before they can do anything); some take the operand first. Allowing both means neither design is penalised, as long as the Manager never makes W wait for R or R wait for W.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A DDR controller reads the line, returns the old value at once and then waits for the operand; a system cache that already holds the line takes W first and returns R and B together.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>A Manager that holds WVALID until it sees R deadlocks against a Subordinate that waits for W.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A6.4.7, p.118 · §A6.4.9, p.120</li><li><span class="kind illus">Illustrative</span>designs</li></ul></div></article>
+
+    <article class="wcard" data-g="atom"><div class="meta"><span>Atomic</span><span>§A6.4.10 p.121–122</span></div><h3>All or nothing support</h3><p class="rule">A component that supports Atomics supports every operation, size and endianness; a path that can't handle them must not receive them.</p>
+      <div class="part"><span class="l l-why">Why</span><p>A Manager can't know which operation a program will use. Partial support would force run-time negotiation. Instead, support is a static property, BROADCASTATOMIC turns issuing off, and unsupported regions give an error.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>An SoC whose peripheral interconnect lacks Atomics ties BROADCASTATOMIC LOW on the CPU port that leads there; the CPU then performs LDADD as an exclusive loop internally.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>An Atomic reaching a component that can't parse AWATOP is treated as a plain write of the operand: silent corruption.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A6.4.10, p.121–122</li><li><span class="kind bg">Background</span>CPU fallback behaviour</li></ul></div></article>
+
+    <article class="wcard" data-g="sys"><div class="meta"><span>System</span><span>§A6.1 p.108</span></div><h3>Atomicity never exceeds alignment</h3><p class="rule">A transaction's single-copy atomicity guarantee is never greater than the alignment of its start address.</p>
+      <div class="part"><span class="l l-why">Why</span><p>An unaligned 8-byte access may straddle two memory words, banks or even Subordinates. Making it atomic would need a lock across both; the spec simply doesn't promise it.</p></div>
+      <div class="part ex"><span class="l l-ex">Real-time example</span><p>A 64-bit pointer at 0x1004 is updated by one CPU and read by another; the reader may see 4 new bytes and 4 old ones. At 0x1008 it is atomic in a 64-bit group.</p></div>
+      <div class="part brk"><span class="l l-brk">If you break it</span><p>Torn reads of shared data structures, which software must avoid with alignment.</p></div>
+      <div class="checks"><span class="l l-src">Sources</span><ul><li><span class="kind spec">Spec</span>§A6.1, p.108</li><li><span class="kind illus">Illustrative</span>addresses</li></ul></div></article>
+  </div>
+</div></section>
+
+<section id="live"><div class="wrap">
+  <h2>10 · Live scenarios</h2>
+  <div class="viewer">
+    <div class="tabs" role="tablist" id="tabs" aria-label="Scenarios"></div>
+    <div class="vhead"><h3 id="sc-title"></h3><p id="sc-desc"></p><p class="src" id="sc-src"></p></div>
+    <div class="scroller" id="wave"></div>
+    <div class="steps"><div class="stepbar"><button class="btn" id="prev" type="button">← Previous</button><button class="btn primary" id="next" type="button">Next →</button><div class="dots" id="dots" aria-label="Steps"></div><span class="cycles" id="cyc"></span></div>
+      <div class="stepbody"><h3 id="st-title"></h3><p id="st-text"></p><p class="why" id="st-why"></p><p class="src" id="st-src"></p></div></div>
+  </div>
+  <p style="color:var(--muted);font-size:14px">Cycle positions are illustrative; handshakes are simplified (READY HIGH) to keep the responses in focus.</p>
+</div></section>
+
+<section id="silicon"><div class="wrap">
+  <h2>11 · Real silicon: what the theory turns into</h2>
+  <div class="twocol">
+    <div class="tbl-wrap"><table>
+      <caption class="src" style="caption-side:bottom;text-align:left;padding:8px 12px"><span class="kind illus">Illustrative</span> latencies for a contended counter; exact numbers vary widely by system.</caption>
+      <thead><tr><th>Method</th><th>Bus transactions</th><th>Location held</th><th>Under contention</th></tr></thead>
+      <tbody style="font-size:14px">
+        <tr><td>Exclusive pair from the CPU</td><td>AR + R, then AW + W + B</td><td>Round trip CPU ↔ memory (≈ 100–200 ns)</td><td>Retries grow with contenders; risk of livelock</td></tr>
+        <tr><td>AtomicLoad ADD at memory</td><td>AW + W, R + B</td><td>A few cycles at the memory or cache</td><td>Each operation succeeds once</td></tr>
+        <tr><td>Locked transfers (AXI3)</td><td>Locked sequence</td><td>Whole Subordinate region, all Managers stalled</td><td>Removed in AXI4</td></tr>
+      </tbody></table></div>
+    <div class="card"><h3>Where the monitors live</h3><ul class="tight" style="font-size:14.5px">
+      <li><strong>Local monitor</strong> inside the CPU for Non-shareable exclusives (no bus monitor needed).</li>
+      <li><strong>Global monitor</strong> in the memory controller or on-chip SRAM for exclusives that reach the bus; one entry per exclusive-capable ID is recommended.</li>
+      <li>Shareable exclusives are handled through the coherent interconnect (CHI), which is why AXI forbids Shareable exclusives.</li>
+      <li><strong>Default Subordinate</strong> in every interconnect: answers DECERR for unmapped addresses, with the full beat count.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> · rules from §A6.3.3–A6.3.4, p.111–112 and Table A3.31, p.63</p></div>
+  </div>
+  <h3 style="margin:26px 0 6px">Integration mistakes that show up in real projects</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Symptom</th><th>Root cause</th><th>Rule in the spec</th></tr></thead><tbody>
+    <tr><td>Spin-lock never acquired</td><td>Path to memory has no monitor; exclusive reads return OKAY, software ignores it.</td><td class="ref">§A6.3.2, p.111 · Table A6.4, p.110</td></tr>
+    <tr><td>Spin-lock acquired by two CPUs</td><td>Monitor keyed by address only, not by ID; a different Manager's exclusive write succeeded.</td><td class="ref">§A6.3.4, p.112</td></tr>
+    <tr><td>Exclusive always fails behind a cache</td><td>AxCACHE lets a buffer or cache answer before the monitor.</td><td class="ref">§A6.3.3, p.111</td></tr>
+    <tr><td>R channel hangs after an error</td><td>Subordinate stopped after the first SLVERR beat.</td><td class="ref">§A3.3.2, p.62</td></tr>
+    <tr><td>Atomic counter gets the operand, not the sum</td><td>Interconnect path without Atomic support passed AWATOP traffic as a write.</td><td class="ref">§A6.4.10, p.121–122</td></tr>
+    <tr><td>Atomic deadlocks with a memory controller</td><td>Manager waited for RVALID before sending W.</td><td class="ref">§A6.4.9, p.120</td></tr>
+    <tr><td>Two-response writes miscount completions</td><td>Monitor ignored BCOMP and counted the Persist response as the Completion.</td><td class="ref">§A3.3.1, p.61</td></tr>
+  </tbody></table></div>
+</div></section>
+
+<section id="changes"><div class="wrap">
+  <h2>12 · What changed from AXI3 and AXI4 to Issue L</h2>
+  <div class="tbl-wrap cmp"><table>
+    <thead><tr><th>Topic</th><th><span class="ver old">H.c</span> AXI3 / AXI4</th><th><span class="ver new">L</span> AXI5 family</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>Response width and codes</td><td class="then">BRESP/RRESP[1:0]: OKAY, EXOKAY, SLVERR, DECERR. DECERR "typically generated by an interconnect: no Subordinate at the address".</td><td>Width 0, 2 or 3. B adds DEFER, TRANSFAULT, UNSUPPORTED; R adds PREFETCHED, TRANSFAULT, OKAYDIRTY. R SLVERR/DECERR described as contained/non-contained errors.</td><td class="ref">H.c §A3.4.5, p.A3-59–A3-60 · Tables A3.26–A3.31, p.61–63</td></tr>
+      <tr><td>Second write response</td><td class="then">One B per write.</td><td>BCOMP marks the Completion when Persist CMOs or MTE Match add a second B.</td><td class="ref">§A3.3.1, p.61</td></tr>
+      <tr><td>Busy, Consistent DECERR</td><td class="then">Not present.</td><td>BBUSY/RBUSY (Issue J), Consistent_DECERR.</td><td class="ref">Table B4.1, p.307 · §A3.3.2–A3.3.3, p.63–65</td></tr>
+      <tr><td>Locked transfers</td><td class="then"><strong>AXI3:</strong> AxLOCK[1:0]: 00 normal, 01 exclusive, 10 locked, 11 reserved. Locked sequences block other Managers. <strong>AXI4:</strong> 1-bit AxLOCK, locked removed; AXI3 locked converted to normal.</td><td>1-bit AxLOCK for exclusive only.</td><td class="ref">H.c §A7.3–A7.4, p.A7-99–A7-100 · Table A6.2, p.110</td></tr>
+      <tr><td>Exclusive and caches</td><td class="then">If a buffer or cache could respond before the monitor, the exclusive must be Non-bufferable or Non-cacheable.</td><td>"AxCACHE values must be appropriate to ensure that the read and write requests reach the exclusive access monitor" (redefined in Issue J).</td><td class="ref">H.c §A7.2.4, p.A7-97 · §A6.3.3, p.111 · Table B4.1, p.308</td></tr>
+      <tr><td>Exclusive restrictions</td><td class="then">Aligned, power of 2 ≤ 128 B, ≤ 16 beats, matching attributes.</td><td>Adds: not Shareable, Opcode ReadExclusive/WriteExclusive, AWTAGOP not Match (Issue K); more signals in the must-match list; mismatches don't always fail (Issue L).</td><td class="ref">§A6.3.3, p.111 · Table A6.5, p.112 · Tables B4.2–B4.3</td></tr>
+      <tr><td>Atomic transactions</td><td class="then">AMBA 5 feature (Part E), not in AXI3/AXI4.</td><td>Core Chapter A6.4. Clarified: whole location updated atomically, AtomicCompare is Regular, ID rules (Issue L).</td><td class="ref">H.c §E1.1, p.E1-342 · §A6.4, p.113–122 · Table B4.3, p.311</td></tr>
+      <tr><td>Multi-copy atomicity</td><td class="then">Property defined; Arm-compliant systems must be multi-copy atomic.</td><td>Must be True for Issue G and later.</td><td class="ref">H.c §A7.1, p.A7-95 · §A6.2, p.109</td></tr>
+      <tr><td>Opcodes</td><td class="then">AXI3/AXI4 had no Opcode field; AxSNOOP belonged to ACE/ACE-Lite (Part D) and AMBA 5 features.</td><td>AxSNOOP + AxDOMAIN is the request Opcode of every interface class, with per-Opcode enabling properties.</td><td class="ref">H.c §D3.1, p.D3-176 · §A7, p.124–130</td></tr>
+    </tbody></table></div>
+</div></section>
+
+<section id="verify"><div class="wrap">
+  <h2>13 · Verification</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Assertions</h3><ul class="tight" style="font-size:14.5px">
+      <li>EXOKAY only for exclusive requests; never mixed with OKAY within one exclusive read. <span class="ref">Tables A3.28, A3.31 · §A6.3.4, p.112</span></li>
+      <li>DEFER/UNSUPPORTED only for WriteDeferrable; OKAYDIRTY only for ReadShared; TRANSFAULT only with PRI. <span class="ref">Tables A3.28, A3.31</span></li>
+      <li>Exclusive: aligned to Size × Length, power-of-two bytes ≤ 128, Length ≤ 16, not Shareable. <span class="ref">§A6.3.3, p.111</span></li>
+      <li>No exclusive write with an ID whose exclusive read is still outstanding. <span class="ref">§A6.3.2, p.111</span></li>
+      <li>Atomic: AWLOCK LOW, AWSNOOP 0; unique ID per §A6.4.4; R beat count from AWLEN and type; strobes exactly the data window. <span class="ref">§A6.4.3–A6.4.7, p.114–118</span></li>
+      <li>BCOMP HIGH on exactly one B per write-channel transaction. <span class="ref">§A3.3.1, p.61</span></li>
+      <li>Consistent_DECERR: all or none DECERR per cache line. <span class="ref">Table A3.32, p.64</span></li></ul></div>
+    <div class="card"><h3>Reference model and scenarios</h3><ul class="tight" style="font-size:14.5px">
+      <li>Monitor model like section 6, keyed by (Manager port, ID), with the Subordinate's granule; predict EXOKAY/OKAY and memory update.</li>
+      <li>Atomic model per operation and endianness, all sizes; check returned old value and new memory value; Compare with lower- and upper-half addresses.</li>
+      <li>Scenarios: N Managers racing exclusives on one address; exclusive interleaved with Atomics to the same address; Atomic R-before-W and W-before-R Subordinates; errors on W but not R.</li>
+      <li>Coverage: every response code per channel; exclusive success/fail × cause; AWATOP all 8 ops × 2 endian × sizes; Compare sizes 2–32 × INCR/WRAP.</li></ul>
+      <p class="src"><span class="kind bg">Background</span> · rules from §A6.3–A6.4, p.110–122</p></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h3>SVA sketch</h3>
+<pre>// exclusive alignment and size
+a_ex: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  ARVALID &amp;&amp; ARLOCK |-&gt; ARLEN &lt;= 15 &amp;&amp; is_pow2(bytes(ARSIZE, ARLEN))
+    &amp;&amp; bytes(ARSIZE, ARLEN) &lt;= 128 &amp;&amp; (ARADDR % bytes(ARSIZE, ARLEN)) == 0);
+
+// atomics are never exclusive and use Opcode 0
+a_atop: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  AWVALID &amp;&amp; AWATOP != 0 |-&gt; !AWLOCK &amp;&amp; AWSNOOP == 0);
+
+// no EXOKAY on a non-exclusive write (lock_q from AW, matched by BID)
+a_exokay: assert property (@(posedge ACLK) disable iff (!ARESETn)
+  BVALID &amp;&amp; BRESP == EXOKAY |-&gt; lock_q[BID].front());</pre>
+    <p class="src"><span class="sl">Spec</span>§A6.3.3, p.111 · §A6.4.5, p.117 · Table A3.28, p.62. bytes(), is_pow2() and lock_q are checker helpers.</p></div>
+</div></section>
+
+<section id="quiz"><div class="wrap">
+  <h2>14 · Test yourself</h2>
+  <p class="sub"><button class="btn" id="qa-toggle" type="button" aria-pressed="false">Show all answers</button></p>
+  <details><summary>What do OKAY and EXOKAY mean on an exclusive read and on an exclusive write? <span class="lvl">Basic</span></summary><div><p>Read: EXOKAY = monitored; OKAY = Subordinate doesn't support exclusives (data still valid). Write: EXOKAY = succeeded and memory updated; OKAY = failed, not updated (or no monitor, in which case it was updated).</p><p class="src"><span class="sl">Spec</span>Tables A3.28, A3.31, p.62–63 · §A6.3.2, §A6.3.4, p.111–112</p></div></details>
+  <details><summary>SLVERR vs DECERR? <span class="lvl">Basic</span></summary><div><p>SLVERR: reached an endpoint that failed (read-only, powered down, FIFO overrun). DECERR: never reached a point where data exists, typically no Subordinate at the address; usually generated by the interconnect's default Subordinate.</p><p class="src"><span class="sl">Spec</span>Tables A3.28, A3.31, p.62–63</p></div></details>
+  <details><summary>A Subordinate hits an error on beat 3 of 8. What does it send? <span class="lvl">Basic</span></summary><div><p>All 8 beats. Beat 3 onwards (or whichever beats are affected) carry an error response; the burst is never shortened.</p><p class="src"><span class="sl">Spec</span>§A3.3.2, p.62</p></div></details>
+  <details><summary>Why did AXI4 remove locked transfers? <span class="lvl">Basic</span></summary><div><p>Few components needed them, and they made interconnects complex and QoS guarantees hard because a locked sequence blocks all other Managers from the region. Exclusive accesses give semaphores without locking.</p><p class="src"><span class="sl">Spec</span>H.c §A7.3, p.A7-99</p></div></details>
+  <details><summary>List the restrictions on an exclusive access. <span class="lvl">Intermediate</span></summary><div><p>Aligned to Size × Length; power-of-two total of 1–128 bytes; Length ≤ 16; not Shareable; Opcode ReadExclusive/WriteExclusive; AWTAGOP not Match; AxCACHE such that both requests reach the monitor; attributes matching between read and write.</p><p class="src"><span class="sl">Spec</span>§A6.3.3, p.111 · Table A6.5, p.112</p></div></details>
+  <details><summary>Can an exclusive fail even though nobody wrote the exact bytes? <span class="lvl">Intermediate</span></summary><div><p>Yes: the monitor may watch up to 128 bytes, so a write to a neighbouring byte fails it; another exclusive read with the same ID moves the monitor; or read and write attributes differed.</p><p class="src"><span class="sl">Spec</span>§A6.3.3–A6.3.4, p.111–112</p></div></details>
+  <details><summary>Encode AtomicLoad, big-endian, signed maximum. <span class="lvl">Intermediate</span></summary><div><p>AWATOP = 0b10_1_100 = 0x2C: AtomicLoad (10), big-endian (1), SMAX (100).</p><p class="src"><span class="sl">Spec</span>Tables A6.8–A6.9, p.117–118</p></div></details>
+  <details><summary>What is the ID rule for Atomic transactions and why? <span class="lvl">Intermediate</span></summary><div><p>One ID for request, B and R, and it must be unique in flight: no other same-ID write-channel transaction for AtomicStore, none on either channel for the others. This removes any ordering link between Atomics and other traffic.</p><p class="src"><span class="sl">Spec</span>§A6.4.4, p.116</p></div></details>
+  <details><summary>Describe an AtomicCompare of 4-byte values at 0x104 on a 64-bit channel. <span class="lvl">Advanced</span></summary><div><p>8 bytes outbound (compare + swap), AWSIZE 8 bytes, AWADDR 0x104 aligned to 4. 0x104 is the upper half of the 8-byte window 0x100–0x107, so the swap value goes in the lower bytes, the compare value in the upper bytes, and AWBURST is WRAP (Length 1 and an unaligned-to-Size WRAP are allowed here). Read data returns 4 bytes.</p><p class="src"><span class="sl">Spec</span>§A6.4.3, p.115 · Figure A6.2, p.116</p></div></details>
+  <details><summary>How does a Manager know whether an AtomicCompare swapped? <span class="lvl">Advanced</span></summary><div><p>Only by comparing the returned original value with its compare value. Responses carry no outcome.</p><p class="src"><span class="sl">Spec</span>§A6.4.8, p.119</p></div></details>
+  <details><summary>Why is "Domain not Shareable" a restriction on AXI exclusives? <span class="lvl">Advanced</span></summary><div><p>Shareable locations may be cached coherently by several agents, so an exclusive must be resolved by the coherence protocol rather than a single endpoint monitor. AXI keeps exclusives to Non-shareable and System locations, which reach a monitor at the endpoint.</p><p class="src"><span class="sl">Spec</span>§A6.3.3, p.111 · <span class="kind bg">Background</span> on coherent exclusives</p></div></details>
+  <details><summary>What changed in responses between AXI4 and Issue L? <span class="lvl">Advanced</span></summary><div><p>Optional 3-bit width with DEFER, TRANSFAULT and UNSUPPORTED on B and PREFETCHED, TRANSFAULT and OKAYDIRTY on R; BCOMP for two-response writes; Busy indicators; Consistent_DECERR; and the clarification that Managers may sample RDATA on error beats.</p><p class="src"><span class="sl">Spec</span>H.c §A3.4.5, p.A3-59 · §A3.3, p.61–65 · Table B4.1, p.307–308</p></div></details>
+</div></section>
+
+<section id="refs"><div class="wrap">
+  <h2>15 · Spec reference index</h2>
+  <h3 style="margin:0 0 8px">ARM IHI 0022 Issue L</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A3.3, §A3.3.1, Tables A3.26–A3.28</td><td>Transaction response; write response</td><td class="num">61–62</td><td>1, 2, 3, 9, 11, 12, 13, 14</td></tr>
+    <tr><td>§A3.3.2, Tables A3.29–A3.33</td><td>Read response; Consistent_DECERR</td><td class="num">62–64</td><td>1, 2, 3, 9, 10, 11, 12, 13, 14</td></tr>
+    <tr><td>§A3.3.3, Tables A3.34–A3.37</td><td>Subordinate Busy indicator</td><td class="num">64–65</td><td>2, 3, 12</td></tr>
+    <tr><td>§A4.2.2</td><td>Modifiable (atomicity limit)</td><td class="num">69–70</td><td>4, 9</td></tr>
+    <tr><td>§A5.3.3</td><td>Completion definitions</td><td class="num">94</td><td>1</td></tr>
+    <tr><td>§A6.1, Figure A6.1</td><td>Single-copy atomicity size</td><td class="num">108</td><td>4, 9</td></tr>
+    <tr><td>§A6.2, Table A6.1</td><td>Multi-copy write atomicity</td><td class="num">109</td><td>3, 4, 12</td></tr>
+    <tr><td>§A6.3, Tables A6.2–A6.4</td><td>Exclusive accesses</td><td class="num">110</td><td>1, 3, 5, 10, 11</td></tr>
+    <tr><td>§A6.3.1–A6.3.2</td><td>Exclusive sequence; Manager perspective</td><td class="num">110–111</td><td>5, 6, 9, 10, 11, 13, 14</td></tr>
+    <tr><td>§A6.3.3</td><td>Exclusive access restrictions</td><td class="num">111</td><td>5, 9, 11, 12, 13, 14</td></tr>
+    <tr><td>§A6.3.4, Table A6.5</td><td>Subordinate perspective; signals to match</td><td class="num">112</td><td>5, 6, 9, 10, 11, 12, 14</td></tr>
+    <tr><td>§A6.4–A6.4.2, Table A6.6</td><td>Atomic transactions; operations</td><td class="num">113–114</td><td>1, 7, 10, 12</td></tr>
+    <tr><td>§A6.4.3, Figure A6.2</td><td>Atomic attributes; Compare layout</td><td class="num">114–116</td><td>7, 10, 13, 14</td></tr>
+    <tr><td>§A6.4.4–A6.4.6, Tables A6.7–A6.9</td><td>ID use; attribute restrictions; AWATOP</td><td class="num">116–118</td><td>3, 7, 9, 10, 13, 14</td></tr>
+    <tr><td>§A6.4.7–A6.4.9, Figures A6.3–A6.5</td><td>Structure; response signaling; dependencies</td><td class="num">118–121</td><td>7, 9, 10, 11, 14</td></tr>
+    <tr><td>§A6.4.10, Tables A6.10–A6.11</td><td>Support for Atomic transactions</td><td class="num">121–122</td><td>3, 7, 9, 11</td></tr>
+    <tr><td>§A7.1, Tables A7.1–A7.2</td><td>Opcode signaling</td><td class="num">124–125</td><td>3, 8</td></tr>
+    <tr><td>§A7.2–A7.3, Tables A7.3–A7.4</td><td>AWSNOOP and ARSNOOP encodings</td><td class="num">126–130</td><td>3, 8, 12</td></tr>
+    <tr><td>Tables B4.1–B4.3</td><td>Revisions</td><td class="num">307–312</td><td>9, 12, 14</td></tr>
+  </tbody></table></div>
+  <h3 style="margin:20px 0 8px">ARM IHI 0022 Issue H.c</h3>
+  <div class="tbl-wrap refidx"><table><thead><tr><th>Reference</th><th>Title in the spec</th><th class="num">Page</th><th>Used in</th></tr></thead><tbody>
+    <tr><td>§A3.4.5</td><td>Read and write response structure</td><td class="num">A3-59–A3-60</td><td>9, 12, 14</td></tr>
+    <tr><td>§A7.1</td><td>Single-copy atomicity size; multi-copy atomicity</td><td class="num">A7-95</td><td>12</td></tr>
+    <tr><td>§A7.2</td><td>Exclusive accesses</td><td class="num">A7-96–A7-98</td><td>12</td></tr>
+    <tr><td>§A7.3–A7.4</td><td>Locked accesses; atomic access signaling (AXI3 AxLOCK)</td><td class="num">A7-99–A7-100</td><td>1, 12, 14</td></tr>
+    <tr><td>§D3.1</td><td>Read and write address channel signaling (ACE AxSNOOP)</td><td class="num">D3-176</td><td>12</td></tr>
+    <tr><td>§E1.1</td><td>Atomic transactions (AMBA 5)</td><td class="num">E1-342</td><td>12</td></tr>
+  </tbody></table></div>
+</div></section>
+</main>
+<footer><div class="wrap">Built from ARM IHI 0022 Issue L: §A3.3, Chapters A6 and A7, with Appendix B4; AXI3/AXI4 comparisons from Issue H.c §A3.4.5, Chapter A7, §D3.1 and §E1.1. For sign-off, check the spec at the cited page.</div></footer>
