@@ -241,6 +241,16 @@ figcaption .ref { display: block; margin-top: 6px; }
   h2 { font-size: 24px; }
   .cycles { margin-left: 0; width: 100%; }
 }
+/* quiz (same look as the template pages) */
+#quiz details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+#quiz details + details { margin-top: 10px; }
+#quiz summary { cursor: pointer; font-weight: 500; list-style: none; display: block; position: relative; padding-left: 22px; }
+#quiz summary::-webkit-details-marker { display: none; }
+#quiz summary::before { content: "+"; font-family: var(--font-mono); color: var(--pl); position: absolute; left: 0; top: 0; }
+#quiz details[open] summary::before { content: "\2013"; }
+#quiz details > div { padding: 8px 0 2px 22px; display: grid; gap: 6px; }
+#quiz details > div p { margin: 0; font-size: 15px; }
+#quiz .lvl { display: inline-block; font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; margin-left: 8px; white-space: nowrap; vertical-align: 1px; }
 /* series navigation (shared with the template pages) */
 .series { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 12px; }
 .series a { color: var(--muted); text-decoration: none; }
@@ -261,7 +271,7 @@ figcaption .ref { display: block; margin-top: 6px; }
       <span><i class="sw" style="background:var(--pl)"></i><code>pl_*</code> driven by the Adapter</span>
       <span><i class="sw" style="background:var(--sb)"></i>sideband messages between dies</span>
     </div>
-    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025); in that PDF the printed page number equals the PDF page number. Rule cards tag each fact as <span class="kind spec">Spec</span>stated in the spec, <span class="kind derived">Derived</span>arithmetic on spec values, <span class="kind illus">Illustrative</span>example values, or <span class="kind bg">Background</span>from outside UCIe. Section 11 indexes every cited section, table and figure.</p>
+    <p class="src" style="max-width:76ch"><span class="sl">References</span>§ = section and p. = page of the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025); in that PDF the printed page number equals the PDF page number. Rule cards tag each fact as <span class="kind spec">Spec</span>stated in the spec, <span class="kind derived">Derived</span>arithmetic on spec values, <span class="kind illus">Illustrative</span>example values, or <span class="kind bg">Background</span>from outside UCIe. Section 12 indexes every cited section, table and figure.</p>
   </div>
 </header>
 
@@ -277,7 +287,8 @@ figcaption .ref { display: block; margin-top: 6px; }
     <a href="#live">8 · Live scenarios</a>
     <a href="#silicon">9 · Real silicon</a>
     <a href="#verify">10 · Verification</a>
-    <a href="#refs">11 · Spec index</a>
+    <a href="#quiz">11 · Test yourself</a>
+    <a href="#refs">12 · Spec index</a>
   </div>
 </nav>
 
@@ -1326,10 +1337,25 @@ a_no_bubble: assert property (@(posedge lclk)
   </div>
 </section>
 
-<!-- 11. SPEC INDEX -->
+<!-- 11. QUIZ -->
+<section id="quiz">
+  <div class="wrap">
+    <h2>11 · Test yourself</h2>
+    <p class="sub">Interview-style questions. <button class="btn" id="qa-toggle" type="button" aria-pressed="false" style="margin-left:8px">Show all answers</button></p>
+    <details><summary>When does one beat of flit data move from the Protocol Layer to the Adapter? <span class="lvl">Basic</span></summary><div><p>Only in a cycle where <code>lp_irdy</code>, <code>lp_valid</code> and <code>pl_trdy</code> are all high. Inside a flit the Protocol Layer keeps <code>lp_irdy</code> and <code>lp_valid</code> high; only <code>pl_trdy</code> may pause it.</p><p class="src"><span class="sl">Spec</span>§10.2.4, p.549</p></div></details>
+    <details><summary>In which FDI states does the Protocol Layer treat the link as up? <span class="lvl">Basic</span></summary><div><p>Active, Active.PMNAK, Retrain, L1 and L2. Reset, LinkReset, Disabled and LinkError are link down.</p><p class="src"><span class="sl">Spec</span>Table 10-3 (pl_state_sts), p.542</p></div></details>
+    <details><summary>Can the Protocol Layer back-pressure received flits? <span class="lvl">Intermediate</span></summary><div><p>No. Whenever <code>pl_valid</code> is high the beat is taken; there is no ready signal toward the Adapter. The Adapter, on its side, may drop <code>pl_valid</code> in the middle of a flit.</p><p class="src"><span class="sl">Spec</span>§10.2.2, p.547 · §10.2.4, p.550</p></div></details>
+    <details><summary>The Adapter forwards a flit and its CRC check then fails. How does the Protocol Layer find out? <span class="lvl">Intermediate</span></summary><div><p><code>pl_flit_cancel</code> pulses for one cycle, exactly one cycle after the last beat of the flit (or of the 128-byte half in Latency-Optimized formats). The Protocol Layer discards it; the replayed flit arrives later, in order and uncancelled.</p><p class="src"><span class="sl">Spec</span>Table 10-3 (pl_flit_cancel), p.542 · §10.2.5, p.551–552</p></div></details>
+    <details><summary>The status is Reset and <code>lp_state_req</code> already reads Active. Why does the link not come up? <span class="lvl">Intermediate</span></summary><div><p>The Adapter acts on the transition from NOP to Active, not on the level. The Protocol Layer must drive NOP for at least one clock and then Active. The same applies to a Retrain entered from Active.</p><p class="src"><span class="sl">Spec</span>§10.3.3.1, p.565 · §10.3.3.4, p.567</p></div></details>
+    <details><summary>On FDI in Flit mode, when is the <code>pl_stallreq</code> / <code>lp_stallack</code> handshake used? <span class="lvl">Advanced</span></summary><div><p>Only when leaving Active for PM. For Retrain, LinkReset and Disabled the Adapter drops <code>pl_trdy</code> at a flit boundary instead. In Raw format the stall handshake is used for every exit from Active.</p><p class="src"><span class="sl">Spec</span>§10.3.2, p.563</p></div></details>
+    <details><summary>Give the three PM timing numbers on FDI and who may start a PM request. <span class="lvl">Advanced</span></summary><div><p>An Adapter answers a PM request within 2 µs; if its Protocol Layer has stayed at Active for 1 µs the answer is PMNAK; after a PMNAK the requester waits at least 2 µs before retrying. For PCIe and CXL only the upstream port's Adapter sends PM requests; for Streaming, Raw format and Management-only mainband, both sides do.</p><p class="src"><span class="sl">Spec</span>§10.2.9, p.555–556</p></div></details>
+  </div>
+</section>
+
+<!-- 12. SPEC INDEX -->
 <section id="refs">
   <div class="wrap">
-    <h2>11 · Spec reference index</h2>
+    <h2>12 · Spec reference index</h2>
     <p class="sub">Every section, table and figure this page cites, from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025). Page numbers are the printed footer numbers, which in this PDF are also the PDF page numbers. "Used in" lists the sections of this page that rely on it.</p>
     <div class="tbl-wrap refidx">
       <table>
@@ -1401,7 +1427,7 @@ a_no_bubble: assert property (@(posedge lclk)
 </main>
 
 <footer>
-  <div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 10.2 Flit-Aware Die-to-Die Interface and Chapter 10.3 Common rules for FDI and RDI, with Chapters 1.4, 2.4, 3.1–3.9, 4.1, 4.5 and 5.5 for context. Section 11 lists every cited section, table and figure with its page. Example numbers in sections 3, 7 and 9 are derived calculations, not spec requirements; pipeline latencies and the 2-cycle ungate, 50 ns stall and 300 ns completion examples are illustrative.</div>
+  <div class="wrap">Built from the UCIe Specification Revision 3.0, Version 1.0 (August 5, 2025), Chapter 10.2 Flit-Aware Die-to-Die Interface and Chapter 10.3 Common rules for FDI and RDI, with Chapters 1.4, 2.4, 3.1–3.9, 4.1, 4.5 and 5.5 for context. Section 12 lists every cited section, table and figure with its page. Example numbers in sections 3, 7 and 9 are derived calculations, not spec requirements; pipeline latencies and the 2-cycle ungate, 50 ns stall and 300 ns completion examples are illustrative.</div>
 </footer>
 
 <script>
@@ -1915,6 +1941,18 @@ a_no_bubble: assert property (@(posedge lclk)
   /* sanity: every waveform row must match its scenario length */
   scenarios.concat(minis.map(function (m) { return m.w; })).forEach(function (s) {
     s.sig.forEach(function (r) { if (r.v.length !== s.n && window.console) console.warn("length mismatch", s.id || s.aria, r.name, r.v.length, s.n); });
+  });
+})();
+
+/* quiz reveal: open all / close all */
+(function () {
+  var b = document.getElementById("qa-toggle");
+  if (!b) return;
+  b.addEventListener("click", function () {
+    var open = b.getAttribute("aria-pressed") !== "true";
+    Array.prototype.forEach.call(document.querySelectorAll("#quiz details"), function (d) { d.open = open; });
+    b.setAttribute("aria-pressed", open ? "true" : "false");
+    b.textContent = open ? "Hide all answers" : "Show all answers";
   });
 })();
 </script>
